@@ -1,0 +1,276 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Strapi Socket.IO Plugin API Reference",
+  "version": "3.0.0",
+  "description": "Token-optimized API reference for AI assistants and code editors",
+  
+  "quickStart": {
+    "install": "npm install strapi-plugin-io",
+    "minimalConfig": {
+      "io": {
+        "enabled": true,
+        "config": {
+          "contentTypes": ["api::article.article"]
+        }
+      }
+    }
+  },
+  
+  "api": {
+    "global": {
+      "strapi.$io": {
+        "description": "Main Socket.IO instance",
+        "properties": ["server", "namespaces"],
+        "methods": ["emit", "raw", "joinRoom", "leaveRoom", "getSocketsInRoom", "sendPrivateMessage", "broadcast", "emitToNamespace", "disconnectSocket"]
+      },
+      "strapi.$ioSettings": {
+        "description": "Current plugin settings (read-only)"
+      }
+    },
+    
+    "methods": {
+      "emit": {
+        "signature": "emit({ event, schema, data }): Promise<void>",
+        "description": "Emit with permission checking and data sanitization",
+        "parameters": {
+          "event": "string - Action name (create|update|delete|custom)",
+          "schema": "string - Content type UID",
+          "data": "any - Data to emit"
+        },
+        "example": "await strapi.$io.emit({ event: 'create', schema: 'api::article.article', data: article })"
+      },
+      
+      "raw": {
+        "signature": "raw({ event, rooms?, data }): Promise<void>",
+        "description": "Emit without sanitization or permission checks",
+        "parameters": {
+          "event": "string - Event name",
+          "rooms": "string[] - Optional room names",
+          "data": "any - Data to emit (NOT sanitized)"
+        },
+        "example": "await strapi.$io.raw({ event: 'notification', rooms: ['admin'], data: { message: 'Alert' } })"
+      },
+      
+      "joinRoom": {
+        "signature": "joinRoom(socketId: string, roomName: string): boolean",
+        "description": "Add socket to room",
+        "returns": "boolean - Success status",
+        "example": "strapi.$io.joinRoom(socket.id, 'premium-users')"
+      },
+      
+      "leaveRoom": {
+        "signature": "leaveRoom(socketId: string, roomName: string): boolean",
+        "description": "Remove socket from room",
+        "returns": "boolean - Success status"
+      },
+      
+      "getSocketsInRoom": {
+        "signature": "getSocketsInRoom(roomName: string): Promise<SocketInfo[]>",
+        "description": "Get all sockets in room",
+        "returns": "Array of { id, user, rooms }",
+        "example": "const sockets = await strapi.$io.getSocketsInRoom('chat-lobby')"
+      },
+      
+      "sendPrivateMessage": {
+        "signature": "sendPrivateMessage(socketId: string, event: string, data: any): void",
+        "description": "Send message to specific socket only",
+        "example": "strapi.$io.sendPrivateMessage(socket.id, 'notification', { type: 'info', message: 'Hi' })"
+      },
+      
+      "broadcast": {
+        "signature": "broadcast(socketId: string, event: string, data: any): void",
+        "description": "Emit to all except sender",
+        "example": "strapi.$io.broadcast(socket.id, 'user-joined', { username: 'john' })"
+      },
+      
+      "emitToNamespace": {
+        "signature": "emitToNamespace(namespace: string, event: string, data: any): void",
+        "description": "Emit to all sockets in namespace",
+        "example": "strapi.$io.emitToNamespace('admin', 'dashboard:update', stats)"
+      },
+      
+      "disconnectSocket": {
+        "signature": "disconnectSocket(socketId: string, reason?: string): boolean",
+        "description": "Force disconnect socket",
+        "returns": "boolean - Success status",
+        "example": "strapi.$io.disconnectSocket(socket.id, 'Kicked by admin')"
+      }
+    },
+    
+    "services": {
+      "settings": {
+        "access": "strapi.plugin('io').service('settings')",
+        "methods": {
+          "getSettings": "(): Promise<PluginSettings>",
+          "setSettings": "(settings: Partial<PluginSettings>): Promise<PluginSettings>",
+          "getDefaultSettings": "(): PluginSettings"
+        }
+      },
+      
+      "monitoring": {
+        "access": "strapi.plugin('io').service('monitoring')",
+        "methods": {
+          "getConnectionStats": "(): ConnectionStats",
+          "getEventStats": "(): EventStats",
+          "getEventLog": "(limit?: number): EventLogEntry[]",
+          "logEvent": "(type: string, data?: any): void",
+          "resetStats": "(): void",
+          "sendTestEvent": "(name?: string, data?: any): TestResult"
+        }
+      }
+    }
+  },
+  
+  "configuration": {
+    "contentTypes": {
+      "simple": ["api::article.article", "api::comment.comment"],
+      "advanced": [
+        {
+          "uid": "api::article.article",
+          "actions": ["create", "update", "delete"],
+          "populate": ["author", "category"],
+          "eventPrefix": "article"
+        }
+      ]
+    },
+    
+    "socket": {
+      "serverOptions": {
+        "cors": {
+          "origin": "http://localhost:3000",
+          "methods": ["GET", "POST"],
+          "credentials": true
+        },
+        "pingTimeout": 60000,
+        "pingInterval": 25000,
+        "transports": ["websocket", "polling"]
+      }
+    },
+    
+    "events": [
+      {
+        "name": "connection",
+        "handler": "({ strapi, io }, socket) => { /* ... */ }"
+      },
+      {
+        "name": "custom-event",
+        "handler": "({ strapi, io }, socket, ...args) => { /* ... */ }"
+      }
+    ],
+    
+    "hooks": {
+      "init": "async ({ strapi, io }) => { /* Setup adapters, middleware */ }"
+    }
+  },
+  
+  "client": {
+    "connection": {
+      "basic": "io('http://localhost:1337')",
+      "authenticated": "io('http://localhost:1337', { auth: { strategy: 'jwt', token: 'xxx' } })",
+      "namespace": "io('http://localhost:1337/admin', { auth: { token: 'xxx' } })"
+    },
+    
+    "events": {
+      "contentTypes": {
+        "pattern": "{contentType}:{action}",
+        "examples": ["article:create", "article:update", "article:delete", "comment:create"]
+      },
+      
+      "system": {
+        "connect": "socket.on('connect', () => {})",
+        "disconnect": "socket.on('disconnect', (reason) => {})",
+        "connect_error": "socket.on('connect_error', (error) => {})"
+      }
+    }
+  },
+  
+  "useCases": {
+    "realTimeBlog": {
+      "server": "contentTypes: ['api::article.article']",
+      "client": "socket.on('article:create', (article) => addToList(article))"
+    },
+    
+    "liveChat": {
+      "server": "events: [{ name: 'chat:send', handler({ io }, socket, msg) { io.server.to(roomId).emit('chat:message', msg) } }]",
+      "client": "socket.emit('chat:send', { roomId, message }); socket.on('chat:message', displayMessage)"
+    },
+    
+    "notifications": {
+      "server": "const sockets = await strapi.$io.getSocketsInRoom(`user-${userId}`); strapi.$io.sendPrivateMessage(sockets[0].id, 'notification', data)",
+      "client": "socket.on('notification', showToast)"
+    },
+    
+    "typing": {
+      "server": "socket.to(roomId).emit('user:typing', { userId })",
+      "client": "socket.emit('typing:start', { roomId }); socket.on('user:typing', showIndicator)"
+    }
+  },
+  
+  "patterns": {
+    "authentication": {
+      "jwt": "auth: { strategy: 'jwt', token: 'your-jwt-token' }",
+      "apiToken": "auth: { strategy: 'api-token', token: 'your-api-token' }",
+      "public": "No auth object needed"
+    },
+    
+    "rooms": {
+      "autoJoin": "socket.join(`user-${userId}`); socket.join(`role-${roleType}`)",
+      "manual": "socket.emit('join-room', roomName, callback)",
+      "broadcast": "io.server.to('room-name').emit('event', data)"
+    },
+    
+    "errorHandling": {
+      "server": "try { /* ... */ socket.emit('success', data) } catch (e) { socket.emit('error', { message: e.message }) }",
+      "client": "socket.on('connect_error', (err) => console.error(err.message))"
+    }
+  },
+  
+  "typescript": {
+    "imports": "import type { SocketIO, EmitOptions, RawEmitOptions } from 'strapi-plugin-io/types'",
+    "usage": "const io: SocketIO = strapi.$io; await io.emit({ event: 'create', schema: 'api::article.article', data })"
+  },
+  
+  "production": {
+    "checklist": [
+      "Enable Redis adapter for scaling",
+      "Configure CORS origins for production domains",
+      "Enable authentication requirement",
+      "Set rate limiting",
+      "Set connection limits",
+      "Disable event logging",
+      "Monitor connection stats"
+    ],
+    
+    "envVars": {
+      "CLIENT_URL": "http://localhost:3000",
+      "REDIS_URL": "redis://localhost:6379",
+      "SOCKET_IO_PATH": "/socket.io"
+    }
+  },
+  
+  "troubleshooting": {
+    "eventsNotReceived": [
+      "Check role permissions in Admin Panel",
+      "Verify event name pattern: {contentType}:{action}",
+      "Check if content type is enabled in config"
+    ],
+    
+    "corsErrors": "Set cors.origin to '*' for development or specific domains for production",
+    
+    "connectionFails": [
+      "Verify server is running",
+      "Check CORS configuration",
+      "Validate authentication token",
+      "Check if max connections reached"
+    ]
+  },
+  
+  "meta": {
+    "version": "3.0.0",
+    "strapiVersion": "5.x",
+    "maintainedUntil": "December 2026",
+    "documentation": "See docs/ folder",
+    "updatedBy": "@Schero94"
+  }
+}
+
