@@ -10,7 +10,7 @@ const { bootstrapLifecycles } = require('./lifecycle');
  * @param {*} params.strapi
  */
 async function bootstrap({ strapi }) {
-	bootstrapIO({ strapi });
+	await bootstrapIO({ strapi });
 	bootstrapLifecycles({ strapi });
 }
 

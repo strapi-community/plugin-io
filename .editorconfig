@@ -1,16 +1,18 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+# top-most EditorConfig file
 root = true
 
 [*]
-indent_style = space
-indent_size = 2
-end_of_line = lf
 charset = utf-8
-trim_trailing_whitespace = true
+end_of_line = lf
 insert_final_newline = true
+trim_trailing_whitespace = true
 
-[{package.json,*.yml}]
-indent_style = space
+[*.{js,jsx,ts,tsx}]
+indent_style = tab
 indent_size = 2
 
-[*.md]
-trim_trailing_whitespace = false
+[*.{json,yml,yaml,md}]
+indent_style = space
+indent_size = 2

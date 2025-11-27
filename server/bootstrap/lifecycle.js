@@ -1,5 +1,24 @@
 'use strict';
 
+const { pluginId } = require('../utils/pluginId');
+
+/**
+ * Check if action is enabled for a content type
+ * Reads from strapi.$ioSettings which is updated on settings change
+ */
+function isActionEnabled(strapi, uid, action) {
+	const settings = strapi.$ioSettings || {};
+	const rolePermissions = settings.rolePermissions || {};
+	
+	// Check if ANY role has this action enabled for this content type
+	for (const rolePerms of Object.values(rolePermissions)) {
+		if (rolePerms.contentTypes?.[uid]?.[action] === true) {
+			return true;
+		}
+	}
+	return false;
+}
+
 /**
  * Bootstrap lifecycles
  *
@@ -7,111 +26,136 @@
  * @param {*} params.strapi
  */
 async function bootstrapLifecycles({ strapi }) {
-	strapi.config.get('plugin.io.contentTypes', []).forEach((ct) => {
-		const uid = ct.uid ? ct.uid : ct;
+	// Get content types from stored settings (set by bootstrapIO)
+	const settings = strapi.$ioSettings || {};
+	const rolePermissions = settings.rolePermissions || {};
 
+	// Merge all role permissions to get all enabled content types
+	const allContentTypes = {};
+	Object.values(rolePermissions).forEach((rolePerms) => {
+		if (rolePerms.contentTypes) {
+			Object.entries(rolePerms.contentTypes).forEach(([uid, actions]) => {
+				if (!allContentTypes[uid]) {
+					allContentTypes[uid] = { create: false, update: false, delete: false };
+				}
+				// Enable action if ANY role has it enabled
+				if (actions.create) allContentTypes[uid].create = true;
+				if (actions.update) allContentTypes[uid].update = true;
+				if (actions.delete) allContentTypes[uid].delete = true;
+			});
+		}
+	});
+
+	// Get all UIDs that have at least one action enabled
+	const enabledUids = Object.entries(allContentTypes)
+		.filter(([uid, actions]) => actions.create || actions.update || actions.delete)
+		.map(([uid]) => uid);
+
+	enabledUids.forEach((uid) => {
 		const subscriber = {
 			models: [uid],
 		};
 
-		if (!ct.actions || ct.actions.includes('create')) {
-			const eventType = 'create';
-			subscriber.afterCreate = async (event) => {
-				strapi.$io.emit({
-					event: eventType,
-					schema: event.model,
-					data: event.result,
-				});
-			};
-			subscriber.afterCreateMany = async (event) => {
-				const query = buildEventQuery({ event });
-				if (query.filters) {
-					const records = await strapi.entityService.findMany(uid, query);
-
-					records.forEach((r) => {
-						strapi.$io.emit({
-							event: eventType,
-							schema: event.model,
-							data: r,
-						});
-					});
-				}
-			};
-		}
-
-		if (!ct.actions || ct.actions.includes('update')) {
-			const eventType = 'update';
-			subscriber.afterUpdate = async (event) => {
-				strapi.$io.emit({
-					event: eventType,
-					schema: event.model,
-					data: event.result,
-				});
-			};
-			subscriber.beforeUpdateMany = async (event) => {
-				const query = buildEventQuery({ event });
-				if (query.filters) {
-					const ids = await strapi.entityService.findMany(uid, query);
-					if (!event.state.io) {
-						event.state.io = {};
-					}
-					event.state.io.ids = ids;
-				}
-			};
-			subscriber.afterUpdateMany = async (event) => {
-				if (!event.state.io?.ids) {
-					return;
-				}
-				const records = await strapi.entityService.findMany(uid, {
-					filters: { id: event.state.io.ids },
-				});
-
+		// CREATE - check dynamically if enabled
+		subscriber.afterCreate = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'create')) return;
+			strapi.$io.emit({
+				event: 'create',
+				schema: event.model,
+				data: event.result,
+			});
+		};
+		subscriber.afterCreateMany = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'create')) return;
+			const query = buildEventQuery({ event });
+			if (query.filters) {
+				const records = await strapi.entityService.findMany(uid, query);
 				records.forEach((r) => {
 					strapi.$io.emit({
-						event: eventType,
+						event: 'create',
 						schema: event.model,
 						data: r,
 					});
 				});
-			};
-		}
+			}
+		};
 
-		if (!ct.actions || ct.actions.includes('delete')) {
-			const eventType = 'delete';
-			subscriber.afterDelete = async (event) => {
+		// UPDATE - check dynamically if enabled
+		subscriber.afterUpdate = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'update')) return;
+			strapi.$io.emit({
+				event: 'update',
+				schema: event.model,
+				data: event.result,
+			});
+		};
+		subscriber.beforeUpdateMany = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'update')) return;
+			const query = buildEventQuery({ event });
+			if (query.filters) {
+				const ids = await strapi.entityService.findMany(uid, query);
+				if (!event.state.io) {
+					event.state.io = {};
+				}
+				event.state.io.ids = ids;
+			}
+		};
+		subscriber.afterUpdateMany = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'update')) return;
+			if (!event.state.io?.ids) return;
+			const records = await strapi.entityService.findMany(uid, {
+				filters: { id: event.state.io.ids },
+			});
+			records.forEach((r) => {
 				strapi.$io.emit({
-					event: eventType,
+					event: 'update',
 					schema: event.model,
-					data: event.result,
+					data: r,
 				});
-			};
-			subscriber.beforeDeleteMany = async (event) => {
-				const query = buildEventQuery({ event });
-				if (query.filters) {
-					const records = await strapi.entityService.findMany(uid, query);
-					if (!event.state.io) {
-						event.state.io = {};
-					}
-					event.state.io.records = records;
+			});
+		};
+
+		// DELETE - check dynamically if enabled
+		subscriber.afterDelete = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'delete')) return;
+			strapi.$io.emit({
+				event: 'delete',
+				schema: event.model,
+				data: event.result,
+			});
+		};
+		subscriber.beforeDeleteMany = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'delete')) return;
+			const query = buildEventQuery({ event });
+			if (query.filters) {
+				const records = await strapi.entityService.findMany(uid, query);
+				if (!event.state.io) {
+					event.state.io = {};
 				}
-			};
-			subscriber.afterDeleteMany = async (event) => {
-				if (!event.state.io?.records) {
-					return;
-				}
-				event.state.io.records.forEach((r) => {
-					strapi.$io.emit({
-						event: eventType,
-						schema: event.model,
-						data: r,
-					});
+				event.state.io.records = records;
+			}
+		};
+		subscriber.afterDeleteMany = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'delete')) return;
+			if (!event.state.io?.records) return;
+			event.state.io.records.forEach((r) => {
+				strapi.$io.emit({
+					event: 'delete',
+					schema: event.model,
+					data: r,
 				});
-			};
-		}
+			});
+		};
 
 		// setup lifecycles
 		strapi.db.lifecycles.subscribe(subscriber);
 	});
+
+	// Log configured content types
+	const configuredCount = enabledUids.length;
+	if (configuredCount > 0) {
+		strapi.log.info(`socket.io: Lifecycle hooks registered for ${configuredCount} content type(s)`);
+	}
 }
 
 function buildEventQuery({ event }) {

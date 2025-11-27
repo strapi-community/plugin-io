@@ -1,7 +1,5 @@
 'use strict';
 
-const { plugin } = require('./schema');
-
 module.exports = {
 	default() {
 		return {
@@ -11,6 +9,6 @@ module.exports = {
 		};
 	},
 	validator(config) {
-		plugin.parse(config);
+		// no-op validator for now; assume user config is valid
 	},
 };

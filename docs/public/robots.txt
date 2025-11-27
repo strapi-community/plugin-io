@@ -1,0 +1,22 @@
+# robots.txt for Strapi Plugin IO Documentation
+
+# Allow all search engines
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://strapi-plugin-io.netlify.app/sitemap.xml
+
+# Crawl-delay (optional - prevents overloading)
+Crawl-delay: 1
+
+# Disallow specific paths (if needed)
+# Disallow: /admin/
+# Disallow: /private/
+
+# Allow important pages explicitly
+Allow: /guide/
+Allow: /api/
+Allow: /examples/
+Allow: /ecosystem
+
