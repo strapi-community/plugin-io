@@ -46,6 +46,10 @@ async function bootstrapIO({ strapi }) {
 	strapi.$io = io;
 	strapi.$ioSettings = settings;
 
+	// Apply sensitive fields sanitization middleware
+	const sanitizeSensitiveFields = require('../src/middlewares/sanitize-sensitive-fields');
+	sanitizeSensitiveFields({ strapi });
+
 	// Namespaces
 	const namespaces = {
 		main: io.server,
@@ -244,6 +248,141 @@ async function bootstrapIO({ strapi }) {
 			if (callback) callback({ success: true, rooms });
 		});
 
+		// Entity Subscription (NEW - for entity-specific events)
+		socket.on('subscribe-entity', async ({ uid, id }, callback) => {
+			// Check if entity subscriptions are enabled
+			if (settings.entitySubscriptions?.enabled === false) {
+				if (callback) callback({ success: false, error: 'Entity subscriptions are disabled' });
+				return;
+			}
+
+			// Validate parameters
+			if (!uid || !id) {
+				if (callback) callback({ success: false, error: 'Invalid parameters: uid and id are required' });
+				return;
+			}
+
+			// Validate uid format (api::model.model or plugin::plugin.model)
+			if (typeof uid !== 'string' || !uid.match(/^(api|plugin)::[a-z0-9-]+\.[a-z0-9-]+$/)) {
+				if (callback) callback({ success: false, error: 'Invalid content type uid format' });
+				return;
+			}
+
+			// Validate id (must be number or string)
+			if (typeof id !== 'number' && typeof id !== 'string') {
+				if (callback) callback({ success: false, error: 'Invalid entity id' });
+				return;
+			}
+
+			// Check if content type is in allowedContentTypes whitelist (if not empty)
+			if (settings.entitySubscriptions?.allowedContentTypes?.length > 0) {
+				if (!settings.entitySubscriptions.allowedContentTypes.includes(uid)) {
+					if (callback) callback({ success: false, error: 'Content type not allowed for entity subscriptions' });
+					return;
+				}
+			}
+
+			// Check max subscriptions per socket
+			const currentSubs = Array.from(socket.rooms).filter(r => r !== socket.id && r.includes(':')).length;
+			const maxSubs = settings.entitySubscriptions?.maxSubscriptionsPerSocket || 100;
+			if (currentSubs >= maxSubs) {
+				if (callback) callback({ success: false, error: `Maximum subscriptions (${maxSubs}) reached` });
+				return;
+			}
+
+			// Check if content type exists
+			const contentType = strapi.contentTypes[uid];
+			if (!contentType) {
+				if (callback) callback({ success: false, error: 'Content type not found' });
+				return;
+			}
+
+			// Check if user has permission to read this content type
+			const userRole = socket.user?.role?.toLowerCase() || 'public';
+			const rolePermissions = settings.rolePermissions?.[userRole] || settings.rolePermissions?.['public'] || {};
+			const contentTypePerms = rolePermissions.contentTypes?.[uid];
+
+			// If no explicit permission, deny by default
+			if (!contentTypePerms || (!contentTypePerms.create && !contentTypePerms.update && !contentTypePerms.delete)) {
+				if (callback) callback({ success: false, error: 'Permission denied: no access to this content type' });
+				return;
+			}
+
+			// Verify entity exists (optional, based on settings)
+			if (settings.entitySubscriptions?.requireVerification !== false) {
+				try {
+					const entity = await strapi.entityService.findOne(uid, id);
+					if (!entity) {
+						if (callback) callback({ success: false, error: 'Entity not found' });
+						return;
+					}
+				} catch (err) {
+					strapi.log.warn(`socket.io: Entity verification failed for ${uid}:${id} - ${err.message}`);
+					if (callback) callback({ success: false, error: 'Entity verification failed' });
+					return;
+				}
+			}
+
+			// Join entity-specific room
+			const entityRoomName = `${uid}:${id}`;
+			socket.join(entityRoomName);
+			
+			// Track metrics if enabled
+			if (settings.entitySubscriptions?.enableMetrics && settings.monitoring?.enableEventLogging) {
+				monitoringService.logEvent('entity-subscribe', {
+					socketId: socket.id,
+					uid,
+					id,
+					user: socket.user || null,
+				});
+			}
+			
+			strapi.log.debug(`socket.io: Socket ${socket.id} subscribed to entity: ${entityRoomName}`);
+			if (callback) callback({ success: true, room: entityRoomName, uid, id });
+		});
+
+		socket.on('unsubscribe-entity', ({ uid, id }, callback) => {
+			// Check if entity subscriptions are enabled
+			if (settings.entitySubscriptions?.enabled === false) {
+				if (callback) callback({ success: false, error: 'Entity subscriptions are disabled' });
+				return;
+			}
+
+			// Validate parameters
+			if (!uid || !id) {
+				if (callback) callback({ success: false, error: 'Invalid parameters: uid and id are required' });
+				return;
+			}
+
+			const entityRoomName = `${uid}:${id}`;
+			socket.leave(entityRoomName);
+			
+			// Track metrics if enabled
+			if (settings.entitySubscriptions?.enableMetrics && settings.monitoring?.enableEventLogging) {
+				monitoringService.logEvent('entity-unsubscribe', {
+					socketId: socket.id,
+					uid,
+					id,
+					user: socket.user || null,
+				});
+			}
+			
+			strapi.log.debug(`socket.io: Socket ${socket.id} unsubscribed from entity: ${entityRoomName}`);
+			if (callback) callback({ success: true, room: entityRoomName, uid, id });
+		});
+
+		// Get Entity Subscriptions
+		socket.on('get-entity-subscriptions', (callback) => {
+			const rooms = Array.from(socket.rooms)
+				.filter((r) => r !== socket.id && r.includes(':'))
+				.map((room) => {
+					const [uid, id] = room.split(':');
+					return { uid, id, room };
+				});
+			
+			if (callback) callback({ success: true, subscriptions: rooms });
+		});
+
 		// Private Messages (with security)
 		socket.on('private-message', ({ to, message }, callback) => {
 			// Check if private rooms are enabled
@@ -392,6 +531,78 @@ async function bootstrapIO({ strapi }) {
 			return true;
 		}
 		return false;
+	};
+
+	// Entity Subscription Helpers
+	strapi.$io.subscribeToEntity = async (socketId, uid, id) => {
+		const socket = io.server.sockets.sockets.get(socketId);
+		if (!socket) {
+			return { success: false, error: 'Socket not found' };
+		}
+
+		// Validate content type
+		const contentType = strapi.contentTypes[uid];
+		if (!contentType) {
+			return { success: false, error: 'Content type not found' };
+		}
+
+		// Join entity room
+		const entityRoomName = `${uid}:${id}`;
+		socket.join(entityRoomName);
+		
+		strapi.log.debug(`socket.io: Helper subscribed socket ${socketId} to entity: ${entityRoomName}`);
+		return { success: true, room: entityRoomName, uid, id };
+	};
+
+	strapi.$io.unsubscribeFromEntity = (socketId, uid, id) => {
+		const socket = io.server.sockets.sockets.get(socketId);
+		if (!socket) {
+			return { success: false, error: 'Socket not found' };
+		}
+
+		const entityRoomName = `${uid}:${id}`;
+		socket.leave(entityRoomName);
+		
+		strapi.log.debug(`socket.io: Helper unsubscribed socket ${socketId} from entity: ${entityRoomName}`);
+		return { success: true, room: entityRoomName, uid, id };
+	};
+
+	strapi.$io.getEntitySubscriptions = (socketId) => {
+		const socket = io.server.sockets.sockets.get(socketId);
+		if (!socket) {
+			return { success: false, error: 'Socket not found' };
+		}
+
+		const subscriptions = Array.from(socket.rooms)
+			.filter((r) => r !== socket.id && r.includes(':'))
+			.map((room) => {
+				const parts = room.split(':');
+				// Handle both formats: "api::article.article:123" and simple "article:123"
+				if (parts.length >= 3) {
+					const uid = parts.slice(0, -1).join(':');
+					const id = parts[parts.length - 1];
+					return { uid, id, room };
+				}
+				return null;
+			})
+			.filter(Boolean);
+
+		return { success: true, subscriptions };
+	};
+
+	strapi.$io.emitToEntity = (uid, id, event, data) => {
+		const entityRoomName = `${uid}:${id}`;
+		io.server.to(entityRoomName).emit(event, data);
+		strapi.log.debug(`socket.io: Emitted '${event}' to entity room: ${entityRoomName}`);
+	};
+
+	strapi.$io.getEntityRoomSockets = async (uid, id) => {
+		const entityRoomName = `${uid}:${id}`;
+		const sockets = await io.server.in(entityRoomName).fetchSockets();
+		return sockets.map((s) => ({
+			id: s.id,
+			user: s.user || null,
+		}));
 	};
 
 	// Count enabled content types

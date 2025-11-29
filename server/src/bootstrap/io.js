@@ -18,6 +18,10 @@ async function bootstrapIO({ strapi }) {
 	// make io avaiable anywhere strapi global object is
 	strapi.$io = io;
 
+	// Apply sensitive fields sanitization middleware
+	const sanitizeSensitiveFields = require('../middlewares/sanitize-sensitive-fields');
+	sanitizeSensitiveFields({ strapi });
+
 	// add any io server events
 	if (settings.events?.length) {
 		strapi.$io.server.on('connection', (socket) => {
