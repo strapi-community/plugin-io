@@ -144,11 +144,46 @@ strapi.$io.emitToNamespace('admin', 'dashboard:update', {
   stats: { users: 1234, active: 56 }
 });
 
+// 🆕 NEW: Entity-Specific Subscriptions
+// Emit to clients watching a specific entity
+strapi.$io.emitToEntity('api::article.article', 123, 'article:viewed', {
+  views: 1500
+});
+
 // Get real-time stats
 const monitoringService = strapi.plugin('io').service('monitoring');
 const stats = monitoringService.getConnectionStats();
 console.log(`Connected: ${stats.connected} clients`);
 ```
+
+### Entity-Specific Subscriptions 🆕
+
+**NEW**: Subscribe to individual entities for targeted updates!
+
+```javascript
+// Client-side: Subscribe to a specific article
+socket.emit('subscribe-entity', {
+  uid: 'api::article.article',
+  id: 123
+}, (response) => {
+  if (response.success) {
+    console.log('Subscribed! Will only receive updates for article 123');
+  }
+});
+
+// Listen for updates (only receives events for article 123)
+socket.on('article:update', (data) => {
+  console.log('Article 123 was updated:', data);
+});
+```
+
+**Benefits:**
+- 🎯 Only receive updates for entities you're watching
+- 📉 Reduced bandwidth and client processing
+- ⚡ Better performance at scale
+- 🔒 Built-in permission checks
+
+See [USAGE-GUIDE.md](./USAGE-GUIDE.md#use-case-6-entity-specific-subscriptions) for complete examples.
 
 ### Room Management
 
@@ -248,6 +283,7 @@ For details, see **[WIDGET.md](./WIDGET.md)**
 ## Features
 
 - ✅ **Real-Time Events** - Automatic content type CRUD event broadcasting
+- ✅ **Entity Subscriptions** 🆕 - Subscribe to specific entities for targeted updates
 - ✅ **Authentication** - JWT and API Token support with role-based access
 - ✅ **Admin Panel** - Visual configuration for all settings
 - ✅ **Room Management** - Advanced room/channel system
@@ -257,7 +293,7 @@ For details, see **[WIDGET.md](./WIDGET.md)**
 - ✅ **Rate Limiting** - Prevent abuse with configurable limits
 - ✅ **Security** - IP whitelisting, authentication requirements, input validation
 - ✅ **TypeScript** - Full type definitions for IntelliSense
-- ✅ **Helper Functions** - 7 utility functions for common tasks
+- ✅ **Helper Functions** - 12+ utility functions for common tasks
 - ✅ **Performance** - Optimized for production use
 - ✅ **Vibecode Ready** - IDE-friendly with comprehensive documentation
 

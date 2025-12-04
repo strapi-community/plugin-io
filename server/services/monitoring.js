@@ -26,6 +26,10 @@ module.exports = ({ strapi }) => {
 					connected: 0,
 					rooms: [],
 					sockets: [],
+					entitySubscriptions: {
+						total: 0,
+						byContentType: {},
+					},
 				};
 			}
 
@@ -33,16 +37,35 @@ module.exports = ({ strapi }) => {
 			const rooms = Array.from(io.sockets.adapter.rooms.keys())
 				.filter((room) => !io.sockets.sockets.has(room)); // Filter out socket IDs
 
+			// Calculate entity subscription metrics
+			const entityRooms = rooms.filter(room => room.includes(':') && room.match(/^(api|plugin)::/));
+			const entitySubsByType = {};
+			entityRooms.forEach(room => {
+				const uid = room.substring(0, room.lastIndexOf(':'));
+				entitySubsByType[uid] = (entitySubsByType[uid] || 0) + 1;
+			});
+
 			return {
 				connected: sockets.length,
 				rooms: rooms.map((room) => ({
 					name: room,
 					members: io.sockets.adapter.rooms.get(room)?.size || 0,
+					isEntityRoom: room.includes(':') && room.match(/^(api|plugin)::/) !== null,
 				})),
 				sockets: sockets.map((socket) => ({
 					id: socket.id,
 					connected: socket.connected,
 					rooms: Array.from(socket.rooms).filter((r) => r !== socket.id),
+					entitySubscriptions: Array.from(socket.rooms)
+						.filter((r) => r !== socket.id && r.includes(':') && r.match(/^(api|plugin)::/))
+						.map(room => {
+							const lastColon = room.lastIndexOf(':');
+							return {
+								uid: room.substring(0, lastColon),
+								id: room.substring(lastColon + 1),
+								room: room,
+							};
+						}),
 					handshake: {
 						address: socket.handshake.address,
 						time: socket.handshake.time,
@@ -51,6 +74,11 @@ module.exports = ({ strapi }) => {
 					// Include user info if authenticated
 					user: socket.user || null,
 				})),
+				entitySubscriptions: {
+					total: entityRooms.length,
+					byContentType: entitySubsByType,
+					rooms: entityRooms,
+				},
 			};
 		},
 

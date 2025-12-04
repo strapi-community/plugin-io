@@ -104,10 +104,13 @@ async function bootstrapIO({ strapi }) {
 				strapi.log.info(`socket.io: JWT decoded - user id: ${decoded.id}`);
 				
 				if (decoded.id) {
-					const user = await strapi.query('plugin::users-permissions.user').findOne({
-						where: { id: decoded.id },
+					// Use Document Service API (Strapi v5)
+					const users = await strapi.documents('plugin::users-permissions.user').findMany({
+						filters: { id: decoded.id },
 						populate: { role: true },
+						limit: 1,
 					});
+					const user = users.length > 0 ? users[0] : null;
 					
 					if (user) {
 						socket.user = {
@@ -311,7 +314,20 @@ async function bootstrapIO({ strapi }) {
 			// Verify entity exists (optional, based on settings)
 			if (settings.entitySubscriptions?.requireVerification !== false) {
 				try {
-					const entity = await strapi.entityService.findOne(uid, id);
+					// Use Document Service API (Strapi v5)
+					// Try documentId first, then fall back to numeric id filter
+					let entity = null;
+					if (id && !/^\d+$/.test(String(id))) {
+						// Looks like a documentId
+						entity = await strapi.documents(uid).findOne({ documentId: id });
+					} else {
+						// Numeric id - use findFirst with filter
+						const results = await strapi.documents(uid).findMany({
+							filters: { id: Number(id) },
+							limit: 1,
+						});
+						entity = results.length > 0 ? results[0] : null;
+					}
 					if (!entity) {
 						if (callback) callback({ success: false, error: 'Entity not found' });
 						return;

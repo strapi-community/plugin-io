@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import styled, { keyframes, css } from 'styled-components';
 import { Box, Typography, Flex, Loader, Badge, TextInput, Field } from '@strapi/design-system';

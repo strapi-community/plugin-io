@@ -26,6 +26,10 @@ class SocketIO {
 		}
 
 		const eventName = `${schema.singularName}:${event}`;
+		
+		// Extract entity ID for entity-specific room
+		const entityId = rawData.id || rawData.documentId;
+		const entityRoomName = entityId ? `${schema.uid}:${entityId}` : null;
 
 		for (const strategyType in strategyService) {
 			if (Object.hasOwnProperty.call(strategyService, strategyType)) {
@@ -58,8 +62,14 @@ class SocketIO {
 
 						// transform
 						const data = transformService.response({ data: sanitizedData, schema });
-						// emit
+						
+						// Emit to role-based room (existing behavior)
 						this._socket.to(roomName.replace(' ', '-')).emit(eventName, { ...data });
+						
+						// Also emit to entity-specific room if ID exists
+						if (entityRoomName) {
+							this._socket.to(entityRoomName).emit(eventName, { ...data });
+						}
 					}
 				}
 			}

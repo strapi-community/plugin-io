@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Button,
@@ -176,9 +176,9 @@ const InputWrapper = styled.div`
       display: flex;
       align-items: center;
       justify-content: center;
-      min-width: 36px !important;
-      width: 36px !important;
-      height: 36px !important;
+      min-width: 32px !important;
+      width: 32px !important;
+      height: 32px !important;
       padding: 0 !important;
       border: 1px solid #dcdce4 !important;
       background: #ffffff !important;
@@ -201,31 +201,42 @@ const InputWrapper = styled.div`
       }
       
       svg {
-        width: 12px !important;
-        height: 12px !important;
+        width: 10px !important;
+        height: 10px !important;
         fill: #8e8ea9 !important;
         transition: fill 0.2s ease !important;
       }
     }
   }
   
-  /* NumberInput Container - besser aligned auf Desktop */
-  @media (min-width: 768px) {
-    > div {
-      display: flex !important;
-      align-items: center !important;
-      gap: 8px !important;
+  /* NumberInput Container - proper alignment */
+  > div {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    
+    /* Input field container */
+    > div:first-child {
+      flex: 1 !important;
+      min-width: 0 !important;
+      margin-right: 0 !important;
       
-      > div:first-child {
-        flex: 1 !important;
-        min-width: 0 !important;
+      input {
+        width: 100% !important;
+        padding-right: 12px !important;
       }
+    }
+    
+    /* Spinner Buttons Container */
+    > div:last-child {
+      display: none !important;
       
-      /* Spinner Buttons Container */
-      > div:last-child {
+      @media (min-width: 768px) {
         display: flex !important;
         flex-direction: column !important;
-        gap: 4px !important;
+        gap: 2px !important;
+        margin-left: 8px !important;
+        flex-shrink: 0 !important;
         
         button {
           margin: 0 !important;
@@ -322,6 +333,13 @@ const SettingsPage = () => {
       enableConnectionLogging: true,
       enableEventLogging: false,
       maxEventLogSize: 100,
+    },
+    entitySubscriptions: {
+      enabled: true,
+      maxSubscriptionsPerSocket: 100,
+      requireVerification: true,
+      allowedContentTypes: [],
+      enableMetrics: true,
     },
   });
   const [availableContentTypes, setAvailableContentTypes] = useState([]);
@@ -587,6 +605,17 @@ const SettingsPage = () => {
       ...prev,
       monitoring: {
         ...prev.monitoring,
+        [key]: value,
+      },
+    }));
+  };
+
+  // Entity Subscriptions settings update
+  const updateEntitySubscriptions = (key, value) => {
+    updateSettings((prev) => ({
+      ...prev,
+      entitySubscriptions: {
+        ...prev.entitySubscriptions,
         [key]: value,
       },
     }));
@@ -1222,7 +1251,7 @@ const SettingsPage = () => {
                               {/* Header */}
                               <Box padding={2} background="neutral100" style={{ borderBottom: '1px solid #dcdce4' }}>
                                 <Grid.Root>
-                                  <Grid.Item col={6}>
+                                  <Grid.Item col={4}>
                                     <Typography variant="sigma" textColor="neutral600">
                                       {t('events.contentType', 'CONTENT TYPE')}
                                     </Typography>
@@ -1248,102 +1277,164 @@ const SettingsPage = () => {
                                       </Typography>
                                     </Flex>
                                   </Grid.Item>
+                                  <Grid.Item col={2}>
+                                    <Flex justifyContent="center">
+                                      <Typography variant="sigma" textColor="neutral600">
+                                        {t('entitySubscriptions.allow', 'ENTITIES')} 🆕
+                                      </Typography>
+                                    </Flex>
+                                  </Grid.Item>
                                 </Grid.Root>
                               </Box>
 
                               {/* Content Type Rows */}
-                              {availableContentTypes.map((ct, idx) => (
-                                <Box
-                                  key={ct.uid}
-                                  padding={2}
-                                  style={{
-                                    borderBottom: idx < availableContentTypes.length - 1 ? '1px solid #dcdce4' : 'none',
-                                  }}
-                                >
-                                  <Grid.Root>
-                                    <Grid.Item col={6}>
-                                      <Typography variant="omega">
-                                        {ct.displayName}
-                                      </Typography>
-                                    </Grid.Item>
-                                    <Grid.Item col={2}>
-                                      <Flex justifyContent="center">
-                                        <Checkbox
-                                          checked={rolePerms.contentTypes?.[ct.uid]?.create || false}
-                                          onCheckedChange={(checked) =>
-                                            updateSettings((prev) => ({
-                                              ...prev,
-                                              rolePermissions: {
-                                                ...prev.rolePermissions,
-                                                [role.type]: {
-                                                  ...prev.rolePermissions?.[role.type],
-                                                  contentTypes: {
-                                                    ...prev.rolePermissions?.[role.type]?.contentTypes,
-                                                    [ct.uid]: {
-                                                      ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
-                                                      create: checked,
+                              {availableContentTypes.map((ct, idx) => {
+                                const hasAnyPermission = rolePerms.contentTypes?.[ct.uid]?.create || 
+                                                        rolePerms.contentTypes?.[ct.uid]?.update || 
+                                                        rolePerms.contentTypes?.[ct.uid]?.delete;
+                                const allowEntitySubs = settings.entitySubscriptions?.allowedContentTypes?.includes(ct.uid) || 
+                                                       settings.entitySubscriptions?.allowedContentTypes?.length === 0;
+                                
+                                return (
+                                  <Box
+                                    key={ct.uid}
+                                    padding={2}
+                                    style={{
+                                      borderBottom: idx < availableContentTypes.length - 1 ? '1px solid #dcdce4' : 'none',
+                                      opacity: hasAnyPermission ? 1 : 0.5,
+                                    }}
+                                  >
+                                    <Grid.Root>
+                                      <Grid.Item col={4}>
+                                        <Typography variant="omega">
+                                          {ct.displayName}
+                                        </Typography>
+                                      </Grid.Item>
+                                      <Grid.Item col={2}>
+                                        <Flex justifyContent="center">
+                                          <Checkbox
+                                            checked={rolePerms.contentTypes?.[ct.uid]?.create || false}
+                                            onCheckedChange={(checked) =>
+                                              updateSettings((prev) => ({
+                                                ...prev,
+                                                rolePermissions: {
+                                                  ...prev.rolePermissions,
+                                                  [role.type]: {
+                                                    ...prev.rolePermissions?.[role.type],
+                                                    contentTypes: {
+                                                      ...prev.rolePermissions?.[role.type]?.contentTypes,
+                                                      [ct.uid]: {
+                                                        ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
+                                                        create: checked,
+                                                      },
                                                     },
                                                   },
                                                 },
-                                              },
-                                            }))
-                                          }
-                                        />
-                                      </Flex>
-                                    </Grid.Item>
-                                    <Grid.Item col={2}>
-                                      <Flex justifyContent="center">
-                                        <Checkbox
-                                          checked={rolePerms.contentTypes?.[ct.uid]?.update || false}
-                                          onCheckedChange={(checked) =>
-                                            updateSettings((prev) => ({
-                                              ...prev,
-                                              rolePermissions: {
-                                                ...prev.rolePermissions,
-                                                [role.type]: {
-                                                  ...prev.rolePermissions?.[role.type],
-                                                  contentTypes: {
-                                                    ...prev.rolePermissions?.[role.type]?.contentTypes,
-                                                    [ct.uid]: {
-                                                      ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
-                                                      update: checked,
+                                              }))
+                                            }
+                                          />
+                                        </Flex>
+                                      </Grid.Item>
+                                      <Grid.Item col={2}>
+                                        <Flex justifyContent="center">
+                                          <Checkbox
+                                            checked={rolePerms.contentTypes?.[ct.uid]?.update || false}
+                                            onCheckedChange={(checked) =>
+                                              updateSettings((prev) => ({
+                                                ...prev,
+                                                rolePermissions: {
+                                                  ...prev.rolePermissions,
+                                                  [role.type]: {
+                                                    ...prev.rolePermissions?.[role.type],
+                                                    contentTypes: {
+                                                      ...prev.rolePermissions?.[role.type]?.contentTypes,
+                                                      [ct.uid]: {
+                                                        ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
+                                                        update: checked,
+                                                      },
                                                     },
                                                   },
                                                 },
-                                              },
-                                            }))
-                                          }
-                                        />
-                                      </Flex>
-                                    </Grid.Item>
-                                    <Grid.Item col={2}>
-                                      <Flex justifyContent="center">
-                                        <Checkbox
-                                          checked={rolePerms.contentTypes?.[ct.uid]?.delete || false}
-                                          onCheckedChange={(checked) =>
-                                            updateSettings((prev) => ({
-                                              ...prev,
-                                              rolePermissions: {
-                                                ...prev.rolePermissions,
-                                                [role.type]: {
-                                                  ...prev.rolePermissions?.[role.type],
-                                                  contentTypes: {
-                                                    ...prev.rolePermissions?.[role.type]?.contentTypes,
-                                                    [ct.uid]: {
-                                                      ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
-                                                      delete: checked,
+                                              }))
+                                            }
+                                          />
+                                        </Flex>
+                                      </Grid.Item>
+                                      <Grid.Item col={2}>
+                                        <Flex justifyContent="center">
+                                          <Checkbox
+                                            checked={rolePerms.contentTypes?.[ct.uid]?.delete || false}
+                                            onCheckedChange={(checked) =>
+                                              updateSettings((prev) => ({
+                                                ...prev,
+                                                rolePermissions: {
+                                                  ...prev.rolePermissions,
+                                                  [role.type]: {
+                                                    ...prev.rolePermissions?.[role.type],
+                                                    contentTypes: {
+                                                      ...prev.rolePermissions?.[role.type]?.contentTypes,
+                                                      [ct.uid]: {
+                                                        ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
+                                                        delete: checked,
+                                                      },
                                                     },
                                                   },
                                                 },
-                                              },
-                                            }))
-                                          }
-                                        />
-                                      </Flex>
-                                    </Grid.Item>
-                                  </Grid.Root>
-                                </Box>
-                              ))}
+                                              }))
+                                            }
+                                          />
+                                        </Flex>
+                                      </Grid.Item>
+                                      <Grid.Item col={2}>
+                                        <Flex justifyContent="center">
+                                          {settings.entitySubscriptions?.enabled ? (
+                                            <Checkbox
+                                              checked={
+                                                hasAnyPermission && (
+                                                  settings.entitySubscriptions?.allowedContentTypes?.length === 0 ||
+                                                  settings.entitySubscriptions?.allowedContentTypes?.includes(ct.uid)
+                                                )
+                                              }
+                                              disabled={!hasAnyPermission}
+                                              onCheckedChange={(checked) => {
+                                                if (!hasAnyPermission) return;
+                                                
+                                                const current = settings.entitySubscriptions?.allowedContentTypes || [];
+                                                let updated;
+                                                
+                                                if (current.length === 0) {
+                                                  // Currently all allowed - create whitelist with ALL EXCEPT this one
+                                                  if (!checked) {
+                                                    updated = availableContentTypes
+                                                      .filter(t => t.uid !== ct.uid)
+                                                      .map(t => t.uid);
+                                                  } else {
+                                                    // Keep all allowed
+                                                    updated = [];
+                                                  }
+                                                } else {
+                                                  // Whitelist exists
+                                                  if (checked) {
+                                                    // Add to whitelist
+                                                    updated = [...current, ct.uid];
+                                                  } else {
+                                                    // Remove from whitelist
+                                                    updated = current.filter(uid => uid !== ct.uid);
+                                                  }
+                                                }
+                                                
+                                                updateEntitySubscriptions('allowedContentTypes', updated);
+                                              }}
+                                            />
+                                          ) : (
+                                            <Checkbox checked={false} disabled={true} />
+                                          )}
+                                        </Flex>
+                                      </Grid.Item>
+                                    </Grid.Root>
+                                  </Box>
+                                );
+                              })}
                             </Box>
                           ) : (
                             <Box padding={4} background="neutral100" hasRadius>
@@ -1532,6 +1623,64 @@ const SettingsPage = () => {
               </Grid.Item>
             )}
           </Grid.Root>
+
+          <Box paddingTop={4} paddingBottom={2}>
+            <Divider />
+          </Box>
+
+          {/* Entity Subscriptions - Compact Global Settings */}
+          <ResponsiveSection>
+            <Flex justifyContent="space-between" alignItems="center">
+              <Box>
+                <ResponsiveSectionTitle variant="delta" as="h2">
+                  {t('entitySubscriptions.title', 'Entity Subscriptions')} 🆕
+                </ResponsiveSectionTitle>
+                <Typography variant="pi" textColor="neutral600">
+                  {t('entitySubscriptions.description', 'Allow clients to subscribe to specific entities')}
+                </Typography>
+              </Box>
+              <Toggle
+                checked={settings.entitySubscriptions?.enabled ?? true}
+                onChange={(e) => updateEntitySubscriptions('enabled', e.target.checked)}
+              />
+            </Flex>
+          </ResponsiveSection>
+
+          {settings.entitySubscriptions?.enabled && (
+            <Box paddingTop={3}>
+              <Grid.Root gap={3}>
+                <Grid.Item col={4} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('entitySubscriptions.maxPerSocket', 'Max Per Socket')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.entitySubscriptions?.maxSubscriptionsPerSocket ?? 100}
+                        onValueChange={(value) => updateEntitySubscriptions('maxSubscriptionsPerSocket', value)}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+                <Grid.Item col={4} s={12}>
+                  <Flex gap={2} alignItems="center" paddingTop={6}>
+                    <Checkbox
+                      checked={settings.entitySubscriptions?.requireVerification ?? true}
+                      onCheckedChange={(checked) => updateEntitySubscriptions('requireVerification', checked)}
+                    />
+                    <Typography variant="omega">{t('entitySubscriptions.verify', 'Verify Entity Exists')}</Typography>
+                  </Flex>
+                </Grid.Item>
+                <Grid.Item col={4} s={12}>
+                  <Flex gap={2} alignItems="center" paddingTop={6}>
+                    <Checkbox
+                      checked={settings.entitySubscriptions?.enableMetrics ?? true}
+                      onCheckedChange={(checked) => updateEntitySubscriptions('enableMetrics', checked)}
+                    />
+                    <Typography variant="omega">{t('entitySubscriptions.metrics', 'Track Metrics')}</Typography>
+                  </Flex>
+                </Grid.Item>
+              </Grid.Root>
+            </Box>
+          )}
 
           <Box paddingTop={4} paddingBottom={2}>
             <Divider />

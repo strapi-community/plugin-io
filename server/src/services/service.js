@@ -1,6 +1,6 @@
 const service = ({ strapi }) => ({
   getWelcomeMessage() {
-    return 'Welcome to Strapi 🚀';
+    return 'Welcome to Strapi';
   },
 });
 
