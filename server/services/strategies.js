@@ -51,9 +51,13 @@ module.exports = ({ strapi }) => {
 				throw new UnauthorizedError('Invalid credentials');
 			}
 
-			return strapi.entityService.findOne('plugin::users-permissions.role', user.role.id, {
+			// Find role using Document Service API (Strapi v5)
+			const roles = await strapi.documents('plugin::users-permissions.role').findMany({
+				filters: { id: user.role.id },
 				fields: ['id', 'name'],
+				limit: 1,
 			});
+			return roles.length > 0 ? roles[0] : null;
 		},
 		verify: function (auth, config) {
 			// adapted from https://github.com/strapi/strapi/blob/main/packages/plugins/users-permissions/server/strategies/users-permissions.js#L80
@@ -76,8 +80,8 @@ module.exports = ({ strapi }) => {
 			return `${this.name}-${role.name.toLowerCase()}`;
 		},
 		getRooms: function () {
-			// fetch all role types
-			return strapi.entityService.findMany('plugin::users-permissions.role', {
+			// fetch all role types using Document Service API (Strapi v5)
+			return strapi.documents('plugin::users-permissions.role').findMany({
 				fields: ['id', 'name'],
 				populate: { permissions: true },
 			});
@@ -97,7 +101,9 @@ module.exports = ({ strapi }) => {
 				throw new UnauthorizedError('Invalid credentials');
 			}
 
-			const apiToken = await strapi.query('admin::api-token').findOne({
+			// Note: admin::api-token uses strapi.db.query() as it's a core admin entity
+			// that doesn't follow the Document Service pattern
+			const apiToken = await strapi.db.query('admin::api-token').findOne({
 				where: { accessKey: apiTokenService.hash(token) },
 				select: ['id', 'name', 'type', 'lastUsedAt', 'expiresAt'],
 				populate: ['permissions'],
@@ -119,7 +125,7 @@ module.exports = ({ strapi }) => {
 
 			// update lastUsedAt if the token has not been used in the last hour
 			if (!apiToken.lastUsedAt || differenceInHours(currentDate, parseISO(apiToken.lastUsedAt)) >= 1) {
-				await strapi.query('admin::api-token').update({
+				await strapi.db.query('admin::api-token').update({
 					where: { id: apiToken.id },
 					data: { lastUsedAt: currentDate },
 				});
@@ -172,9 +178,10 @@ module.exports = ({ strapi }) => {
 		},
 		getRooms: function () {
 			// fetch active token types
-			return strapi.entityService.findMany('admin::api-token', {
-				fields: ['id', 'type', 'name'],
-				filters: {
+			// Note: admin::api-token uses strapi.db.query() as it's a core admin entity
+			return strapi.db.query('admin::api-token').findMany({
+				select: ['id', 'type', 'name'],
+				where: {
 					$or: [
 						{
 							expiresAt: {
@@ -186,7 +193,7 @@ module.exports = ({ strapi }) => {
 						},
 					],
 				},
-				populate: { permissions: true },
+				populate: ['permissions'],
 			});
 		},
 	};

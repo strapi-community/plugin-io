@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Box, Flex, Typography } from '@strapi/design-system';
 import { User, Message, Lightning, Check } from '@strapi/icons';
 import { useFetchClient } from '@strapi/strapi/admin';

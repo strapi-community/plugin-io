@@ -74,7 +74,8 @@ async function bootstrapLifecycles({ strapi }) {
 					// Ensure query executes after commit
 					scheduleAfterTransaction(async () => {
 						try {
-							const records = await strapi.entityService.findMany(uid, clonedQuery);
+							// Use Document Service API (Strapi v5)
+							const records = await strapi.documents(uid).findMany(clonedQuery);
 					records.forEach((r) => {
 						strapi.$io.emit({
 							event: eventType,
@@ -126,7 +127,8 @@ async function bootstrapLifecycles({ strapi }) {
 				// Ensure query executes after commit
 				scheduleAfterTransaction(async () => {
 					try {
-						const records = await strapi.entityService.findMany(uid, {
+						// Use Document Service API (Strapi v5)
+						const records = await strapi.documents(uid).findMany({
 							filters: clonedWhere,
 						});
 						records.forEach((r) => {

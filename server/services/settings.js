@@ -58,6 +58,15 @@ module.exports = ({ strapi }) => {
 			enablePrivateRooms: false,
 		},
 		
+		// Entity Subscriptions (NEW)
+		entitySubscriptions: {
+			enabled: true, // Enable/disable entity-specific subscriptions
+			maxSubscriptionsPerSocket: 100, // Max entities a socket can subscribe to
+			requireVerification: true, // Verify entity exists before subscribing
+			allowedContentTypes: [], // Empty = all allowed, or specific UIDs: ['api::article.article']
+			enableMetrics: true, // Track subscription metrics
+		},
+		
 		// Role-based Permissions
 		rolePermissions: {
 			// Default: all roles can connect with all methods

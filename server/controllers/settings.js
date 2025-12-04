@@ -122,7 +122,8 @@ module.exports = ({ strapi }) => ({
 	 * Get available user roles for permissions configuration
 	 */
 	async getRoles(ctx) {
-		const roles = await strapi.query('plugin::users-permissions.role').findMany();
+		// Use Document Service API (Strapi v5)
+		const roles = await strapi.documents('plugin::users-permissions.role').findMany({});
 		ctx.body = {
 			data: roles.map((role) => ({
 				id: role.id,
