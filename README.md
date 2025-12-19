@@ -1,4 +1,4 @@
-# strapi-plugin-io
+# @strapi-community/plugin-io
 
 A plugin for [Strapi CMS](https://github.com/strapi/strapi) that provides the ability for [Socket IO](https://socket.io) integration
 
