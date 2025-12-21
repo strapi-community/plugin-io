@@ -1,31 +1,162 @@
-# This workflow will publish a package to NPM when a release is created
+# Strapi Plugin CI/CD Pipeline
+# Best Practices workflow for building, testing, and publishing Strapi v5 plugins
 
-name: Publish to NPM
+name: CI/CD
 
 on:
+  push:
+    branches: [main, feat/v5-support]
+  pull_request:
+    branches: [main]
   release:
     types: [published]
 
+env:
+  NODE_VERSION: '20.x'
+
 jobs:
-  publish-npm:
+  # ============================================
+  # Build & Verify Job
+  # Runs on every push and PR to validate the plugin
+  # ============================================
+  build:
+    name: Build & Verify
     runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout branch
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Node v20
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install --legacy-peer-deps
+        run: npm ci --legacy-peer-deps
 
       - name: Build plugin
         run: npm run build
 
+      - name: Verify plugin structure
+        run: npm run verify
+
+      - name: Check package.json exports
+        run: |
+          echo "[INFO] Checking package exports..."
+          node -e "
+            const pkg = require('./package.json');
+            const required = ['./strapi-admin', './strapi-server'];
+            for (const exp of required) {
+              if (!pkg.exports[exp]) {
+                console.error('[ERROR] Missing export:', exp);
+                process.exit(1);
+              }
+            }
+            console.log('[SUCCESS] All required exports present');
+          "
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 7
+
+  # ============================================
+  # Publish to NPM Job
+  # Only runs when a GitHub Release is published
+  # ============================================
+  publish:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'release'
+    
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Verify version matches release tag
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          # Remove 'v' prefix if present
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+          
+          echo "[INFO] Package version: $PKG_VERSION"
+          echo "[INFO] Release tag: $RELEASE_TAG (version: $RELEASE_VERSION)"
+          
+          if [ "$PKG_VERSION" != "$RELEASE_VERSION" ]; then
+            echo "[ERROR] Version mismatch! Package: $PKG_VERSION, Release: $RELEASE_VERSION"
+            echo "[INFO] Please update package.json version to match the release tag."
+            exit 1
+          fi
+          
+          echo "[SUCCESS] Version match confirmed"
+
+      - name: Determine npm tag
+        id: npm-tag
+        run: |
+          RELEASE_TAG="${{ github.event.release.tag_name }}"
+          
+          # Determine npm dist-tag based on release type
+          if [[ "$RELEASE_TAG" == *"-beta"* ]]; then
+            echo "tag=beta" >> $GITHUB_OUTPUT
+          elif [[ "$RELEASE_TAG" == *"-alpha"* ]]; then
+            echo "tag=alpha" >> $GITHUB_OUTPUT
+          elif [[ "$RELEASE_TAG" == *"-rc"* ]]; then
+            echo "tag=next" >> $GITHUB_OUTPUT
+          else
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "[INFO] NPM tag: $(cat $GITHUB_OUTPUT | grep tag | cut -d= -f2)"
+
       - name: Publish to NPM
-        run: npm publish --access public
+        run: |
+          echo "[INFO] Publishing with tag: ${{ steps.npm-tag.outputs.tag }}"
+          npm publish --access public --tag ${{ steps.npm-tag.outputs.tag }}
         env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Post-publish verification
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          
+          echo "[INFO] Waiting for NPM registry to update..."
+          sleep 10
+          
+          echo "[INFO] Verifying package on NPM..."
+          npm view "$PKG_NAME@$PKG_VERSION" version || echo "[WARNING] Package may take a few minutes to appear on NPM"
+          
+          echo ""
+          echo "============================================"
+          echo "[SUCCESS] Published $PKG_NAME@$PKG_VERSION"
+          echo "============================================"
+          echo ""
+          echo "Install with:"
+          echo "  npm install $PKG_NAME@$PKG_VERSION"
+          echo ""
+          echo "View on NPM:"
+          echo "  https://www.npmjs.com/package/$PKG_NAME"
+          echo ""
