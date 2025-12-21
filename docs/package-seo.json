@@ -1,6 +1,6 @@
 {
-  "name": "strapi-plugin-io",
-  "version": "3.0.0",
+  "name": "@strapi-community/plugin-io",
+  "version": "5.0.0",
   "description": "Socket.IO plugin for Strapi v5 CMS with OAuth authentication, real-time events, Redis adapter, and production-ready features",
   "keywords": [
     "strapi",
@@ -18,7 +18,7 @@
     "headless-cms",
     "nodejs",
     "real-time-events",
-    "strapi-plugin-io",
+    "@strapi-community/plugin-io",
     "strapi-websocket",
     "strapi-realtime",
     "socket-io-strapi",
@@ -27,10 +27,10 @@
   "homepage": "https://strapi-plugin-io.netlify.app",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ComfortablyCoding/strapi-plugin-io.git"
+    "url": "https://github.com/strapi-community/strapi-plugin-io.git"
   },
   "bugs": {
-    "url": "https://github.com/ComfortablyCoding/strapi-plugin-io/issues"
+    "url": "https://github.com/strapi-community/strapi-plugin-io/issues"
   },
   "author": {
     "name": "ComfortablyCoding",

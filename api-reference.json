@@ -1,11 +1,11 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Strapi Socket.IO Plugin API Reference",
-  "version": "3.0.0",
+  "version": "5.0.0",
   "description": "Token-optimized API reference for AI assistants and code editors",
   
   "quickStart": {
-    "install": "npm install strapi-plugin-io",
+    "install": "npm install @strapi-community/plugin-io",
     "minimalConfig": {
       "io": {
         "enabled": true,
@@ -226,7 +226,7 @@
   },
   
   "typescript": {
-    "imports": "import type { SocketIO, EmitOptions, RawEmitOptions } from 'strapi-plugin-io/types'",
+    "imports": "import type { SocketIO, EmitOptions, RawEmitOptions } from '@strapi-community/plugin-io/types'",
     "usage": "const io: SocketIO = strapi.$io; await io.emit({ event: 'create', schema: 'api::article.article', data })"
   },
   
@@ -266,7 +266,7 @@
   },
   
   "meta": {
-    "version": "3.0.0",
+    "version": "5.0.0",
     "strapiVersion": "5.x",
     "maintainedUntil": "December 2026",
     "documentation": "See docs/ folder",

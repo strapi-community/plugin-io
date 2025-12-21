@@ -7,7 +7,7 @@ function getTransactionCtx() {
 		try {
 			transactionCtx = require('@strapi/database/dist/transaction-context').transactionCtx;
 		} catch (error) {
-			console.warn('[strapi-plugin-io] Unable to access transaction context:', error.message);
+			console.warn('[@strapi-community/plugin-io] Unable to access transaction context:', error.message);
 			transactionCtx = { get: () => null, onCommit: () => {} }; // Fallback noop
 		}
 	}

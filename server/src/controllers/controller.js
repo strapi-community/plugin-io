@@ -1,7 +1,7 @@
 const controller = ({ strapi }) => ({
   index(ctx) {
     ctx.body = strapi
-      .plugin('strapi-plugin-io')
+      .plugin('io')
       // the name of the service file & the method.
       .service('service')
       .getWelcomeMessage();
