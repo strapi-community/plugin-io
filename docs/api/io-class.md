@@ -2,7 +2,7 @@
 
 The `$io` class is the main Socket.IO instance available globally on the Strapi object (`strapi.$io`).
 
-**Version:** 3.x for Strapi v5  
+**Version:** 5.x for Strapi v5  
 **TypeScript:** Full type definitions included
 
 ---
@@ -17,14 +17,25 @@ const io = strapi.$io;
 io.emit({ event, schema, data });
 io.raw({ event, rooms, data });
 
-// Helper functions (new in v3.0)
+// Room management
 io.joinRoom(socketId, roomName);
 io.leaveRoom(socketId, roomName);
 io.getSocketsInRoom(roomName);
+
+// Messaging
 io.sendPrivateMessage(socketId, event, data);
 io.broadcast(socketId, event, data);
 io.emitToNamespace(namespace, event, data);
+
+// Connection management
 io.disconnectSocket(socketId, reason);
+
+// Entity subscriptions (new in v5.0)
+io.subscribeToEntity(socketId, uid, id);
+io.unsubscribeFromEntity(socketId, uid, id);
+io.getEntitySubscriptions(socketId);
+io.emitToEntity(uid, id, event, data);
+io.getEntityRoomSockets(uid, id);
 
 // Properties
 io.server;           // Raw Socket.IO server
@@ -421,6 +432,150 @@ strapi.$io.disconnectSocket(socket.id, 'Account deleted');
 
 // Session timeout
 strapi.$io.disconnectSocket(socket.id, 'Session expired');
+```
+
+---
+
+## Entity Subscription Functions
+
+Entity subscriptions allow targeted updates for specific entities rather than receiving all events for a content type.
+
+### `subscribeToEntity()`
+
+Subscribe a socket to a specific entity (server-side).
+
+**Signature:**
+
+```typescript
+subscribeToEntity(
+  socketId: string,
+  uid: string,
+  id: string | number
+): Promise<EntitySubscriptionResult>
+
+interface EntitySubscriptionResult {
+  success: boolean;
+  room?: string;
+  uid?: string;
+  id?: string | number;
+  error?: string;
+}
+```
+
+```javascript
+// Subscribe user to article updates
+const result = await strapi.$io.subscribeToEntity(
+  socket.id,
+  'api::article.article',
+  123
+);
+
+if (result.success) {
+  console.log(`Subscribed to room: ${result.room}`);
+}
+```
+
+### `unsubscribeFromEntity()`
+
+Unsubscribe a socket from a specific entity.
+
+**Signature:**
+
+```typescript
+unsubscribeFromEntity(
+  socketId: string,
+  uid: string,
+  id: string | number
+): EntitySubscriptionResult
+```
+
+```javascript
+// Unsubscribe when user leaves article page
+const result = strapi.$io.unsubscribeFromEntity(
+  socket.id,
+  'api::article.article',
+  123
+);
+```
+
+### `getEntitySubscriptions()`
+
+Get all entity subscriptions for a socket.
+
+**Signature:**
+
+```typescript
+getEntitySubscriptions(socketId: string): {
+  success: boolean;
+  subscriptions?: Array<{ uid: string; id: string; room: string }>;
+  error?: string;
+}
+```
+
+```javascript
+// Check what entities a user is watching
+const result = strapi.$io.getEntitySubscriptions(socket.id);
+
+if (result.success) {
+  result.subscriptions.forEach(sub => {
+    console.log(`Watching: ${sub.uid} #${sub.id}`);
+  });
+}
+```
+
+### `emitToEntity()`
+
+Emit an event to all clients subscribed to a specific entity.
+
+**Signature:**
+
+```typescript
+emitToEntity(
+  uid: string,
+  id: string | number,
+  event: string,
+  data: any
+): void
+```
+
+```javascript
+// Notify all subscribers when article gets a new comment
+strapi.$io.emitToEntity(
+  'api::article.article',
+  123,
+  'article:commented',
+  {
+    commentId: 456,
+    author: 'jane_doe',
+    text: 'Great article!'
+  }
+);
+```
+
+### `getEntityRoomSockets()`
+
+Get all sockets subscribed to a specific entity.
+
+**Signature:**
+
+```typescript
+getEntityRoomSockets(
+  uid: string,
+  id: string | number
+): Promise<Array<{ id: string; user: any }>>
+```
+
+```javascript
+// Check who's watching an article
+const sockets = await strapi.$io.getEntityRoomSockets(
+  'api::article.article',
+  123
+);
+
+console.log(`${sockets.length} users watching this article`);
+sockets.forEach(s => {
+  console.log(`User: ${s.user?.username || 'anonymous'}`);
+});
 ```
 
 ---

@@ -18,8 +18,10 @@ Add real-time capabilities to your Strapi application with WebSocket support. Au
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage Examples](#usage-examples)
+- [Helper Functions](#helper-functions)
 - [Authentication](#authentication)
 - [Admin Panel](#admin-panel)
+- [Monitoring Service](#monitoring-service)
 - [TypeScript Support](#typescript-support)
 - [Performance](#performance)
 - [Migration Guide](#migration-guide)
@@ -40,7 +42,7 @@ Add real-time capabilities to your Strapi application with WebSocket support. Au
 ### Developer Experience
 - **Visual Admin Panel** - Configure everything through the Strapi admin interface
 - **TypeScript Support** - Full type definitions for IntelliSense
-- **Helper Functions** - 12+ utility methods for common tasks
+- **Helper Functions** - 12 utility methods for common tasks
 - **Comprehensive Documentation** - Detailed guides and examples
 
 ### Production Ready
@@ -167,8 +169,7 @@ module.exports = {
       contentTypes: [
         {
           uid: 'api::article.article',
-          actions: ['create', 'update'],  // Only these events
-          populate: ['author', 'category'] // Include relations
+          actions: ['create', 'update']  // Only these events
         },
         {
           uid: 'api::comment.comment',
@@ -215,6 +216,8 @@ module.exports = {
   }
 };
 ```
+
+> **Note**: Relations are included globally via the admin panel settings (`Settings > Socket.IO > Events > Include Relations`), not per content type in the config file.
 
 ### Environment Variables
 
@@ -460,6 +463,130 @@ strapi.$io.disconnectSocket(socketId, 'Kicked by admin');
 
 ---
 
+## Helper Functions
+
+The plugin provides 12 utility functions available on `strapi.$io`:
+
+### Room Management
+
+#### `joinRoom(socketId, roomName)`
+Add a socket to a room.
+
+```javascript
+const success = strapi.$io.joinRoom(socketId, 'premium-users');
+// Returns: true if socket found and joined, false otherwise
+```
+
+#### `leaveRoom(socketId, roomName)`
+Remove a socket from a room.
+
+```javascript
+const success = strapi.$io.leaveRoom(socketId, 'premium-users');
+// Returns: true if socket found and left, false otherwise
+```
+
+#### `getSocketsInRoom(roomName)`
+Get all sockets in a specific room.
+
+```javascript
+const sockets = await strapi.$io.getSocketsInRoom('premium-users');
+// Returns: [{ id: 'socket-id', user: { username: 'john' } }, ...]
+```
+
+### Messaging
+
+#### `sendPrivateMessage(socketId, event, data)`
+Send a message to a specific socket.
+
+```javascript
+strapi.$io.sendPrivateMessage(socketId, 'order:shipped', {
+  orderId: 123,
+  trackingNumber: 'ABC123'
+});
+```
+
+#### `broadcast(socketId, event, data)`
+Broadcast from a socket to all other connected clients.
+
+```javascript
+strapi.$io.broadcast(socketId, 'user:typing', {
+  username: 'john',
+  channel: 'general'
+});
+```
+
+#### `emitToNamespace(namespace, event, data)`
+Emit an event to all clients in a namespace.
+
+```javascript
+strapi.$io.emitToNamespace('admin', 'alert', {
+  message: 'New user registered',
+  level: 'info'
+});
+```
+
+### Connection Management
+
+#### `disconnectSocket(socketId, reason)`
+Force disconnect a specific socket.
+
+```javascript
+const success = strapi.$io.disconnectSocket(socketId, 'Session expired');
+// Returns: true if socket found and disconnected, false otherwise
+```
+
+### Entity Subscriptions
+
+#### `subscribeToEntity(socketId, uid, id)`
+Subscribe a socket to a specific entity (server-side).
+
+```javascript
+const result = await strapi.$io.subscribeToEntity(socketId, 'api::article.article', 123);
+// Returns: { success: true, room: 'api::article.article:123', uid, id }
+// or: { success: false, error: 'Socket not found' }
+```
+
+#### `unsubscribeFromEntity(socketId, uid, id)`
+Unsubscribe a socket from a specific entity.
+
+```javascript
+const result = strapi.$io.unsubscribeFromEntity(socketId, 'api::article.article', 123);
+// Returns: { success: true, room: 'api::article.article:123', uid, id }
+```
+
+#### `getEntitySubscriptions(socketId)`
+Get all entity subscriptions for a socket.
+
+```javascript
+const result = strapi.$io.getEntitySubscriptions(socketId);
+// Returns: { 
+//   success: true, 
+//   subscriptions: [
+//     { uid: 'api::article.article', id: '123', room: 'api::article.article:123' }
+//   ]
+// }
+```
+
+#### `emitToEntity(uid, id, event, data)`
+Emit an event to all clients subscribed to a specific entity.
+
+```javascript
+strapi.$io.emitToEntity('api::article.article', 123, 'article:commented', {
+  commentId: 456,
+  author: 'jane'
+});
+```
+
+#### `getEntityRoomSockets(uid, id)`
+Get all sockets subscribed to a specific entity.
+
+```javascript
+const sockets = await strapi.$io.getEntityRoomSockets('api::article.article', 123);
+// Returns: [{ id: 'socket-id', user: { username: 'john' } }, ...]
+```
+
+---
+
 ## Authentication
 
 The plugin supports multiple authentication strategies.
@@ -501,7 +628,7 @@ const socket = io('http://localhost:1337', {
 
 ```javascript
 // 1. Create API token in Strapi Admin:
-//    Settings → Global Settings → API Tokens → Create new token
+//    Settings > Global Settings > API Tokens > Create new token
 
 // 2. Connect with API token
 const socket = io('http://localhost:1337', {
@@ -524,7 +651,7 @@ socket.on('article:create', (data) => {
 ```
 
 Configure permissions in the Strapi admin panel:
-1. Go to **Settings → Users & Permissions → Roles**
+1. Go to **Settings > Users & Permissions > Roles**
 2. Select a role (e.g., "Authenticated")
 3. Configure Socket.IO permissions per content type
 
@@ -532,7 +659,11 @@ Configure permissions in the Strapi admin panel:
 
 ## Admin Panel
 
+The plugin provides a full admin interface for configuration and monitoring.
+
 ### Dashboard Widget
+
+> **Requires Strapi v5.13+**
 
 After installation, a live statistics widget appears on your Strapi admin homepage:
 
@@ -545,9 +676,11 @@ After installation, a live statistics widget appears on your Strapi admin homepa
 
 Updates automatically every 5 seconds.
 
-### Settings Panel
+### Settings Page
 
-Navigate to **Settings → Socket.IO** for visual configuration:
+Navigate to **Settings > Socket.IO > Settings** for visual configuration:
+
+**Path:** `/admin/settings/io/settings`
 
 #### General Settings
 - Enable/disable the plugin
@@ -555,28 +688,176 @@ Navigate to **Settings → Socket.IO** for visual configuration:
 - Set server options (ping timeout, etc.)
 
 #### Content Types
-- Enable automatic events for content types
+- Enable automatic events for content types per role
 - Select specific actions (create, update, delete)
-- Include relations in events
+- Configure role-based permissions
+
+#### Events
+- Include relations in events (`includeRelations`)
 - Custom event names
+- Exclude specific fields
+- Only published content mode
 
 #### Security
 - Require authentication
 - Rate limiting configuration
-- IP whitelisting
+- IP whitelisting/blacklisting
 - Input validation rules
 
-#### Monitoring
-- View active connections with user details
-- See event logs in real-time
-- Monitor performance metrics
-- Export connection data
+#### Rooms
+- Auto-join by role configuration
+- Enable/disable private rooms
 
 #### Advanced
 - Configure namespaces
-- Set up Redis adapter for scaling
-- Custom event handlers
-- Lifecycle hooks
+- Redis adapter settings for scaling
+- Entity subscription limits
+
+### Monitoring Page
+
+Navigate to **Settings > Socket.IO > Monitoring** for live statistics:
+
+**Path:** `/admin/settings/io/monitoring`
+
+- View active connections with user details
+- See event logs in real-time
+- Monitor performance metrics (events/second)
+- View entity subscription statistics
+- Send test events
+- Reset statistics
+
+---
+
+## Monitoring Service
+
+Access monitoring data programmatically via the monitoring service:
+
+```javascript
+const monitoringService = strapi.plugin('io').service('monitoring');
+```
+
+### Available Methods
+
+#### `getConnectionStats()`
+Get current connection statistics.
+
+```javascript
+const stats = monitoringService.getConnectionStats();
+// Returns:
+// {
+//   connected: 42,
+//   rooms: [
+//     { name: 'Authenticated', members: 35, isEntityRoom: false },
+//     { name: 'api::article.article:123', members: 5, isEntityRoom: true }
+//   ],
+//   sockets: [
+//     {
+//       id: 'abc123',
+//       connected: true,
+//       rooms: ['Authenticated'],
+//       entitySubscriptions: [{ uid: 'api::article.article', id: '123', room: '...' }],
+//       handshake: { address: '::1', time: '...', query: {} },
+//       user: { id: 1, username: 'john' }
+//     }
+//   ],
+//   entitySubscriptions: {
+//     total: 15,
+//     byContentType: { 'api::article.article': 10, 'api::comment.comment': 5 },
+//     rooms: ['api::article.article:123', ...]
+//   }
+// }
+```
+
+#### `getEventStats()`
+Get event statistics.
+
+```javascript
+const stats = monitoringService.getEventStats();
+// Returns:
+// {
+//   totalEvents: 1234,
+//   eventsByType: { 'create': 500, 'update': 600, 'delete': 134 },
+//   lastReset: 1703123456789,
+//   eventsPerSecond: '2.50'
+// }
+```
+
+#### `getEventLog(limit)`
+Get recent event log entries.
+
+```javascript
+const logs = monitoringService.getEventLog(50);
+// Returns:
+// [
+//   { timestamp: 1703123456789, type: 'create', data: {...} },
+//   { timestamp: 1703123456790, type: 'connect', data: {...} }
+// ]
+```
+
+#### `logEvent(type, data)`
+Manually log an event.
+
+```javascript
+monitoringService.logEvent('custom-event', {
+  action: 'user-action',
+  userId: 123
+});
+```
+
+#### `resetStats()`
+Reset all statistics and clear event log.
+
+```javascript
+monitoringService.resetStats();
+```
+
+#### `sendTestEvent(eventName, data)`
+Send a test event to all connected clients.
+
+```javascript
+const result = monitoringService.sendTestEvent('test', { message: 'Hello!' });
+// Returns:
+// {
+//   success: true,
+//   eventName: 'test',
+//   data: { message: 'Hello!', timestamp: 1703123456789, test: true },
+//   recipients: 42
+// }
+```
+
+### Use Cases
+
+**Custom Analytics Dashboard:**
+
+```javascript
+// In a custom controller
+async getAnalytics(ctx) {
+  const monitoring = strapi.plugin('io').service('monitoring');
+  
+  ctx.body = {
+    connections: monitoring.getConnectionStats(),
+    events: monitoring.getEventStats(),
+    recentActivity: monitoring.getEventLog(10)
+  };
+}
+```
+
+**Health Check Endpoint:**
+
+```javascript
+async healthCheck(ctx) {
+  const monitoring = strapi.plugin('io').service('monitoring');
+  const stats = monitoring.getConnectionStats();
+  
+  ctx.body = {
+    status: 'healthy',
+    websocket: {
+      connected: stats.connected,
+      rooms: stats.rooms.length
+    }
+  };
+}
+```
 
 ---
 
@@ -591,7 +872,12 @@ import type {
   SocketIO, 
   SocketIOConfig,
   EmitOptions,
-  RawEmitOptions 
+  RawEmitOptions,
+  PluginSettings,
+  MonitoringService,
+  SettingsService,
+  ConnectionStats,
+  EventStats
 } from '@strapi-community/plugin-io/types';
 ```
 
@@ -608,8 +894,7 @@ export default {
       contentTypes: [
         {
           uid: 'api::article.article',
-          actions: ['create', 'update', 'delete'],
-          populate: ['author', 'category']
+          actions: ['create', 'update', 'delete']
         }
       ],
       socket: {
@@ -636,10 +921,14 @@ const io: SocketIO = strapi.$io;
 
 // All methods have full IntelliSense
 await io.emit({
-  event: 'notification',
-  schema: 'api::article.article',
+  event: 'create',
+  schema: strapi.contentTypes['api::article.article'],
   data: { title: 'New Article' }
 });
+
+// Helper functions are typed
+const sockets = await io.getSocketsInRoom('premium-users');
+io.sendPrivateMessage(sockets[0].id, 'welcome', { message: 'Hello!' });
 ```
 
 ---
@@ -714,8 +1003,6 @@ module.exports = ({ env }) => ({
 });
 ```
 
-For detailed performance tuning, see the [Optimizations Guide](./docs/optimizations.md).
-
 ---
 
 ## Migration Guide
@@ -746,7 +1033,7 @@ Your configuration stays the same - no code changes needed!
 
 #### What Changed
 
-- **Package name**: `strapi-plugin-io` → `@strapi-community/plugin-io`
+- **Package name**: `strapi-plugin-io` -> `@strapi-community/plugin-io`
 - **Package structure**: Uses new Strapi v5 Plugin SDK
 - **Dependencies**: Updated to Strapi v5 peer dependencies
 - **Build process**: Optimized build with modern tooling
@@ -776,16 +1063,13 @@ For detailed migration instructions, see [docs/guide/migration.md](./docs/guide/
 ### Guides
 
 - **[Getting Started](./docs/guide/getting-started.md)** - Step-by-step setup
-- **[Authentication](./docs/guide/authentication.md)** - JWT and API token setup
-- **[Security Best Practices](./docs/guide/security.md)** - Production security
-- **[Performance Tuning](./docs/optimizations.md)** - Scale your application
+- **[Widget Guide](./docs/guide/widget.md)** - Dashboard widget configuration
 
 ### Examples
 
 - **[Content Types](./docs/examples/content-types.md)** - Automatic CRUD events
 - **[Custom Events](./docs/examples/events.md)** - Server-client communication
 - **[Hooks & Adapters](./docs/examples/hooks.md)** - Redis, MongoDB integration
-- **[Real-World Use Cases](./docs/examples/)** - Chat, notifications, live editing
 
 ---
 
@@ -895,6 +1179,9 @@ Copyright (c) 2024 Strapi Community
 - Strapi v5 support
 - Package renamed to `@strapi-community/plugin-io`
 - Enhanced TypeScript support
+- Entity-specific subscriptions
+- 12 helper functions
+- Admin panel with monitoring dashboard
 - Performance optimizations
 - Updated documentation
 
@@ -904,11 +1191,11 @@ For full changelog, see [CHANGELOG.md](./CHANGELOG.md).
 
 <div align="center">
   
-**[Documentation](https://strapi-plugin-io.netlify.app/)** • 
-**[API Reference](./docs/api/io-class.md)** • 
-**[Examples](./docs/examples/)** • 
+**[Documentation](https://strapi-plugin-io.netlify.app/)** | 
+**[API Reference](./docs/api/io-class.md)** | 
+**[Examples](./docs/examples/)** | 
 **[GitHub](https://github.com/strapi-community/strapi-plugin-io)**
 
-Made with ❤️ for the Strapi community
+Made with love for the Strapi community
 
 </div>

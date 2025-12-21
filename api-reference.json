@@ -21,7 +21,7 @@
       "strapi.$io": {
         "description": "Main Socket.IO instance",
         "properties": ["server", "namespaces"],
-        "methods": ["emit", "raw", "joinRoom", "leaveRoom", "getSocketsInRoom", "sendPrivateMessage", "broadcast", "emitToNamespace", "disconnectSocket"]
+        "methods": ["emit", "raw", "joinRoom", "leaveRoom", "getSocketsInRoom", "sendPrivateMessage", "broadcast", "emitToNamespace", "disconnectSocket", "subscribeToEntity", "unsubscribeFromEntity", "getEntitySubscriptions", "emitToEntity", "getEntityRoomSockets"]
       },
       "strapi.$ioSettings": {
         "description": "Current plugin settings (read-only)"
@@ -94,6 +94,40 @@
         "description": "Force disconnect socket",
         "returns": "boolean - Success status",
         "example": "strapi.$io.disconnectSocket(socket.id, 'Kicked by admin')"
+      },
+      
+      "subscribeToEntity": {
+        "signature": "subscribeToEntity(socketId: string, uid: string, id: string|number): Promise<EntitySubscriptionResult>",
+        "description": "Subscribe a socket to a specific entity (server-side)",
+        "returns": "{ success: boolean, room?: string, uid?: string, id?: string|number, error?: string }",
+        "example": "const result = await strapi.$io.subscribeToEntity(socket.id, 'api::article.article', 123)"
+      },
+      
+      "unsubscribeFromEntity": {
+        "signature": "unsubscribeFromEntity(socketId: string, uid: string, id: string|number): EntitySubscriptionResult",
+        "description": "Unsubscribe a socket from a specific entity",
+        "returns": "{ success: boolean, room?: string, uid?: string, id?: string|number, error?: string }",
+        "example": "const result = strapi.$io.unsubscribeFromEntity(socket.id, 'api::article.article', 123)"
+      },
+      
+      "getEntitySubscriptions": {
+        "signature": "getEntitySubscriptions(socketId: string): EntitySubscriptionsResult",
+        "description": "Get all entity subscriptions for a socket",
+        "returns": "{ success: boolean, subscriptions?: Array<{ uid, id, room }>, error?: string }",
+        "example": "const result = strapi.$io.getEntitySubscriptions(socket.id)"
+      },
+      
+      "emitToEntity": {
+        "signature": "emitToEntity(uid: string, id: string|number, event: string, data: any): void",
+        "description": "Emit an event to all clients subscribed to a specific entity",
+        "example": "strapi.$io.emitToEntity('api::article.article', 123, 'article:commented', { commentId: 456 })"
+      },
+      
+      "getEntityRoomSockets": {
+        "signature": "getEntityRoomSockets(uid: string, id: string|number): Promise<Array<{ id: string, user: any }>>",
+        "description": "Get all sockets subscribed to a specific entity",
+        "returns": "Array of { id, user }",
+        "example": "const sockets = await strapi.$io.getEntityRoomSockets('api::article.article', 123)"
       }
     },
     
@@ -127,11 +161,10 @@
       "advanced": [
         {
           "uid": "api::article.article",
-          "actions": ["create", "update", "delete"],
-          "populate": ["author", "category"],
-          "eventPrefix": "article"
+          "actions": ["create", "update", "delete"]
         }
-      ]
+      ],
+      "note": "Relations are controlled globally via admin panel settings (Settings > Socket.IO > Events > Include Relations)"
     },
     
     "socket": {

@@ -138,9 +138,48 @@ export class SocketIO {
   disconnectSocket?(socketId: string, reason?: string): boolean;
   
   /**
+   * Subscribe a socket to a specific entity (server-side)
+   */
+  subscribeToEntity?(socketId: string, uid: string, id: string | number): Promise<EntitySubscriptionResult>;
+  
+  /**
+   * Unsubscribe a socket from a specific entity
+   */
+  unsubscribeFromEntity?(socketId: string, uid: string, id: string | number): EntitySubscriptionResult;
+  
+  /**
+   * Get all entity subscriptions for a socket
+   */
+  getEntitySubscriptions?(socketId: string): EntitySubscriptionsResult;
+  
+  /**
+   * Emit an event to all clients subscribed to a specific entity
+   */
+  emitToEntity?(uid: string, id: string | number, event: string, data: any): void;
+  
+  /**
+   * Get all sockets subscribed to a specific entity
+   */
+  getEntityRoomSockets?(uid: string, id: string | number): Promise<Array<{ id: string; user: any }>>;
+  
+  /**
    * Cleanup and destroy the Socket.IO instance
    */
   destroy(): Promise<void>;
+}
+
+export interface EntitySubscriptionResult {
+  success: boolean;
+  room?: string;
+  uid?: string;
+  id?: string | number;
+  error?: string;
+}
+
+export interface EntitySubscriptionsResult {
+  success: boolean;
+  subscriptions?: Array<{ uid: string; id: string; room: string }>;
+  error?: string;
 }
 
 /**
@@ -224,11 +263,12 @@ export interface MonitoringService {
 
 export interface ConnectionStats {
   connected: number;
-  rooms: Array<{ name: string; members: number }>;
+  rooms: Array<{ name: string; members: number; isEntityRoom?: boolean }>;
   sockets: Array<{
     id: string;
     connected: boolean;
     rooms: string[];
+    entitySubscriptions?: Array<{ uid: string; id: string; room: string }>;
     handshake: {
       address: string;
       time: string;
@@ -236,13 +276,18 @@ export interface ConnectionStats {
     };
     user: any;
   }>;
+  entitySubscriptions?: {
+    total: number;
+    byContentType: Record<string, number>;
+    rooms: string[];
+  };
 }
 
 export interface EventStats {
   totalEvents: number;
   eventsByType: Record<string, number>;
   lastReset: number;
-  eventsPerSecond: number;
+  eventsPerSecond: string | number;
 }
 
 export interface EventLogEntry {
