@@ -2,9 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [main, feat/v5-support]
+    branches: [main, main-v5]
   pull_request:
-    branches: [main]
+    branches: [main, main-v5]
   release:
     types: [published]
   workflow_dispatch:
@@ -83,13 +83,11 @@ jobs:
           PKG_VERSION=$(node -p "require('./package.json').version")
           RELEASE_TAG="${{ github.event.release.tag_name }}"
           RELEASE_VERSION="${RELEASE_TAG#v}"
-          echo "[INFO] Package version: $PKG_VERSION"
-          echo "[INFO] Release tag: $RELEASE_TAG (version: $RELEASE_VERSION)"
+          echo "[INFO] Package: $PKG_VERSION, Release: $RELEASE_VERSION"
           if [ "$PKG_VERSION" != "$RELEASE_VERSION" ]; then
             echo "[ERROR] Version mismatch!"
             exit 1
           fi
-          echo "[SUCCESS] Version match confirmed"
 
       - name: Determine npm tag
         id: npm-tag
@@ -114,9 +112,8 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Post-publish verification
+      - name: Done
         run: |
           PKG_NAME=$(node -p "require('./package.json').name")
           PKG_VERSION=$(node -p "require('./package.json').version")
           echo "[SUCCESS] Published $PKG_NAME@$PKG_VERSION"
-          echo "Install: npm install $PKG_NAME@$PKG_VERSION"
