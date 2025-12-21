@@ -1,6 +1,6 @@
-# Migration Guide: v2 (Strapi v4) to v3 (Strapi v5)
+# Migration Guide: v2 (Strapi v4) to v5 (Strapi v5)
 
-Complete guide for migrating from `strapi-plugin-io` v2.x (Strapi v4) to v3.x (Strapi v5).
+Complete guide for migrating from `@strapi-community/plugin-io` v2.x (Strapi v4) to v5.x (Strapi v5).
 
 ---
 
@@ -16,7 +16,7 @@ The Socket.IO plugin has been updated for Strapi v5 with minimal breaking change
 
 | Plugin Version | Strapi Version | Node.js | Status |
 |----------------|----------------|---------|--------|
-| **v3.x** | v5.x | 18-22 | ✅ Current |
+| **v5.x** | v5.x | 18-22 | ✅ Current |
 | v2.x | v4.x | 14-20 | 🔒 Legacy |
 
 ---
@@ -62,7 +62,7 @@ npm install @strapi/plugin-i18n@5 @strapi/plugin-graphql@5
 npm uninstall strapi-plugin-io
 
 # Install new version
-npm install strapi-plugin-io@latest
+npm install @strapi-community/plugin-io@latest
 ```
 
 ### Step 3: Update Configuration
@@ -70,7 +70,7 @@ npm install strapi-plugin-io@latest
 **No changes needed!** Your `config/plugins.js` works as-is:
 
 ```javascript
-// config/plugins.js - Works in both v2 and v3! ✅
+// config/plugins.js - Works in both v2 and v5! ✅
 module.exports = {
   io: {
     enabled: true,
@@ -173,7 +173,7 @@ These are Strapi core changes, not plugin-specific:
 
 ```typescript
 // types/strapi.d.ts
-import type { SocketIO } from 'strapi-plugin-io/types';
+import type { SocketIO } from '@strapi-community/plugin-io/types';
 
 declare module '@strapi/strapi' {
   export interface Strapi {
@@ -201,7 +201,7 @@ npm install @strapi/strapi@5 @strapi/plugin-users-permissions@5
 **✅ No changes needed**
 
 ```javascript
-// Works in both v2 and v3
+// Works in both v2 and v5
 contentTypes: [
   'api::article.article',
   {
@@ -215,7 +215,7 @@ contentTypes: [
 **✅ No changes needed**
 
 ```javascript
-// Works in both v2 and v3
+// Works in both v2 and v5
 events: [
   {
     name: 'connection',
@@ -230,7 +230,7 @@ events: [
 **✅ No changes needed**
 
 ```javascript
-// Works in both v2 and v3
+// Works in both v2 and v5
 hooks: {
   async init({ strapi, io }) {
     // Redis adapter setup
@@ -344,7 +344,7 @@ All settings work the same:
 
 **Symptoms:**
 ```
-Error: Cannot find module 'strapi-plugin-io'
+Error: Cannot find module '@strapi-community/plugin-io'
 ```
 
 **Solution:**
@@ -365,7 +365,7 @@ Property '$io' does not exist on type 'Strapi'
 **Solution:**
 ```typescript
 // Create types/strapi.d.ts
-import type { SocketIO } from 'strapi-plugin-io/types';
+import type { SocketIO } from '@strapi-community/plugin-io/types';
 
 declare module '@strapi/strapi' {
   export interface Strapi {
@@ -507,7 +507,7 @@ npm install
 npm install @strapi/strapi@4
 
 # Downgrade plugin
-npm install strapi-plugin-io@2
+npm install @strapi-community/plugin-io@2
 ```
 
 ---
@@ -547,9 +547,9 @@ npm install strapi-plugin-io@2
 ### Resources
 - 📖 [Official Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - 📖 [Strapi v5 Breaking Changes](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
-- 🔗 [Plugin GitHub Repository](https://github.com/ComfortablyCoding/strapi-plugin-io)
-- 💬 [GitHub Discussions](https://github.com/ComfortablyCoding/strapi-plugin-io/discussions)
-- 🐛 [Report Issues](https://github.com/ComfortablyCoding/strapi-plugin-io/issues)
+- 🔗 [Plugin GitHub Repository](https://github.com/strapi-community/strapi-plugin-io)
+- 💬 [GitHub Discussions](https://github.com/strapi-community/strapi-plugin-io/discussions)
+- 🐛 [Report Issues](https://github.com/strapi-community/strapi-plugin-io/issues)
 
 ### Support
 If you encounter issues during migration:
@@ -588,7 +588,7 @@ If you encounter issues during migration:
 ### ⚠️ What to Update
 - Strapi core to v5
 - All @strapi/* packages
-- Plugin to v3.x
+- Plugin to v5.x
 - Dependencies (npm install)
 
 ### 🎯 Migration Difficulty

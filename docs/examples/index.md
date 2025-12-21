@@ -563,4 +563,4 @@ Explore detailed examples for specific use cases:
 
 - **[API Reference](/api/io-class)** - Complete API documentation
 - **[Configuration](/api/plugin-config)** - All configuration options
-- **[GitHub Discussions](https://github.com/ComfortablyCoding/strapi-plugin-io/discussions)** - Ask questions
+- **[GitHub Discussions](https://github.com/strapi-community/strapi-plugin-io/discussions)** - Ask questions

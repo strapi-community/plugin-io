@@ -9,7 +9,7 @@ Get up and running with Socket.IO in your Strapi v5 application in less than 5 m
 - **npm**: 6.0.0 or higher
 
 ::: tip Compatibility
-This version (v3.x) is designed for **Strapi v5** only. For Strapi v4, use version 2.x of this plugin.
+This version (v5.x) is designed for **Strapi v5** only. For Strapi v4, use version 2.x of this plugin.
 :::
 
 ## Installation
@@ -19,15 +19,15 @@ Install the plugin in your Strapi project:
 ::: code-group
 
 ```bash [npm]
-npm install strapi-plugin-io
+npm install @strapi-community/plugin-io
 ```
 
 ```bash [yarn]
-yarn add strapi-plugin-io
+yarn add @strapi-community/plugin-io
 ```
 
 ```bash [pnpm]
-pnpm add strapi-plugin-io
+pnpm add @strapi-community/plugin-io
 ```
 
 :::
@@ -322,5 +322,5 @@ config: {
 See our [Migration Guide](/guide/migration) for step-by-step instructions to upgrade from Strapi v4 to v5.
 
 ::: warning Data Transfer
-If using `strapi transfer` command, temporarily disable this plugin or run it on a different port. See [issue #76](https://github.com/ComfortablyCoding/strapi-plugin-io/issues/76) for details.
+If using `strapi transfer` command, temporarily disable this plugin or run it on a different port. See [issue #76](https://github.com/strapi-community/strapi-plugin-io/issues/76) for details.
 :::

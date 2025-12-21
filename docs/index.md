@@ -47,7 +47,7 @@ features:
 Install the plugin:
 
 ```bash
-npm install strapi-plugin-io
+npm install @strapi-community/plugin-io
 ```
 
 Enable in `config/plugins.js`:
@@ -88,7 +88,7 @@ socket.on('article:create', (data) => {
 });
 ```
 
-## What's New in v3.0
+## What's New in v5.0
 
 **Strapi v5 Support** - Built for the latest Strapi version with full compatibility
 
@@ -253,9 +253,9 @@ Configure everything visually in the admin panel:
 ## Community & Support
 
 - 📖 [Full Documentation](https://strapi-plugin-io.netlify.app/)
-- 🐛 [Report Issues](https://github.com/ComfortablyCoding/strapi-plugin-io/issues)
-- 💬 [Discussions](https://github.com/ComfortablyCoding/strapi-plugin-io/discussions)
-- ⭐ [Star on GitHub](https://github.com/ComfortablyCoding/strapi-plugin-io)
+- 🐛 [Report Issues](https://github.com/strapi-community/strapi-plugin-io/issues)
+- 💬 [Discussions](https://github.com/strapi-community/strapi-plugin-io/discussions)
+- ⭐ [Star on GitHub](https://github.com/strapi-community/strapi-plugin-io)
 
 ## Next Steps
 
@@ -300,7 +300,7 @@ Powerful bookmark management system with real-time sync capabilities. Share book
 
 ## License
 
-MIT License - see [LICENSE](https://github.com/ComfortablyCoding/strapi-plugin-io/blob/master/LICENSE) for details
+MIT License - see [LICENSE](https://github.com/strapi-community/strapi-plugin-io/blob/master/LICENSE) for details
 
 ---
 

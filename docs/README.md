@@ -267,8 +267,8 @@ MIT License - Same as the plugin
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/ComfortablyCoding/strapi-plugin-io/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/ComfortablyCoding/strapi-plugin-io/discussions)
+- **Issues**: [GitHub Issues](https://github.com/strapi-community/strapi-plugin-io/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/strapi-community/strapi-plugin-io/discussions)
 - **Documentation**: [strapi-plugin-io.netlify.app](https://strapi-plugin-io.netlify.app/)
 
 ---

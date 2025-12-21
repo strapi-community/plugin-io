@@ -469,7 +469,7 @@ events: [
 Full TypeScript definitions are included:
 
 ```typescript
-import type { SocketIO, EmitOptions, RawEmitOptions } from 'strapi-plugin-io/types';
+import type { SocketIO, EmitOptions, RawEmitOptions } from '@strapi-community/plugin-io/types';
 
 // Access with IntelliSense
 const io: SocketIO = strapi.$io;

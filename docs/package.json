@@ -1,7 +1,7 @@
 {
-  "name": "strapi-plugin-io-docs",
+  "name": "@strapi-community/plugin-io-docs",
   "version": "1.0.0",
-  "description": "Documentation for Strapi Plugin IO - Socket.IO Integration for Strapi v5",
+  "description": "Documentation for @strapi-community/plugin-io - Socket.IO Integration for Strapi v5",
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
