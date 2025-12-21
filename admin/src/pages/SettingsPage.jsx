@@ -121,13 +121,13 @@ const InputWrapper = styled.div`
     }
   }
   
-  /* Number Input specific */
+  /* Number Input specific - remove ALL spinners */
   input[type="number"] {
     width: 100% !important;
     min-height: 48px !important;
     font-size: 16px !important;
     
-    /* Remove spinner arrows on mobile for better UX */
+    /* Remove native browser spinner arrows */
     -moz-appearance: textfield;
     
     &::-webkit-outer-spin-button,
@@ -139,18 +139,6 @@ const InputWrapper = styled.div`
     @media (min-width: 768px) {
       min-height: 44px !important;
       font-size: 15px !important;
-      
-      /* Show spinner arrows on desktop */
-      -moz-appearance: auto;
-      
-      &::-webkit-outer-spin-button,
-      &::-webkit-inner-spin-button {
-        -webkit-appearance: auto;
-        width: 20px;
-        height: 20px;
-        margin: 0;
-        cursor: pointer;
-      }
     }
   }
   
@@ -167,46 +155,10 @@ const InputWrapper = styled.div`
     }
   }
   
-  /* Strapi NumberInput Component - hide spinners on mobile */
+  /* Strapi NumberInput Component - ALWAYS hide increment/decrement buttons */
   button[aria-label="Increment"],
   button[aria-label="Decrement"] {
-    display: none;
-    
-    @media (min-width: 768px) {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-width: 32px !important;
-      width: 32px !important;
-      height: 32px !important;
-      padding: 0 !important;
-      border: 1px solid #dcdce4 !important;
-      background: #ffffff !important;
-      border-radius: 4px !important;
-      transition: all 0.2s ease !important;
-      cursor: pointer !important;
-      
-      &:hover {
-        background: #f6f6f9 !important;
-        border-color: #4945ff !important;
-        
-        svg {
-          fill: #4945ff !important;
-        }
-      }
-      
-      &:active {
-        background: #eaeaef !important;
-        transform: scale(0.95);
-      }
-      
-      svg {
-        width: 10px !important;
-        height: 10px !important;
-        fill: #8e8ea9 !important;
-        transition: fill 0.2s ease !important;
-      }
-    }
+    display: none !important;
   }
   
   /* NumberInput Container - proper alignment */
