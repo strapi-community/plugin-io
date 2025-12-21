@@ -1,4 +1,4 @@
-import { p } from "../_chunks/index-Dmsc-WDK.mjs";
+import { i } from "../_chunks/index-DLXtrAtk.mjs";
 export {
-  p as default
+  i as default
 };

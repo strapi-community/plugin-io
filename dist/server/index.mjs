@@ -10949,6 +10949,12 @@ const getComponentAttributes = (schema2) => {
     return acc;
   }, []);
 };
+const getMediaAttributes = (schema2) => {
+  return ___default.reduce(schema2.attributes, (acc, attr, attrName) => {
+    if (isMediaAttribute(attr)) acc.push(attrName);
+    return acc;
+  }, []);
+};
 const getScalarAttributes = (schema2) => {
   return ___default.reduce(schema2.attributes, (acc, attr, attrName) => {
     if (isScalarAttribute(attr)) acc.push(attrName);
@@ -10974,6 +10980,7 @@ const contentTypes$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defi
   getContentTypeRoutePrefix,
   getCreatorFields,
   getDoesAttributeRequireValidation,
+  getMediaAttributes,
   getNonVisibleAttributes,
   getNonWritableAttributes,
   getOptions,
@@ -19437,16 +19444,16 @@ var shebangCommand$1 = (string2 = "") => {
   }
   return argument ? `${binary2} ${argument}` : binary2;
 };
-const fs$7 = require$$0$7;
+const fs$5 = require$$0$7;
 const shebangCommand = shebangCommand$1;
 function readShebang$1(command2) {
   const size = 150;
   const buffer = Buffer.alloc(size);
   let fd;
   try {
-    fd = fs$7.openSync(command2, "r");
-    fs$7.readSync(fd, buffer, 0, size, 0);
-    fs$7.closeSync(fd);
+    fd = fs$5.openSync(command2, "r");
+    fs$5.readSync(fd, buffer, 0, size, 0);
+    fs$5.closeSync(fd);
   } catch (e) {
   }
   return shebangCommand(buffer.toString());
@@ -20457,9 +20464,9 @@ var bufferStream$1 = (options) => {
 };
 const { constants: BufferConstants } = require$$0$b;
 const stream$1 = require$$0$a;
-const { promisify: promisify$5 } = require$$2$1;
+const { promisify: promisify$3 } = require$$2$1;
 const bufferStream = bufferStream$1;
-const streamPipelinePromisified = promisify$5(stream$1.pipeline);
+const streamPipelinePromisified = promisify$3(stream$1.pipeline);
 class MaxBufferError extends Error {
   constructor() {
     super("maxBuffer exceeded");
@@ -20997,11 +21004,11 @@ pLocate$4.exports = pLocate$3;
 pLocate$4.exports.default = pLocate$3;
 var pLocateExports = pLocate$4.exports;
 const path$6 = require$$0$8;
-const fs$6 = require$$0$7;
-const { promisify: promisify$4 } = require$$2$1;
+const fs$4 = require$$0$7;
+const { promisify: promisify$2 } = require$$2$1;
 const pLocate$2 = pLocateExports;
-const fsStat$1 = promisify$4(fs$6.stat);
-const fsLStat$1 = promisify$4(fs$6.lstat);
+const fsStat$1 = promisify$2(fs$4.stat);
+const fsLStat$1 = promisify$2(fs$4.lstat);
 const typeMappings$1 = {
   directory: "isDirectory",
   file: "isFile"
@@ -21039,7 +21046,7 @@ locatePath$1.exports.sync = (paths, options) => {
     ...options
   };
   checkType$1(options);
-  const statFn = options.allowSymlinks ? fs$6.statSync : fs$6.lstatSync;
+  const statFn = options.allowSymlinks ? fs$4.statSync : fs$4.lstatSync;
   for (const path_ of paths) {
     try {
       const stat = statFn(path$6.resolve(options.cwd, path_));
@@ -21051,31 +21058,31 @@ locatePath$1.exports.sync = (paths, options) => {
   }
 };
 var locatePathExports$1 = locatePath$1.exports;
-var pathExists$4 = { exports: {} };
-const fs$5 = require$$0$7;
-const { promisify: promisify$3 } = require$$2$1;
-const pAccess$2 = promisify$3(fs$5.access);
-pathExists$4.exports = async (path2) => {
+var pathExists$2 = { exports: {} };
+const fs$3 = require$$0$7;
+const { promisify: promisify$1 } = require$$2$1;
+const pAccess = promisify$1(fs$3.access);
+pathExists$2.exports = async (path2) => {
   try {
-    await pAccess$2(path2);
+    await pAccess(path2);
     return true;
   } catch (_2) {
     return false;
   }
 };
-pathExists$4.exports.sync = (path2) => {
+pathExists$2.exports.sync = (path2) => {
   try {
-    fs$5.accessSync(path2);
+    fs$3.accessSync(path2);
     return true;
   } catch (_2) {
     return false;
   }
 };
-var pathExistsExports$2 = pathExists$4.exports;
+var pathExistsExports = pathExists$2.exports;
 (function(module) {
   const path2 = require$$0$8;
   const locatePath2 = locatePathExports$1;
-  const pathExists2 = pathExistsExports$2;
+  const pathExists2 = pathExistsExports;
   const stop = Symbol("findUp.stop");
   module.exports = async (name, options = {}) => {
     let directory = path2.resolve(options.cwd || "");
@@ -23968,11 +23975,11 @@ const pLocate$1 = async (iterable, tester, options) => {
 };
 var pLocate_1 = pLocate$1;
 const path$2 = require$$0$8;
-const fs$4 = require$$0$7;
-const { promisify: promisify$2 } = require$$2$1;
+const fs$2 = require$$0$7;
+const { promisify } = require$$2$1;
 const pLocate = pLocate_1;
-const fsStat = promisify$2(fs$4.stat);
-const fsLStat = promisify$2(fs$4.lstat);
+const fsStat = promisify(fs$2.stat);
+const fsLStat = promisify(fs$2.lstat);
 const typeMappings = {
   directory: "isDirectory",
   file: "isFile"
@@ -24010,7 +24017,7 @@ locatePath.exports.sync = (paths, options) => {
     ...options
   };
   checkType(options);
-  const statFn = options.allowSymlinks ? fs$4.statSync : fs$4.lstatSync;
+  const statFn = options.allowSymlinks ? fs$2.statSync : fs$2.lstatSync;
   for (const path_ of paths) {
     try {
       const stat = statFn(path$2.resolve(options.cwd, path_));
@@ -24022,31 +24029,10 @@ locatePath.exports.sync = (paths, options) => {
   }
 };
 var locatePathExports = locatePath.exports;
-var pathExists$3 = { exports: {} };
-const fs$3 = require$$0$7;
-const { promisify: promisify$1 } = require$$2$1;
-const pAccess$1 = promisify$1(fs$3.access);
-pathExists$3.exports = async (path2) => {
-  try {
-    await pAccess$1(path2);
-    return true;
-  } catch (_2) {
-    return false;
-  }
-};
-pathExists$3.exports.sync = (path2) => {
-  try {
-    fs$3.accessSync(path2);
-    return true;
-  } catch (_2) {
-    return false;
-  }
-};
-var pathExistsExports$1 = pathExists$3.exports;
 (function(module) {
   const path2 = require$$0$8;
   const locatePath2 = locatePathExports;
-  const pathExists2 = pathExistsExports$1;
+  const pathExists2 = pathExistsExports;
   const stop = Symbol("findUp.stop");
   module.exports = async (name, options = {}) => {
     let directory = path2.resolve(options.cwd || "");
@@ -24109,27 +24095,6 @@ var pathExistsExports$1 = pathExists$3.exports;
   module.exports.stop = stop;
 })(findUp$1);
 var findUpExports = findUp$1.exports;
-var pathExists$2 = { exports: {} };
-const fs$2 = require$$0$7;
-const { promisify } = require$$2$1;
-const pAccess = promisify(fs$2.access);
-pathExists$2.exports = async (path2) => {
-  try {
-    await pAccess(path2);
-    return true;
-  } catch (_2) {
-    return false;
-  }
-};
-pathExists$2.exports.sync = (path2) => {
-  try {
-    fs$2.accessSync(path2);
-    return true;
-  } catch (_2) {
-    return false;
-  }
-};
-var pathExistsExports = pathExists$2.exports;
 var loadYamlFile$1 = { exports: {} };
 var constants = require$$0$c;
 var origCwd = process.cwd;
@@ -27603,7 +27568,7 @@ function toNameAndVersion(pkgSpec) {
 const findYarnWorkspaceRoot = findYarnWorkspaceRoot2;
 const findUp = findUpExports;
 const path = require$$0$8;
-const pathExists = pathExistsExports$1;
+const pathExists = pathExistsExports;
 const whichPM = whichPm;
 var preferredPm = async function preferredPM(pkgPath) {
   if (typeof pkgPath !== "string") {
