@@ -482,6 +482,33 @@ const ResponsiveBox = styled(Box)`
   }
 `;
 
+// Styled Select for Dark Mode support
+const StyledSelect = styled.select`
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid ${({ theme }) => theme.colors.neutral200};
+  font-size: 13px;
+  cursor: pointer;
+  background: ${({ theme }) => theme.colors.neutral0};
+  color: ${({ theme }) => theme.colors.neutral800};
+  transition: all 0.15s;
+  
+  &:hover {
+    border-color: ${({ theme }) => theme.colors.primary600};
+  }
+  
+  &:focus {
+    outline: none;
+    border-color: ${({ theme }) => theme.colors.primary600};
+    box-shadow: 0 0 0 2px ${({ theme }) => theme.colors.primary100};
+  }
+  
+  option {
+    background: ${({ theme }) => theme.colors.neutral0};
+    color: ${({ theme }) => theme.colors.neutral800};
+  }
+`;
+
 const MonitoringPage = () => {
   const { get, post } = useFetchClient();
   const { toggleNotification } = useNotification();
@@ -593,32 +620,32 @@ const MonitoringPage = () => {
 
       {/* Mobile-optimized Stats Grid */}
       <StatsGrid>
-        <StatCard $delay="0.1s" $borderColor={theme.colors.primary[500]} $accentColor={theme.colors.primary[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.primary[100]} $color={theme.colors.primary[600]}>
+        <StatCard $delay="0.1s" $borderColor={customColors.primary[500]} $accentColor={customColors.primary[600]}>
+          <StatIcon className="stat-icon" $bg={customColors.primary[100]} $color={customColors.primary[600]}>
             <UsersIcon />
           </StatIcon>
           <StatValue className="stat-value">{stats?.connections?.connected || 0}</StatValue>
           <StatLabel>{t('monitoring.connectedClients', 'Connected Clients')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.2s" $borderColor={theme.colors.success[500]} $accentColor={theme.colors.success[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.success[100]} $color={theme.colors.success[600]}>
+        <StatCard $delay="0.2s" $borderColor={customColors.success[500]} $accentColor={customColors.success[600]}>
+          <StatIcon className="stat-icon" $bg={customColors.success[100]} $color={customColors.success[600]}>
             <BoltIcon />
           </StatIcon>
           <StatValue className="stat-value">{stats?.events?.totalEvents || 0}</StatValue>
           <StatLabel>{t('monitoring.totalEvents', 'Total Events')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.3s" $borderColor={theme.colors.warning[500]} $accentColor={theme.colors.warning[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.warning[100]} $color={theme.colors.warning[600]}>
+        <StatCard $delay="0.3s" $borderColor={customColors.warning[500]} $accentColor={customColors.warning[600]}>
+          <StatIcon className="stat-icon" $bg={customColors.warning[100]} $color={customColors.warning[600]}>
             <ChartBarIcon />
           </StatIcon>
           <StatValue className="stat-value">{stats?.events?.eventsPerSecond || '0.00'}</StatValue>
           <StatLabel>{t('monitoring.eventsPerSecond', 'Events/Second')}</StatLabel>
         </StatCard>
 
-        <StatCard $delay="0.4s" $borderColor={theme.colors.secondary[500]} $accentColor={theme.colors.secondary[600]}>
-          <StatIcon className="stat-icon" $bg={theme.colors.secondary[100]} $color={theme.colors.secondary[600]}>
+        <StatCard $delay="0.4s" $borderColor={customColors.secondary[500]} $accentColor={customColors.secondary[600]}>
+          <StatIcon className="stat-icon" $bg={customColors.secondary[100]} $color={customColors.secondary[600]}>
             <HomeIcon />
           </StatIcon>
           <StatValue className="stat-value">{stats?.connections?.rooms?.length || 0}</StatValue>
@@ -752,24 +779,16 @@ const MonitoringPage = () => {
                   size="S" 
                 />
               </Box>
-              <select 
+              <StyledSelect 
                 value={eventTypeFilter} 
-                onChange={e => setEventTypeFilter(e.target.value)} 
-                style={{
-                  padding: '6px 12px',
-                  borderRadius: '4px',
-                  border: '1px solid #dcdce4',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  background: '#fff'
-                }}
+                onChange={e => setEventTypeFilter(e.target.value)}
               >
                 {eventTypes.map(type => (
                   <option key={type} value={type}>
                     {type === 'all' ? 'All Types' : type}
                   </option>
                 ))}
-              </select>
+              </StyledSelect>
             </Flex>
             {filteredEvents.length > 0 ? (
               <Box style={{ maxHeight: '180px', overflowY: 'auto' }}>
