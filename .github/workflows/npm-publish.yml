@@ -26,6 +26,9 @@ on:
 env:
   NODE_VERSION: '20.x'
 
+env:
+  NODE_VERSION: '20.x'
+
 jobs:
   # ============================================
   # Build & Verify Job
