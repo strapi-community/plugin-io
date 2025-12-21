@@ -10,6 +10,21 @@ on:
     branches: [main]
   release:
     types: [published]
+  # Manual trigger for publishing
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: 'NPM tag (latest, beta, next)'
+        required: true
+        default: 'latest'
+        type: choice
+        options:
+          - latest
+          - beta
+          - next
+
+env:
+  NODE_VERSION: '20.x'
 
 env:
   NODE_VERSION: '20.x'
@@ -72,7 +87,7 @@ jobs:
     name: Publish to NPM
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     
     permissions:
       contents: read
@@ -96,6 +111,7 @@ jobs:
           path: dist/
 
       - name: Verify version matches release tag
+        if: github.event_name == 'release'
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
           RELEASE_TAG="${{ github.event.release.tag_name }}"
@@ -116,6 +132,14 @@ jobs:
       - name: Determine npm tag
         id: npm-tag
         run: |
+          # For manual dispatch, use the input value
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.npm_tag }}" >> $GITHUB_OUTPUT
+            echo "[INFO] Manual publish with tag: ${{ github.event.inputs.npm_tag }}"
+            exit 0
+          fi
+          
+          # For releases, determine tag from release name
           RELEASE_TAG="${{ github.event.release.tag_name }}"
           
           # Determine npm dist-tag based on release type
