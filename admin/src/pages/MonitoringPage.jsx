@@ -15,20 +15,12 @@ const TrashIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" vie
 const PlayIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.347a1.125 1.125 0 0 1 0 1.972l-11.54 6.347a1.125 1.125 0 0 1-1.667-.986V5.653Z" /></svg>);
 const SignalIcon = () => (<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9.348 14.652a3.75 3.75 0 0 1 0-5.304m5.304 0a3.75 3.75 0 0 1 0 5.304m-7.425 2.121a6.75 6.75 0 0 1 0-9.546m9.546 0a6.75 6.75 0 0 1 0 9.546M5.106 18.894c-3.808-3.807-3.808-9.98 0-13.788m13.788 0c3.808 3.807 3.808 9.98 0 13.788M12 12h.008v.008H12V12Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" /></svg>);
 
-const theme = {
-  colors: {
-    primary: { 50: '#F0F9FF', 100: '#E0F2FE', 500: '#0EA5E9', 600: '#0284C7' },
-    secondary: { 100: '#EDE9FE', 500: '#A855F7', 600: '#9333EA' },
-    success: { 100: '#DCFCE7', 500: '#22C55E', 600: '#16A34A' },
-    warning: { 100: '#FEF3C7', 500: '#F59E0B', 600: '#D97706' },
-    neutral: { 0: '#FFF', 50: '#F9FAFB', 100: '#F3F4F6', 200: '#E5E7EB', 600: '#4B5563', 700: '#374151', 800: '#1F2937' }
-  },
-  shadows: {
-    sm: '0 1px 3px rgba(0,0,0,0.1)',
-    md: '0 4px 6px rgba(0,0,0,0.1)',
-    lg: '0 10px 15px rgba(0,0,0,0.1)',
-    xl: '0 20px 25px rgba(0,0,0,0.1)'
-  }
+// Custom theme colors (works in both light and dark mode)
+const customColors = {
+  primary: { 50: '#F0F9FF', 100: '#E0F2FE', 500: '#0EA5E9', 600: '#0284C7' },
+  secondary: { 100: '#EDE9FE', 500: '#A855F7', 600: '#9333EA' },
+  success: { 100: '#DCFCE7', 500: '#22C55E', 600: '#16A34A' },
+  warning: { 100: '#FEF3C7', 500: '#F59E0B', 600: '#D97706' }
 };
 
 const fadeIn = keyframes`
@@ -61,19 +53,18 @@ const Container = styled(Box)`
 
 // Mobile-optimized Header
 const Header = styled(Box)`
-  background: linear-gradient(135deg, ${theme.colors.primary[600]} 0%, ${theme.colors.secondary[600]} 100%);
+  background: linear-gradient(135deg, ${customColors.primary[600]} 0%, ${customColors.secondary[600]} 100%);
   border-radius: 12px;
   padding: 20px 16px;
   margin-bottom: 20px;
   position: relative;
   overflow: hidden;
-  box-shadow: ${theme.shadows.lg};
+  box-shadow: ${({ theme }) => theme.shadows.tableShadow};
   
   @media (min-width: 768px) {
     border-radius: 16px;
     padding: 32px 48px;
     margin-bottom: 32px;
-    box-shadow: ${theme.shadows.xl};
   }
   
   &::before {
@@ -145,14 +136,14 @@ const StatsGrid = styled.div`
 
 // Mobile-optimized Stat Card
 const StatCard = styled(Box)`
-  background: #fff;
+  background: ${({ theme }) => theme.colors.neutral0};
   border-radius: 10px;
   padding: 16px;
   transition: all 0.2s;
   ${css`animation: ${fadeIn} 0.5s backwards;`}
   animation-delay: ${p => p.$delay || '0s'};
-  box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${theme.colors.neutral[200]};
+  box-shadow: ${({ theme }) => theme.shadows.filterShadow};
+  border: 1px solid ${({ theme }) => theme.colors.neutral200};
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -169,8 +160,8 @@ const StatCard = styled(Box)`
   
   &:hover {
     transform: translateY(-4px);
-    box-shadow: ${theme.shadows.lg};
-    border-color: ${p => p.$borderColor || theme.colors.primary[500]};
+    box-shadow: ${({ theme }) => theme.shadows.tableShadow};
+    border-color: ${p => p.$borderColor || customColors.primary[500]};
     
     .stat-icon {
       transform: scale(1.1);
@@ -178,7 +169,7 @@ const StatCard = styled(Box)`
     
     .stat-value {
       transform: scale(1.05);
-      color: ${p => p.$accentColor || theme.colors.primary[600]};
+      color: ${p => p.$accentColor || customColors.primary[600]};
     }
   }
 `;
@@ -191,10 +182,10 @@ const StatIcon = styled(Box)`
   display: flex;
   align-items: center;
   justify-content: center;
-  background: ${p => p.$bg || theme.colors.primary[100]};
+  background: ${p => p.$bg || customColors.primary[100]};
   transition: all 0.2s;
   margin: 0 auto 12px;
-  box-shadow: ${theme.shadows.sm};
+  box-shadow: ${({ theme }) => theme.shadows.filterShadow};
   
   @media (min-width: 640px) {
     width: 60px;
@@ -212,7 +203,7 @@ const StatIcon = styled(Box)`
   svg {
     width: 24px;
     height: 24px;
-    color: ${p => p.$color || theme.colors.primary[600]};
+    color: ${p => p.$color || customColors.primary[600]};
     
     @media (min-width: 640px) {
       width: 30px;
@@ -229,7 +220,7 @@ const StatIcon = styled(Box)`
 const StatValue = styled(Typography)`
   font-size: 2rem;
   font-weight: 700;
-  color: ${theme.colors.neutral[800]};
+  color: ${({ theme }) => theme.colors.neutral800};
   line-height: 1;
   margin-bottom: 6px;
   transition: all 0.2s;
@@ -247,7 +238,7 @@ const StatValue = styled(Typography)`
 
 const StatLabel = styled(Typography)`
   font-size: 0.75rem;
-  color: ${theme.colors.neutral[600]};
+  color: ${({ theme }) => theme.colors.neutral600};
   font-weight: 500;
   
   @media (min-width: 640px) {
@@ -261,11 +252,11 @@ const StatLabel = styled(Typography)`
 
 // Mobile-optimized Card
 const Card = styled(Box)`
-  background: #fff;
+  background: ${({ theme }) => theme.colors.neutral0};
   border-radius: 10px;
   padding: 16px;
-  box-shadow: ${theme.shadows.sm};
-  border: 1px solid ${theme.colors.neutral[200]};
+  box-shadow: ${({ theme }) => theme.shadows.filterShadow};
+  border: 1px solid ${({ theme }) => theme.colors.neutral200};
   margin-bottom: 16px;
   transition: all 0.2s;
   
@@ -278,15 +269,15 @@ const Card = styled(Box)`
   @media (min-width: 1024px) {
     padding: 28px;
     margin-bottom: 28px;
-    box-shadow: ${theme.shadows.md};
+    box-shadow: ${({ theme }) => theme.shadows.tableShadow};
   }
   
   &:hover {
-    box-shadow: ${theme.shadows.md};
-    border-color: ${theme.colors.primary[100]};
+    box-shadow: ${({ theme }) => theme.shadows.tableShadow};
+    border-color: ${customColors.primary[100]};
     
     @media (min-width: 1024px) {
-      box-shadow: ${theme.shadows.lg};
+      box-shadow: ${({ theme }) => theme.shadows.popupShadow};
     }
   }
 `;
@@ -294,7 +285,7 @@ const Card = styled(Box)`
 const CardTitle = styled(Typography)`
   font-size: 1rem;
   font-weight: 700;
-  color: ${theme.colors.neutral[800]};
+  color: ${({ theme }) => theme.colors.neutral800};
   margin-bottom: 12px;
   display: flex;
   align-items: center;
@@ -315,7 +306,7 @@ const CardTitle = styled(Typography)`
   svg {
     width: 20px;
     height: 20px;
-    color: ${theme.colors.primary[600]};
+    color: ${customColors.primary[600]};
     
     @media (min-width: 1024px) {
       width: 24px;
@@ -325,11 +316,11 @@ const CardTitle = styled(Typography)`
 `;
 
 const ClientItem = styled(Box)`
-  background: ${theme.colors.neutral[50]};
+  background: ${({ theme }) => theme.colors.neutral100};
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 10px;
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${({ theme }) => theme.colors.neutral200};
   transition: all 0.15s;
   
   @media (min-width: 640px) {
@@ -339,17 +330,17 @@ const ClientItem = styled(Box)`
   }
   
   &:hover {
-    background: ${theme.colors.primary[50]};
-    border-color: ${theme.colors.primary[100]};
+    background: ${({ theme }) => theme.colors.neutral150};
+    border-color: ${customColors.primary[100]};
   }
 `;
 
 const EventItem = styled(Box)`
-  background: ${theme.colors.neutral[50]};
+  background: ${({ theme }) => theme.colors.neutral100};
   border-radius: 8px;
   padding: 10px 12px;
   margin-bottom: 8px;
-  border: 1px solid ${theme.colors.neutral[200]};
+  border: 1px solid ${({ theme }) => theme.colors.neutral200};
   transition: all 0.15s;
   
   @media (min-width: 640px) {
@@ -359,7 +350,8 @@ const EventItem = styled(Box)`
   }
   
   &:hover {
-    background: ${theme.colors.success[100]};
+    background: ${({ theme }) => theme.colors.neutral150};
+    border-color: ${customColors.success[500]};
   }
 `;
 
@@ -382,7 +374,7 @@ const EmptyState = styled(Box)`
   svg {
     width: 32px;
     height: 32px;
-    color: ${theme.colors.neutral[200]};
+    color: ${({ theme }) => theme.colors.neutral400};
     margin-bottom: 12px;
     
     @media (min-width: 1024px) {
@@ -429,8 +421,8 @@ const ActionButton = styled.button`
   }
   
   &.primary {
-    background: linear-gradient(135deg, ${theme.colors.primary[500]}, ${theme.colors.primary[600]});
-    color: #fff;
+    background: ${({ theme }) => theme.colors.primary600};
+    color: ${({ theme }) => theme.colors.neutral0};
     box-shadow: 0 2px 8px rgba(14,165,233,0.3);
     
     @media (min-width: 1024px) {
@@ -439,6 +431,7 @@ const ActionButton = styled.button`
     
     &:hover {
       transform: translateY(-2px);
+      background: ${({ theme }) => theme.colors.primary700};
       box-shadow: 0 4px 12px rgba(14,165,233,0.4);
       
       @media (min-width: 1024px) {
@@ -448,22 +441,22 @@ const ActionButton = styled.button`
   }
   
   &.secondary {
-    background: ${theme.colors.neutral[100]};
-    color: ${theme.colors.neutral[700]};
-    border: 1px solid ${theme.colors.neutral[200]};
+    background: ${({ theme }) => theme.colors.neutral150};
+    color: ${({ theme }) => theme.colors.neutral700};
+    border: 1px solid ${({ theme }) => theme.colors.neutral200};
     
     &:hover {
-      background: ${theme.colors.neutral[200]};
+      background: ${({ theme }) => theme.colors.neutral200};
     }
   }
   
   &.danger {
-    background: #FEE2E2;
-    color: #DC2626;
-    border: 1px solid #FECACA;
+    background: ${({ theme }) => theme.colors.danger100};
+    color: ${({ theme }) => theme.colors.danger700};
+    border: 1px solid ${({ theme }) => theme.colors.danger200};
     
     &:hover {
-      background: #FECACA;
+      background: ${({ theme }) => theme.colors.danger200};
     }
   }
 `;

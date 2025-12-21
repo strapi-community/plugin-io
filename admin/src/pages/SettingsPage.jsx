@@ -157,8 +157,18 @@ const InputWrapper = styled.div`
   
   /* Strapi NumberInput Component - ALWAYS hide increment/decrement buttons */
   button[aria-label="Increment"],
-  button[aria-label="Decrement"] {
+  button[aria-label="Decrement"],
+  div button[aria-label="Increment"],
+  div button[aria-label="Decrement"],
+  & button[aria-label="Increment"],
+  & button[aria-label="Decrement"] {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
   }
   
   /* NumberInput Container - proper alignment */
@@ -179,21 +189,13 @@ const InputWrapper = styled.div`
       }
     }
     
-    /* Spinner Buttons Container */
+    /* Spinner Buttons Container - ALWAYS HIDDEN */
     > div:last-child {
       display: none !important;
-      
-      @media (min-width: 768px) {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 2px !important;
-        margin-left: 8px !important;
-        flex-shrink: 0 !important;
-        
-        button {
-          margin: 0 !important;
-        }
-      }
+      visibility: hidden !important;
+      width: 0 !important;
+      height: 0 !important;
+      overflow: hidden !important;
     }
   }
 `;
