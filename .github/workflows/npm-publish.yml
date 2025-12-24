@@ -1,120 +1,55 @@
-name: CI/CD
+name: Publish to NPM
 
 on:
-  push:
-    branches: [main, main-v5]
-  pull_request:
-    branches: [main, main-v5]
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      npm_tag:
-        description: 'NPM tag (latest, beta, next)'
-        required: true
-        default: 'latest'
-        type: choice
-        options:
-          - latest
-          - beta
-          - next
 
-env:
-  NODE_VERSION: '20.x'
+permissions:
+  id-token: write  # Required for NPM OIDC
+  contents: write  # Required for Version Bump
 
 jobs:
-  build:
-    name: Build & Verify
+  publish:
     runs-on: ubuntu-latest
-    
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          always-auth: true
+          node-version: 22
           cache: 'npm'
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Update NPM CLI to latest
+        run: npm i -g npm@latest
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build plugin
+      - name: Build the plugin
         run: npm run build
 
-      - name: Verify plugin structure
+      - name: Verify plugin
         run: npm run verify
 
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
-          retention-days: 7
+      - name: Get the release tag version
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF/refs\/tags\//}" >> $GITHUB_OUTPUT
 
-  publish:
-    name: Publish to NPM
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Set package version
+        run: npm version "${{ steps.get_version.outputs.VERSION }}" --no-git-tag-version
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
-
-      - name: Verify version matches release tag
-        if: github.event_name == 'release'
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          RELEASE_TAG="${{ github.event.release.tag_name }}"
-          RELEASE_VERSION="${RELEASE_TAG#v}"
-          echo "[INFO] Package: $PKG_VERSION, Release: $RELEASE_VERSION"
-          if [ "$PKG_VERSION" != "$RELEASE_VERSION" ]; then
-            echo "[ERROR] Version mismatch!"
-            exit 1
-          fi
-
-      - name: Determine npm tag
-        id: npm-tag
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.npm_tag }}" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          RELEASE_TAG="${{ github.event.release.tag_name }}"
-          if [[ "$RELEASE_TAG" == *"-beta"* ]]; then
-            echo "tag=beta" >> $GITHUB_OUTPUT
-          elif [[ "$RELEASE_TAG" == *"-alpha"* ]]; then
-            echo "tag=alpha" >> $GITHUB_OUTPUT
-          elif [[ "$RELEASE_TAG" == *"-rc"* ]]; then
-            echo "tag=next" >> $GITHUB_OUTPUT
-          else
-            echo "tag=latest" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Publish to NPM
-        run: npm publish --access public --tag ${{ steps.npm-tag.outputs.tag }}
+      - name: Publish package
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Done
-        run: |
-          PKG_NAME=$(node -p "require('./package.json').name")
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          echo "[SUCCESS] Published $PKG_NAME@$PKG_VERSION"
+      - name: Push version bump
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: Bump version to ${{ steps.get_version.outputs.VERSION }}'
+          file_pattern: 'package.json package-lock.json'
+          branch: main
