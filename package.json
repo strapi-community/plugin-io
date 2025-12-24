@@ -101,13 +101,13 @@
       "url": "https://github.com/hrdunn"
     }
   ],
-  "homepage": "https://github.com/strapi-community/strapi-plugin-io#readme",
+  "homepage": "https://github.com/strapi-community/plugin-io#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/strapi-community/strapi-plugin-io.git"
+    "url": "https://github.com/strapi-community/plugin-io.git"
   },
   "bugs": {
-    "url": "https://github.com/strapi-community/strapi-plugin-io/issues"
+    "url": "https://github.com/strapi-community/plugin-io/issues"
   },
   "license": "MIT"
 }
