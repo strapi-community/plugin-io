@@ -350,31 +350,56 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
       return next(new Error("Max connections reached"));
     }
     const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+    const strategy2 = socket.handshake.auth?.strategy;
+    const isAdmin = socket.handshake.auth?.isAdmin === true;
     if (token) {
-      try {
-        const decoded = await strapi2.plugin("users-permissions").service("jwt").verify(token);
-        strapi2.log.info(`socket.io: JWT decoded - user id: ${decoded.id}`);
-        if (decoded.id) {
-          const users = await strapi2.documents("plugin::users-permissions.user").findMany({
-            filters: { id: decoded.id },
-            populate: { role: true },
-            limit: 1
-          });
-          const user = users.length > 0 ? users[0] : null;
-          if (user) {
+      if (isAdmin || strategy2 === "admin-jwt") {
+        try {
+          const presenceController = strapi2.plugin(pluginId$6).controller("presence");
+          const session = presenceController.consumeSessionToken(token);
+          if (session) {
             socket.user = {
-              id: user.id,
-              username: user.username,
-              email: user.email,
-              role: user.role?.name || "authenticated"
+              id: session.userId,
+              username: `${session.user.firstname || ""} ${session.user.lastname || ""}`.trim() || `Admin ${session.userId}`,
+              email: session.user.email || `admin-${session.userId}`,
+              role: "strapi-super-admin",
+              isAdmin: true
             };
-            strapi2.log.info(`socket.io: User authenticated - ${user.username} (${user.email})`);
+            socket.adminUser = session.user;
+            presenceController.registerSocket(socket.id, token);
+            strapi2.log.info(`socket.io: Admin authenticated - ${socket.user.username} (ID: ${session.userId})`);
           } else {
-            strapi2.log.warn(`socket.io: User not found for id: ${decoded.id}`);
+            strapi2.log.warn(`socket.io: Admin session token invalid or expired`);
           }
+        } catch (err) {
+          strapi2.log.warn(`socket.io: Admin session verification failed: ${err.message}`);
         }
-      } catch (err) {
-        strapi2.log.warn(`socket.io: JWT verification failed: ${err.message}`);
+      } else {
+        try {
+          const decoded = await strapi2.plugin("users-permissions").service("jwt").verify(token);
+          strapi2.log.info(`socket.io: JWT decoded - user id: ${decoded.id}`);
+          if (decoded.id) {
+            const users = await strapi2.documents("plugin::users-permissions.user").findMany({
+              filters: { id: decoded.id },
+              populate: { role: true },
+              limit: 1
+            });
+            const user = users.length > 0 ? users[0] : null;
+            if (user) {
+              socket.user = {
+                id: user.id,
+                username: user.username,
+                email: user.email,
+                role: user.role?.name || "authenticated"
+              };
+              strapi2.log.info(`socket.io: User authenticated - ${user.username} (${user.email})`);
+            } else {
+              strapi2.log.warn(`socket.io: User not found for id: ${decoded.id}`);
+            }
+          }
+        } catch (err) {
+          strapi2.log.warn(`socket.io: JWT verification failed: ${err.message}`);
+        }
       }
     } else {
       strapi2.log.debug(`socket.io: No token provided, connecting as public`);

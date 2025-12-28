@@ -98,34 +98,66 @@ async function bootstrapIO({ strapi }) {
 		}
 
 		const token = socket.handshake.auth?.token || socket.handshake.query?.token;
+		const strategy = socket.handshake.auth?.strategy;
+		const isAdmin = socket.handshake.auth?.isAdmin === true;
+		
 		if (token) {
-			try {
-				const decoded = await strapi.plugin('users-permissions').service('jwt').verify(token);
-				strapi.log.info(`socket.io: JWT decoded - user id: ${decoded.id}`);
-				
-				if (decoded.id) {
-					// Use Document Service API (Strapi v5)
-					const users = await strapi.documents('plugin::users-permissions.user').findMany({
-						filters: { id: decoded.id },
-						populate: { role: true },
-						limit: 1,
-					});
-					const user = users.length > 0 ? users[0] : null;
+			// Check if this is an admin session token
+			if (isAdmin || strategy === 'admin-jwt') {
+				try {
+					const presenceController = strapi.plugin(pluginId).controller('presence');
+					const session = presenceController.consumeSessionToken(token);
 					
-					if (user) {
+					if (session) {
 						socket.user = {
-							id: user.id,
-							username: user.username,
-							email: user.email,
-							role: user.role?.name || 'authenticated',
+							id: session.userId,
+							username: `${session.user.firstname || ''} ${session.user.lastname || ''}`.trim() || `Admin ${session.userId}`,
+							email: session.user.email || `admin-${session.userId}`,
+							role: 'strapi-super-admin',
+							isAdmin: true,
 						};
-						strapi.log.info(`socket.io: User authenticated - ${user.username} (${user.email})`);
+						socket.adminUser = session.user;
+						
+						// Register socket for tracking
+						presenceController.registerSocket(socket.id, token);
+						
+						strapi.log.info(`socket.io: Admin authenticated - ${socket.user.username} (ID: ${session.userId})`);
 					} else {
-						strapi.log.warn(`socket.io: User not found for id: ${decoded.id}`);
+						strapi.log.warn(`socket.io: Admin session token invalid or expired`);
 					}
+				} catch (err) {
+					strapi.log.warn(`socket.io: Admin session verification failed: ${err.message}`);
 				}
-			} catch (err) {
-				strapi.log.warn(`socket.io: JWT verification failed: ${err.message}`);
+			} else {
+				// Try users-permissions JWT
+				try {
+					const decoded = await strapi.plugin('users-permissions').service('jwt').verify(token);
+					strapi.log.info(`socket.io: JWT decoded - user id: ${decoded.id}`);
+					
+					if (decoded.id) {
+						// Use Document Service API (Strapi v5)
+						const users = await strapi.documents('plugin::users-permissions.user').findMany({
+							filters: { id: decoded.id },
+							populate: { role: true },
+							limit: 1,
+						});
+						const user = users.length > 0 ? users[0] : null;
+						
+						if (user) {
+							socket.user = {
+								id: user.id,
+								username: user.username,
+								email: user.email,
+								role: user.role?.name || 'authenticated',
+							};
+							strapi.log.info(`socket.io: User authenticated - ${user.username} (${user.email})`);
+						} else {
+							strapi.log.warn(`socket.io: User not found for id: ${decoded.id}`);
+						}
+					}
+				} catch (err) {
+					strapi.log.warn(`socket.io: JWT verification failed: ${err.message}`);
+				}
 			}
 		} else {
 			strapi.log.debug(`socket.io: No token provided, connecting as public`);
