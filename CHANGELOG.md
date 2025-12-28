@@ -1,3 +1,11 @@
+# [5.3.0](https://github.com/strapi-community/plugin-io/compare/5.2.0...5.3.0) (2025-12-28)
+
+
+### Features
+
+* add Who's Online dashboard widget showing active editors ([2104597](https://github.com/strapi-community/plugin-io/commit/21045977b932f54345e17d541934f55713219988))
+* add Who's Online dashboard widget with clickable entry links ([14117e0](https://github.com/strapi-community/plugin-io/commit/14117e0d464a6bed1a529a18ca9f8ccb4585695f))
+
 # [5.2.0](https://github.com/strapi-community/plugin-io/compare/5.1.0...5.2.0) (2025-12-28)
 
 
