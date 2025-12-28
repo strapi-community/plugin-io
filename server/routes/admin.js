@@ -87,5 +87,23 @@ module.exports = {
 				policies: ['admin::isAuthenticatedAdmin'],
 			},
 		},
+		// Security: Session statistics
+		{
+			method: 'GET',
+			path: '/security/sessions',
+			handler: 'presence.getSessionStats',
+			config: {
+				policies: ['admin::isAuthenticatedAdmin'],
+			},
+		},
+		// Security: Invalidate user sessions (force logout)
+		{
+			method: 'POST',
+			path: '/security/invalidate/:userId',
+			handler: 'presence.invalidateUserSessionsHandler',
+			config: {
+				policies: ['admin::isAuthenticatedAdmin'],
+			},
+		},
 	],
 };

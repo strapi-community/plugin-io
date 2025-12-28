@@ -770,6 +770,130 @@ Configure permissions in the Strapi admin panel:
 
 ---
 
+## Security
+
+The plugin implements multiple security layers to protect your real-time connections.
+
+### Admin Session Tokens
+
+For admin panel connections (Live Presence), the plugin uses secure session tokens:
+
+```
++------------------+      +------------------+      +------------------+
+|  Admin Browser   | ---> |  Session Endpoint| ---> |   Socket.IO      |
+|  (Strapi Admin)  |      |  /io/presence/   |      |   Server         |
++------------------+      +------------------+      +------------------+
+        |                         |                         |
+        | 1. Request session      |                         |
+        | (Admin JWT in header)   |                         |
+        +------------------------>|                         |
+        |                         |                         |
+        | 2. Return session token |                         |
+        | (UUID, 10 min TTL)      |                         |
+        |<------------------------+                         |
+        |                         |                         |
+        | 3. Connect Socket.IO    |                         |
+        | (Session token in auth) |                         |
+        +-------------------------------------------------->|
+        |                         |                         |
+        | 4. Validate & connect   |                         |
+        |<--------------------------------------------------+
+```
+
+**Security Features:**
+- **Token Hashing**: Tokens stored as SHA-256 hashes (plaintext never persisted)
+- **Short TTL**: 10-minute expiration with automatic refresh at 70%
+- **Usage Limits**: Max 10 reconnects per token to prevent replay attacks
+- **Rate Limiting**: 30-second cooldown between token requests
+- **Minimal Data**: Only essential user info stored (ID, firstname, lastname)
+
+### Rate Limiting
+
+Prevent abuse with configurable rate limits:
+
+```javascript
+// In config/plugins.js
+module.exports = {
+  io: {
+    enabled: true,
+    config: {
+      security: {
+        rateLimit: {
+          enabled: true,
+          maxEventsPerSecond: 10,    // Max events per socket per second
+          maxConnectionsPerIp: 50    // Max connections from single IP
+        }
+      }
+    }
+  }
+};
+```
+
+### IP Whitelisting/Blacklisting
+
+Restrict access by IP address:
+
+```javascript
+// In config/plugins.js
+module.exports = {
+  io: {
+    enabled: true,
+    config: {
+      security: {
+        ipWhitelist: ['192.168.1.0/24', '10.0.0.1'],  // Only these IPs allowed
+        ipBlacklist: ['203.0.113.50'],                 // These IPs blocked
+        requireAuthentication: true                    // Require JWT/API token
+      }
+    }
+  }
+};
+```
+
+### Security Monitoring API
+
+Monitor active sessions via admin API:
+
+```bash
+# Get session statistics
+GET /io/security/sessions
+Authorization: Bearer <admin-jwt>
+
+# Response:
+{
+  "data": {
+    "activeSessions": 5,
+    "expiringSoon": 1,
+    "activeSocketConnections": 3,
+    "sessionTTL": 600000,
+    "refreshCooldown": 30000
+  }
+}
+
+# Force logout a user (invalidate all their sessions)
+POST /io/security/invalidate/:userId
+Authorization: Bearer <admin-jwt>
+
+# Response:
+{
+  "data": {
+    "userId": 1,
+    "invalidatedSessions": 2,
+    "message": "Successfully invalidated 2 session(s)"
+  }
+}
+```
+
+### Best Practices
+
+1. **Always use HTTPS** in production for encrypted WebSocket connections
+2. **Enable authentication** for sensitive content types
+3. **Configure CORS** to only allow your frontend domains
+4. **Monitor connections** via the admin dashboard
+5. **Set reasonable rate limits** based on your use case
+6. **Review access logs** periodically for suspicious activity
+
+---
+
 ## Admin Panel
 
 The plugin provides a full admin interface for configuration and monitoring.
@@ -1327,6 +1451,9 @@ Copyright (c) 2024 Strapi Community
 - **Admin Panel Sidebar** - Live presence panel integrated into edit view
 - **Admin Session Authentication** - Secure session tokens for Socket.IO
 - **Admin JWT Strategy** - New authentication strategy for admin users
+- **Enhanced Security** - Token hashing (SHA-256), usage limits, rate limiting
+- **Automatic Token Refresh** - Tokens auto-refresh at 70% of TTL
+- **Security Monitoring API** - Session stats and force-logout endpoints
 
 ### v5.0.0
 - Strapi v5 support

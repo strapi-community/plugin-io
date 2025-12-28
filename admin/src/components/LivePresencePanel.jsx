@@ -234,7 +234,7 @@ const LivePresencePanel = ({ documentId, model, document }) => {
   // Get the content type UID from model
   const uid = model?.uid || model;
 
-  // Step 1: Get session token from server
+  // Step 1: Get session token from server with automatic refresh
   useEffect(() => {
     if (!uid || !documentId) {
       setPresenceState(prev => ({ ...prev, status: 'disconnected', error: 'No content' }));
@@ -242,10 +242,17 @@ const LivePresencePanel = ({ documentId, model, document }) => {
     }
 
     let cancelled = false;
+    let refreshTimeoutId = null;
 
-    const getSession = async () => {
+    /**
+     * Fetches a new session token from the server
+     * @param {boolean} isRefresh - Whether this is a refresh request
+     */
+    const getSession = async (isRefresh = false) => {
       try {
-        setPresenceState(prev => ({ ...prev, status: 'requesting' }));
+        if (!isRefresh) {
+          setPresenceState(prev => ({ ...prev, status: 'requesting' }));
+        }
         
         // Use useFetchClient to get session token (automatically includes admin auth)
         const { data } = await post(`/${PLUGIN_ID}/presence/session`, {});
@@ -256,11 +263,42 @@ const LivePresencePanel = ({ documentId, model, document }) => {
           throw new Error('Invalid session response');
         }
 
-        console.log(`[${PLUGIN_ID}] Presence session obtained for:`, data.user?.email);
+        console.log(`[${PLUGIN_ID}] Session ${isRefresh ? 'refreshed' : 'obtained'}:`, {
+          expiresIn: Math.round((data.expiresAt - Date.now()) / 1000) + 's',
+          refreshAfter: Math.round((data.refreshAfter - Date.now()) / 1000) + 's',
+        });
+        
         setSessionData(data);
-        setPresenceState(prev => ({ ...prev, status: 'connecting' }));
+        
+        if (!isRefresh) {
+          setPresenceState(prev => ({ ...prev, status: 'connecting' }));
+        }
+
+        // Schedule token refresh at 70% of TTL (when server suggests)
+        if (data.refreshAfter) {
+          const refreshIn = data.refreshAfter - Date.now();
+          if (refreshIn > 0) {
+            console.log(`[${PLUGIN_ID}] Token refresh scheduled in ${Math.round(refreshIn / 1000)}s`);
+            refreshTimeoutId = setTimeout(() => {
+              if (!cancelled) {
+                console.log(`[${PLUGIN_ID}] Refreshing session token...`);
+                getSession(true);
+              }
+            }, refreshIn);
+          }
+        }
       } catch (error) {
         if (cancelled) return;
+        
+        // Handle rate limiting gracefully
+        if (error.response?.status === 429) {
+          console.warn(`[${PLUGIN_ID}] Rate limited, retrying in 30s...`);
+          refreshTimeoutId = setTimeout(() => {
+            if (!cancelled) getSession(isRefresh);
+          }, 30000);
+          return;
+        }
+        
         console.error(`[${PLUGIN_ID}] Failed to get presence session:`, error);
         setPresenceState(prev => ({ 
           ...prev, 
@@ -274,6 +312,9 @@ const LivePresencePanel = ({ documentId, model, document }) => {
 
     return () => {
       cancelled = true;
+      if (refreshTimeoutId) {
+        clearTimeout(refreshTimeoutId);
+      }
     };
   }, [uid, documentId, post]);
 

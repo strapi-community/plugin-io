@@ -567,6 +567,16 @@ async function bootstrapIO({ strapi }) {
 			if (settings.livePreview?.enabled !== false) {
 				previewService.cleanupSocket(socket.id);
 			}
+
+			// Cleanup admin session socket registration
+			try {
+				const presenceController = strapi.plugin(pluginId).controller('presence');
+				if (presenceController?.unregisterSocket) {
+					presenceController.unregisterSocket(socket.id);
+				}
+			} catch (e) {
+				// Ignore cleanup errors
+			}
 		});
 
 		// Error Handler

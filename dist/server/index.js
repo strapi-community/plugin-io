@@ -690,6 +690,13 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
       if (settings2.livePreview?.enabled !== false) {
         previewService.cleanupSocket(socket.id);
       }
+      try {
+        const presenceController = strapi2.plugin(pluginId$6).controller("presence");
+        if (presenceController?.unregisterSocket) {
+          presenceController.unregisterSocket(socket.id);
+        }
+      } catch (e) {
+      }
     });
     socket.on("error", (error2) => {
       strapi2.log.error(`socket.io: Socket error (id: ${socket.id}): ${error2.message}`);
@@ -1311,19 +1318,38 @@ var settings$3 = ({ strapi: strapi2 }) => ({
     };
   }
 });
-const { randomUUID } = require$$1__default.default;
+const { randomUUID, createHash } = require$$1__default.default;
 const sessionTokens = /* @__PURE__ */ new Map();
+const activeSockets = /* @__PURE__ */ new Map();
+const refreshThrottle = /* @__PURE__ */ new Map();
+const SESSION_TTL = 10 * 60 * 1e3;
+const REFRESH_COOLDOWN = 30 * 1e3;
+const CLEANUP_INTERVAL = 2 * 60 * 1e3;
+const hashToken = (token) => {
+  return createHash("sha256").update(token).digest("hex");
+};
 setInterval(() => {
   const now = Date.now();
-  for (const [token, session] of sessionTokens.entries()) {
+  let cleaned = 0;
+  for (const [tokenHash, session] of sessionTokens.entries()) {
     if (session.expiresAt < now) {
-      sessionTokens.delete(token);
+      sessionTokens.delete(tokenHash);
+      cleaned++;
     }
   }
-}, 5 * 60 * 1e3);
+  for (const [userId, lastRefresh] of refreshThrottle.entries()) {
+    if (now - lastRefresh > 60 * 60 * 1e3) {
+      refreshThrottle.delete(userId);
+    }
+  }
+  if (cleaned > 0) {
+    console.log(`[plugin-io] [CLEANUP] Removed ${cleaned} expired session tokens`);
+  }
+}, CLEANUP_INTERVAL);
 var presence$3 = ({ strapi: strapi2 }) => ({
   /**
    * Creates a session token for admin users to connect to Socket.IO
+   * Implements rate limiting and secure token storage
    * @param {object} ctx - Koa context
    */
   async createSession(ctx) {
@@ -1332,28 +1358,40 @@ var presence$3 = ({ strapi: strapi2 }) => ({
       strapi2.log.warn("[plugin-io] Presence session requested without admin user");
       return ctx.unauthorized("Admin authentication required");
     }
+    const lastRefresh = refreshThrottle.get(adminUser.id);
+    const now = Date.now();
+    if (lastRefresh && now - lastRefresh < REFRESH_COOLDOWN) {
+      const waitTime = Math.ceil((REFRESH_COOLDOWN - (now - lastRefresh)) / 1e3);
+      strapi2.log.warn(`[plugin-io] Rate limit: User ${adminUser.id} must wait ${waitTime}s`);
+      return ctx.tooManyRequests(`Please wait ${waitTime} seconds before requesting a new session`);
+    }
     try {
       const token = randomUUID();
-      const expiresAt = Date.now() + 2 * 60 * 1e3;
-      sessionTokens.set(token, {
-        token,
+      const tokenHash = hashToken(token);
+      const expiresAt = now + SESSION_TTL;
+      sessionTokens.set(tokenHash, {
+        tokenHash,
+        userId: adminUser.id,
         user: {
           id: adminUser.id,
-          email: adminUser.email,
+          // Only store minimal user data needed for display
           firstname: adminUser.firstname,
           lastname: adminUser.lastname
         },
-        expiresAt
+        createdAt: now,
+        expiresAt,
+        usageCount: 0,
+        maxUsage: 10
+        // Max reconnects with same token
       });
-      strapi2.log.info(`[plugin-io] Presence session created for admin user: ${adminUser.email}`);
+      refreshThrottle.set(adminUser.id, now);
+      strapi2.log.info(`[plugin-io] Presence session created for admin user: ${adminUser.id}`);
       ctx.body = {
         token,
-        user: {
-          id: adminUser.id,
-          email: adminUser.email,
-          firstname: adminUser.firstname,
-          lastname: adminUser.lastname
-        },
+        // Send plaintext token to client (only time it's exposed)
+        expiresAt,
+        refreshAfter: now + SESSION_TTL * 0.7,
+        // Suggest refresh at 70% of TTL
         wsPath: "/socket.io",
         wsUrl: `${ctx.protocol}://${ctx.host}`
       };
@@ -1363,23 +1401,142 @@ var presence$3 = ({ strapi: strapi2 }) => ({
     }
   },
   /**
-   * Validates and consumes a session token (one-time use)
+   * Validates a session token and tracks usage
+   * Implements usage limits to prevent token abuse
    * @param {string} token - Session token to validate
    * @returns {object|null} Session data or null if invalid/expired
    */
   consumeSessionToken(token) {
-    if (!token) {
+    if (!token || typeof token !== "string") {
       return null;
     }
-    const session = sessionTokens.get(token);
+    const tokenHash = hashToken(token);
+    const session = sessionTokens.get(tokenHash);
     if (!session) {
+      strapi2.log.debug("[plugin-io] Token not found in session store");
       return null;
     }
-    if (session.expiresAt < Date.now()) {
-      sessionTokens.delete(token);
+    const now = Date.now();
+    if (session.expiresAt < now) {
+      sessionTokens.delete(tokenHash);
+      strapi2.log.debug("[plugin-io] Token expired, removed from store");
       return null;
     }
+    if (session.usageCount >= session.maxUsage) {
+      strapi2.log.warn(`[plugin-io] Token usage limit exceeded for user ${session.userId}`);
+      sessionTokens.delete(tokenHash);
+      return null;
+    }
+    session.usageCount++;
+    session.lastUsed = now;
     return session;
+  },
+  /**
+   * Registers a socket as using a specific token
+   * @param {string} socketId - Socket ID
+   * @param {string} token - The token being used
+   */
+  registerSocket(socketId, token) {
+    if (!socketId || !token) return;
+    const tokenHash = hashToken(token);
+    activeSockets.set(socketId, tokenHash);
+  },
+  /**
+   * Unregisters a socket when it disconnects
+   * @param {string} socketId - Socket ID
+   */
+  unregisterSocket(socketId) {
+    activeSockets.delete(socketId);
+  },
+  /**
+   * Invalidates all sessions for a specific user (e.g., on logout)
+   * @param {number} userId - User ID to invalidate
+   * @returns {number} Number of sessions invalidated
+   */
+  invalidateUserSessions(userId) {
+    let invalidated = 0;
+    for (const [tokenHash, session] of sessionTokens.entries()) {
+      if (session.userId === userId) {
+        sessionTokens.delete(tokenHash);
+        invalidated++;
+      }
+    }
+    refreshThrottle.delete(userId);
+    strapi2.log.info(`[plugin-io] Invalidated ${invalidated} sessions for user ${userId}`);
+    return invalidated;
+  },
+  /**
+   * Gets session statistics (for monitoring) - internal method
+   * @returns {object} Session statistics
+   */
+  getSessionStatsInternal() {
+    const now = Date.now();
+    let active = 0;
+    let expiringSoon = 0;
+    for (const session of sessionTokens.values()) {
+      if (session.expiresAt > now) {
+        active++;
+        if (session.expiresAt - now < 2 * 60 * 1e3) {
+          expiringSoon++;
+        }
+      }
+    }
+    return {
+      activeSessions: active,
+      expiringSoon,
+      activeSocketConnections: activeSockets.size,
+      sessionTTL: SESSION_TTL,
+      refreshCooldown: REFRESH_COOLDOWN
+    };
+  },
+  /**
+   * HTTP Handler: Gets session statistics for admin monitoring
+   * @param {object} ctx - Koa context
+   */
+  async getSessionStats(ctx) {
+    const adminUser = ctx.state.user;
+    if (!adminUser) {
+      return ctx.unauthorized("Admin authentication required");
+    }
+    try {
+      const stats = this.getSessionStatsInternal();
+      ctx.body = { data: stats };
+    } catch (error2) {
+      strapi2.log.error("[plugin-io] Failed to get session stats:", error2);
+      return ctx.internalServerError("Failed to get session statistics");
+    }
+  },
+  /**
+   * HTTP Handler: Invalidates all sessions for a specific user
+   * @param {object} ctx - Koa context
+   */
+  async invalidateUserSessionsHandler(ctx) {
+    const adminUser = ctx.state.user;
+    if (!adminUser) {
+      return ctx.unauthorized("Admin authentication required");
+    }
+    const { userId } = ctx.params;
+    if (!userId) {
+      return ctx.badRequest("User ID is required");
+    }
+    try {
+      const userIdNum = parseInt(userId, 10);
+      if (isNaN(userIdNum)) {
+        return ctx.badRequest("Invalid user ID");
+      }
+      const invalidated = this.invalidateUserSessions(userIdNum);
+      strapi2.log.info(`[plugin-io] Admin ${adminUser.id} invalidated ${invalidated} sessions for user ${userIdNum}`);
+      ctx.body = {
+        data: {
+          userId: userIdNum,
+          invalidatedSessions: invalidated,
+          message: `Successfully invalidated ${invalidated} session(s)`
+        }
+      };
+    } catch (error2) {
+      strapi2.log.error("[plugin-io] Failed to invalidate user sessions:", error2);
+      return ctx.internalServerError("Failed to invalidate sessions");
+    }
   }
 });
 const settings$2 = settings$3;
@@ -1468,6 +1625,24 @@ var admin$1 = {
       method: "GET",
       path: "/monitoring/stats",
       handler: "settings.getMonitoringStats",
+      config: {
+        policies: ["admin::isAuthenticatedAdmin"]
+      }
+    },
+    // Security: Session statistics
+    {
+      method: "GET",
+      path: "/security/sessions",
+      handler: "presence.getSessionStats",
+      config: {
+        policies: ["admin::isAuthenticatedAdmin"]
+      }
+    },
+    // Security: Invalidate user sessions (force logout)
+    {
+      method: "POST",
+      path: "/security/invalidate/:userId",
+      handler: "presence.invalidateUserSessionsHandler",
       config: {
         policies: ["admin::isAuthenticatedAdmin"]
       }
@@ -29677,21 +29852,55 @@ var strategies = ({ strapi: strapi2 }) => {
     credentials: function(user) {
       return `${this.name}-${user.id}`;
     },
-    authenticate: async function(auth) {
+    /**
+     * Authenticates admin user via session token
+     * @param {object} auth - Auth object containing token
+     * @param {object} socket - Socket instance for registration
+     * @returns {object} User data if authenticated
+     * @throws {UnauthorizedError} If authentication fails
+     */
+    authenticate: async function(auth, socket) {
       const token2 = auth.token;
-      if (!token2) {
+      if (!token2 || typeof token2 !== "string") {
+        strapi2.log.warn("[plugin-io] Admin auth failed: No token provided");
         throw new UnauthorizedError2("Invalid admin credentials");
+      }
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(token2)) {
+        strapi2.log.warn("[plugin-io] Admin auth failed: Invalid token format");
+        throw new UnauthorizedError2("Invalid token format");
       }
       try {
         const presenceController = strapi2.plugin("io").controller("presence");
         const session = presenceController.consumeSessionToken(token2);
         if (!session) {
+          strapi2.log.warn("[plugin-io] Admin auth failed: Token not valid or expired");
           throw new UnauthorizedError2("Invalid or expired session token");
         }
-        return session.user;
+        if (socket?.id) {
+          presenceController.registerSocket(socket.id, token2);
+        }
+        strapi2.log.info(`[plugin-io] Admin authenticated: User ID ${session.userId}`);
+        return {
+          id: session.userId,
+          ...session.user
+        };
       } catch (error2) {
-        strapi2.log.warn("[plugin-io] Admin session verification failed:", error2.message);
-        throw new UnauthorizedError2("Invalid admin credentials");
+        if (error2 instanceof UnauthorizedError2) {
+          throw error2;
+        }
+        strapi2.log.error("[plugin-io] Admin session verification error:", error2.message);
+        throw new UnauthorizedError2("Authentication failed");
+      }
+    },
+    /**
+     * Cleanup when socket disconnects
+     * @param {object} socket - Socket instance
+     */
+    onDisconnect: function(socket) {
+      if (socket?.id) {
+        const presenceController = strapi2.plugin("io").controller("presence");
+        presenceController.unregisterSocket(socket.id);
       }
     },
     getRoomName: function(user) {
