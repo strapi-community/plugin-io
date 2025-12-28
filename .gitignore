@@ -18,3 +18,4 @@ yarn.lock
 *.swo
 *~
 .tmp
+package-lock.json

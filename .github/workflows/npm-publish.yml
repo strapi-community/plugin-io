@@ -27,7 +27,9 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          rm -f package-lock.json
+          npm install
 
       - name: Build plugin
         run: npm run build
@@ -55,7 +57,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'chore: bump version to ${{ steps.version.outputs.version }}'
-          file_pattern: 'package.json package-lock.json'
+          file_pattern: 'package.json'
           branch: main
       - name: Done
         run: |
