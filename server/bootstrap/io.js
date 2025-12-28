@@ -181,6 +181,15 @@ async function bootstrapIO({ strapi }) {
 		});
 	}
 
+	// Get presence and preview services
+	const presenceService = strapi.plugin(pluginId).service('presence');
+	const previewService = strapi.plugin(pluginId).service('preview');
+
+	// Start presence cleanup interval
+	if (settings.presence?.enabled !== false) {
+		presenceService.startCleanupInterval();
+	}
+
 	// Connection Handler
 	io.server.on('connection', (socket) => {
 		const clientIp = socket.handshake.address || 'unknown';
@@ -193,6 +202,12 @@ async function bootstrapIO({ strapi }) {
 				ip: clientIp,
 				user: socket.user || null,
 			});
+		}
+
+		// Register for presence tracking (support both regular users and admin users)
+		if (settings.presence?.enabled !== false) {
+			const user = socket.user || socket.adminUser;
+			presenceService.registerConnection(socket.id, user);
 		}
 
 		if (settings.rooms?.autoJoinByRole) {
@@ -249,6 +264,98 @@ async function bootstrapIO({ strapi }) {
 		socket.on('get-rooms', (callback) => {
 			const rooms = Array.from(socket.rooms).filter((r) => r !== socket.id);
 			if (callback) callback({ success: true, rooms });
+		});
+
+		// ===== PRESENCE EVENTS =====
+		
+		// Join entity for presence tracking
+		socket.on('presence:join', async ({ uid, documentId }, callback) => {
+			if (settings.presence?.enabled === false) {
+				if (callback) callback({ success: false, error: 'Presence is disabled' });
+				return;
+			}
+
+			if (!uid || !documentId) {
+				if (callback) callback({ success: false, error: 'uid and documentId are required' });
+				return;
+			}
+
+			const result = await presenceService.joinEntity(socket.id, uid, documentId);
+			if (callback) callback(result);
+		});
+
+		// Leave entity presence
+		socket.on('presence:leave', async ({ uid, documentId }, callback) => {
+			if (settings.presence?.enabled === false) {
+				if (callback) callback({ success: false, error: 'Presence is disabled' });
+				return;
+			}
+
+			if (!uid || !documentId) {
+				if (callback) callback({ success: false, error: 'uid and documentId are required' });
+				return;
+			}
+
+			const result = await presenceService.leaveEntity(socket.id, uid, documentId);
+			if (callback) callback(result);
+		});
+
+		// Presence heartbeat
+		socket.on('presence:heartbeat', (callback) => {
+			const result = presenceService.heartbeat(socket.id);
+			if (callback) callback(result);
+		});
+
+		// Typing indicator
+		socket.on('presence:typing', ({ uid, documentId, fieldName }) => {
+			if (settings.presence?.enabled === false) return;
+			presenceService.broadcastTyping(socket.id, uid, documentId, fieldName);
+		});
+
+		// Check if entity is being edited
+		socket.on('presence:check', async ({ uid, documentId }, callback) => {
+			if (settings.presence?.enabled === false) {
+				if (callback) callback({ success: false, error: 'Presence is disabled' });
+				return;
+			}
+
+			const editors = await presenceService.getEntityEditors(uid, documentId);
+			if (callback) callback({ success: true, editors, isBeingEdited: editors.length > 0 });
+		});
+
+		// ===== LIVE PREVIEW EVENTS =====
+
+		// Subscribe to live preview updates
+		socket.on('preview:subscribe', async ({ uid, documentId }, callback) => {
+			if (settings.livePreview?.enabled === false) {
+				if (callback) callback({ success: false, error: 'Live preview is disabled' });
+				return;
+			}
+
+			if (!uid || !documentId) {
+				if (callback) callback({ success: false, error: 'uid and documentId are required' });
+				return;
+			}
+
+			const result = await previewService.subscribe(socket.id, uid, documentId);
+			if (callback) callback(result);
+		});
+
+		// Unsubscribe from live preview
+		socket.on('preview:unsubscribe', ({ uid, documentId }, callback) => {
+			if (!uid || !documentId) {
+				if (callback) callback({ success: false, error: 'uid and documentId are required' });
+				return;
+			}
+
+			const result = previewService.unsubscribe(socket.id, uid, documentId);
+			if (callback) callback(result);
+		});
+
+		// Field change for live preview (editor sends this)
+		socket.on('preview:field-change', ({ uid, documentId, fieldName, value }) => {
+			if (settings.livePreview?.enabled === false) return;
+			previewService.emitFieldChange(socket.id, uid, documentId, fieldName, value);
 		});
 
 		// Entity Subscription (NEW - for entity-specific events)
@@ -441,7 +548,7 @@ async function bootstrapIO({ strapi }) {
 		});
 
 		// Disconnect Handler
-		socket.on('disconnect', (reason) => {
+		socket.on('disconnect', async (reason) => {
 			if (settings.monitoring?.enableConnectionLogging) {
 				strapi.log.info(`socket.io: Client disconnected (id: ${socket.id}, user: ${username}, reason: ${reason})`);
 				monitoringService.logEvent('disconnect', { 
@@ -449,6 +556,16 @@ async function bootstrapIO({ strapi }) {
 					reason,
 					user: socket.user || null,
 				});
+			}
+
+			// Cleanup presence tracking
+			if (settings.presence?.enabled !== false) {
+				await presenceService.unregisterConnection(socket.id);
+			}
+
+			// Cleanup preview subscriptions
+			if (settings.livePreview?.enabled !== false) {
+				previewService.cleanupSocket(socket.id);
 			}
 		});
 
@@ -634,18 +751,62 @@ async function bootstrapIO({ strapi }) {
 	});
 	const enabledContentTypes = allContentTypes.size;
 
+	// Presence Helper Functions
+	strapi.$io.presence = {
+		/**
+		 * Get editors for an entity
+		 */
+		getEditors: (uid, documentId) => presenceService.getEntityEditors(uid, documentId),
+		
+		/**
+		 * Check if entity is being edited
+		 */
+		isBeingEdited: (uid, documentId) => presenceService.isEntityBeingEdited(uid, documentId),
+		
+		/**
+		 * Get presence statistics
+		 */
+		getStats: () => presenceService.getStats(),
+	};
+
+	// Preview Helper Functions
+	strapi.$io.preview = {
+		/**
+		 * Emit draft change to preview subscribers
+		 */
+		emitDraftChange: (uid, documentId, data, diff) => previewService.emitDraftChange(uid, documentId, data, diff),
+		
+		/**
+		 * Emit publish event
+		 */
+		emitPublish: (uid, documentId, data) => previewService.emitPublish(uid, documentId, data),
+		
+		/**
+		 * Emit unpublish event
+		 */
+		emitUnpublish: (uid, documentId) => previewService.emitUnpublish(uid, documentId),
+		
+		/**
+		 * Get preview statistics
+		 */
+		getStats: () => previewService.getStats(),
+	};
+
 	const origins = settings.cors?.origins?.join(', ') || 'http://localhost:3000';
 	const features = [];
 	if (settings.redis?.enabled) features.push('Redis');
 	if (settings.namespaces?.enabled) features.push(`Namespaces(${Object.keys(settings.namespaces.list || {}).length})`);
 	if (settings.security?.rateLimiting?.enabled) features.push('RateLimit');
+	if (settings.presence?.enabled !== false) features.push('Presence');
+	if (settings.livePreview?.enabled !== false) features.push('LivePreview');
+	if (settings.fieldLevelChanges?.enabled !== false) features.push('FieldDiff');
 	
 	strapi.log.info(`socket.io: Plugin initialized`);
-	strapi.log.info(`  • Origins: ${origins}`);
-	strapi.log.info(`  • Content Types: ${enabledContentTypes}`);
-	strapi.log.info(`  • Max Connections: ${settings.connection?.maxConnections || 1000}`);
+	strapi.log.info(`  - Origins: ${origins}`);
+	strapi.log.info(`  - Content Types: ${enabledContentTypes}`);
+	strapi.log.info(`  - Max Connections: ${settings.connection?.maxConnections || 1000}`);
 	if (features.length > 0) {
-		strapi.log.info(`  • Features: ${features.join(', ')}`);
+		strapi.log.info(`  - Features: ${features.join(', ')}`);
 	}
 }
 

@@ -1,8 +1,8 @@
 "use strict";
 const require$$0$4 = require("socket.io");
 const node_async_hooks = require("node:async_hooks");
-const dates$1 = require("date-fns");
 const require$$1 = require("crypto");
+const dates$1 = require("date-fns");
 const require$$0$5 = require("child_process");
 const require$$0$6 = require("os");
 const require$$0$8 = require("path");
@@ -35,8 +35,8 @@ function _interopNamespace(e) {
   return Object.freeze(n);
 }
 const require$$0__default = /* @__PURE__ */ _interopDefault(require$$0$4);
-const dates__namespace = /* @__PURE__ */ _interopNamespace(dates$1);
 const require$$1__default = /* @__PURE__ */ _interopDefault(require$$1);
+const dates__namespace = /* @__PURE__ */ _interopNamespace(dates$1);
 const require$$0__default$1 = /* @__PURE__ */ _interopDefault(require$$0$5);
 const require$$0__default$2 = /* @__PURE__ */ _interopDefault(require$$0$6);
 const require$$0__default$4 = /* @__PURE__ */ _interopDefault(require$$0$8);
@@ -83,10 +83,10 @@ const require$$0$3 = {
   strapi: strapi$1
 };
 const pluginPkg = require$$0$3;
-const pluginId$7 = pluginPkg.strapi.name;
-var pluginId_1 = { pluginId: pluginId$7 };
-const { pluginId: pluginId$6 } = pluginId_1;
-function getService$3({ name, plugin = pluginId$6, type: type2 = "plugin" }) {
+const pluginId$9 = pluginPkg.strapi.name;
+var pluginId_1 = { pluginId: pluginId$9 };
+const { pluginId: pluginId$8 } = pluginId_1;
+function getService$3({ name, plugin = pluginId$8, type: type2 = "plugin" }) {
   let serviceUID = `${type2}::${plugin}`;
   if (name && name.length) {
     serviceUID += `.${name}`;
@@ -108,11 +108,24 @@ async function handshake$2(socket, next) {
   try {
     let room;
     if (strategy2 && strategy2.length) {
-      const strategyType = strategy2 === "jwt" ? "role" : "token";
+      let strategyType;
+      if (strategy2 === "jwt") {
+        strategyType = "role";
+      } else if (strategy2 === "admin-jwt") {
+        strategyType = "admin";
+      } else {
+        strategyType = "token";
+      }
       const ctx = await strategyService[strategyType].authenticate(auth);
       room = strategyService[strategyType].getRoomName(ctx);
+      if (strategyType === "admin") {
+        socket.adminUser = ctx;
+      }
     } else if (strapi.plugin("users-permissions")) {
-      const role = await strapi.query("plugin::users-permissions.role").findOne({ where: { type: "public" }, select: ["id", "name"] });
+      const role = await strapi.documents("plugin::users-permissions.role").findFirst({
+        filters: { type: "public" },
+        fields: ["id", "name"]
+      });
       room = strategyService["role"].getRoomName(role);
     }
     if (room) {
@@ -143,7 +156,7 @@ var constants$7 = {
 const { Server } = require$$0__default.default;
 const { handshake } = middleware;
 const { getService: getService$1 } = getService_1;
-const { pluginId: pluginId$5 } = pluginId_1;
+const { pluginId: pluginId$7 } = pluginId_1;
 const { API_TOKEN_TYPE: API_TOKEN_TYPE$1 } = constants$7;
 let SocketIO$2 = class SocketIO {
   constructor(options) {
@@ -263,11 +276,11 @@ function requireSanitizeSensitiveFields() {
   return sanitizeSensitiveFields;
 }
 const { SocketIO: SocketIO2 } = structures;
-const { pluginId: pluginId$4 } = pluginId_1;
+const { pluginId: pluginId$6 } = pluginId_1;
 async function bootstrapIO$1({ strapi: strapi2 }) {
-  const settingsService = strapi2.plugin(pluginId$4).service("settings");
+  const settingsService = strapi2.plugin(pluginId$6).service("settings");
   const settings2 = await settingsService.getSettings();
-  const monitoringService = strapi2.plugin(pluginId$4).service("monitoring");
+  const monitoringService = strapi2.plugin(pluginId$6).service("monitoring");
   const serverOptions = {
     cors: {
       origin: settings2.cors?.origins || ["http://localhost:3000"],
@@ -400,6 +413,11 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
       }
     });
   }
+  const presenceService = strapi2.plugin(pluginId$6).service("presence");
+  const previewService = strapi2.plugin(pluginId$6).service("preview");
+  if (settings2.presence?.enabled !== false) {
+    presenceService.startCleanupInterval();
+  }
   io2.server.on("connection", (socket) => {
     const clientIp = socket.handshake.address || "unknown";
     const username = socket.user?.username || "anonymous";
@@ -410,6 +428,10 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
         ip: clientIp,
         user: socket.user || null
       });
+    }
+    if (settings2.presence?.enabled !== false) {
+      const user = socket.user || socket.adminUser;
+      presenceService.registerConnection(socket.id, user);
     }
     if (settings2.rooms?.autoJoinByRole) {
       const userRole = socket.user?.role || "public";
@@ -454,6 +476,70 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
     socket.on("get-rooms", (callback) => {
       const rooms = Array.from(socket.rooms).filter((r) => r !== socket.id);
       if (callback) callback({ success: true, rooms });
+    });
+    socket.on("presence:join", async ({ uid, documentId }, callback) => {
+      if (settings2.presence?.enabled === false) {
+        if (callback) callback({ success: false, error: "Presence is disabled" });
+        return;
+      }
+      if (!uid || !documentId) {
+        if (callback) callback({ success: false, error: "uid and documentId are required" });
+        return;
+      }
+      const result = await presenceService.joinEntity(socket.id, uid, documentId);
+      if (callback) callback(result);
+    });
+    socket.on("presence:leave", async ({ uid, documentId }, callback) => {
+      if (settings2.presence?.enabled === false) {
+        if (callback) callback({ success: false, error: "Presence is disabled" });
+        return;
+      }
+      if (!uid || !documentId) {
+        if (callback) callback({ success: false, error: "uid and documentId are required" });
+        return;
+      }
+      const result = await presenceService.leaveEntity(socket.id, uid, documentId);
+      if (callback) callback(result);
+    });
+    socket.on("presence:heartbeat", (callback) => {
+      const result = presenceService.heartbeat(socket.id);
+      if (callback) callback(result);
+    });
+    socket.on("presence:typing", ({ uid, documentId, fieldName }) => {
+      if (settings2.presence?.enabled === false) return;
+      presenceService.broadcastTyping(socket.id, uid, documentId, fieldName);
+    });
+    socket.on("presence:check", async ({ uid, documentId }, callback) => {
+      if (settings2.presence?.enabled === false) {
+        if (callback) callback({ success: false, error: "Presence is disabled" });
+        return;
+      }
+      const editors = await presenceService.getEntityEditors(uid, documentId);
+      if (callback) callback({ success: true, editors, isBeingEdited: editors.length > 0 });
+    });
+    socket.on("preview:subscribe", async ({ uid, documentId }, callback) => {
+      if (settings2.livePreview?.enabled === false) {
+        if (callback) callback({ success: false, error: "Live preview is disabled" });
+        return;
+      }
+      if (!uid || !documentId) {
+        if (callback) callback({ success: false, error: "uid and documentId are required" });
+        return;
+      }
+      const result = await previewService.subscribe(socket.id, uid, documentId);
+      if (callback) callback(result);
+    });
+    socket.on("preview:unsubscribe", ({ uid, documentId }, callback) => {
+      if (!uid || !documentId) {
+        if (callback) callback({ success: false, error: "uid and documentId are required" });
+        return;
+      }
+      const result = previewService.unsubscribe(socket.id, uid, documentId);
+      if (callback) callback(result);
+    });
+    socket.on("preview:field-change", ({ uid, documentId, fieldName, value }) => {
+      if (settings2.livePreview?.enabled === false) return;
+      previewService.emitFieldChange(socket.id, uid, documentId, fieldName, value);
     });
     socket.on("subscribe-entity", async ({ uid, id }, callback) => {
       if (settings2.entitySubscriptions?.enabled === false) {
@@ -589,7 +675,7 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
       strapi2.log.debug(`socket.io: Private message from ${socket.id} to ${to}`);
       if (callback) callback({ success: true });
     });
-    socket.on("disconnect", (reason) => {
+    socket.on("disconnect", async (reason) => {
       if (settings2.monitoring?.enableConnectionLogging) {
         strapi2.log.info(`socket.io: Client disconnected (id: ${socket.id}, user: ${username}, reason: ${reason})`);
         monitoringService.logEvent("disconnect", {
@@ -597,6 +683,12 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
           reason,
           user: socket.user || null
         });
+      }
+      if (settings2.presence?.enabled !== false) {
+        await presenceService.unregisterConnection(socket.id);
+      }
+      if (settings2.livePreview?.enabled !== false) {
+        previewService.cleanupSocket(socket.id);
       }
     });
     socket.on("error", (error2) => {
@@ -741,17 +833,52 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
     }
   });
   const enabledContentTypes = allContentTypes.size;
+  strapi2.$io.presence = {
+    /**
+     * Get editors for an entity
+     */
+    getEditors: (uid, documentId) => presenceService.getEntityEditors(uid, documentId),
+    /**
+     * Check if entity is being edited
+     */
+    isBeingEdited: (uid, documentId) => presenceService.isEntityBeingEdited(uid, documentId),
+    /**
+     * Get presence statistics
+     */
+    getStats: () => presenceService.getStats()
+  };
+  strapi2.$io.preview = {
+    /**
+     * Emit draft change to preview subscribers
+     */
+    emitDraftChange: (uid, documentId, data, diff2) => previewService.emitDraftChange(uid, documentId, data, diff2),
+    /**
+     * Emit publish event
+     */
+    emitPublish: (uid, documentId, data) => previewService.emitPublish(uid, documentId, data),
+    /**
+     * Emit unpublish event
+     */
+    emitUnpublish: (uid, documentId) => previewService.emitUnpublish(uid, documentId),
+    /**
+     * Get preview statistics
+     */
+    getStats: () => previewService.getStats()
+  };
   const origins = settings2.cors?.origins?.join(", ") || "http://localhost:3000";
   const features = [];
   if (settings2.redis?.enabled) features.push("Redis");
   if (settings2.namespaces?.enabled) features.push(`Namespaces(${Object.keys(settings2.namespaces.list || {}).length})`);
   if (settings2.security?.rateLimiting?.enabled) features.push("RateLimit");
+  if (settings2.presence?.enabled !== false) features.push("Presence");
+  if (settings2.livePreview?.enabled !== false) features.push("LivePreview");
+  if (settings2.fieldLevelChanges?.enabled !== false) features.push("FieldDiff");
   strapi2.log.info(`socket.io: Plugin initialized`);
-  strapi2.log.info(`  • Origins: ${origins}`);
-  strapi2.log.info(`  • Content Types: ${enabledContentTypes}`);
-  strapi2.log.info(`  • Max Connections: ${settings2.connection?.maxConnections || 1e3}`);
+  strapi2.log.info(`  - Origins: ${origins}`);
+  strapi2.log.info(`  - Content Types: ${enabledContentTypes}`);
+  strapi2.log.info(`  - Max Connections: ${settings2.connection?.maxConnections || 1e3}`);
   if (features.length > 0) {
-    strapi2.log.info(`  • Features: ${features.join(", ")}`);
+    strapi2.log.info(`  - Features: ${features.join(", ")}`);
   }
 }
 var io = { bootstrapIO: bootstrapIO$1 };
@@ -825,7 +952,7 @@ function getTransactionCtx() {
   }
   return transactionCtx;
 }
-const { pluginId: pluginId$3 } = pluginId_1;
+const { pluginId: pluginId$5 } = pluginId_1;
 function scheduleAfterTransaction(callback, delay = 0) {
   const runner = () => setTimeout(callback, delay);
   const ctx = getTransactionCtx();
@@ -912,17 +1039,47 @@ async function bootstrapLifecycles$1({ strapi: strapi2 }) {
         }, 50);
       }
     };
+    subscriber.beforeUpdate = async (event) => {
+      if (!isActionEnabled(strapi2, uid, "update")) return;
+      const fieldLevelEnabled = strapi2.$ioSettings?.fieldLevelChanges?.enabled !== false;
+      if (!fieldLevelEnabled) return;
+      try {
+        const documentId = event.params.where?.documentId || event.params.documentId;
+        if (!documentId) return;
+        const existing = await strapi2.documents(uid).findOne({ documentId });
+        if (existing) {
+          if (!event.state.io) event.state.io = {};
+          event.state.io.previousData = JSON.parse(JSON.stringify(existing));
+        }
+      } catch (error2) {
+        strapi2.log.debug(`socket.io: Could not fetch previous data for diff: ${error2.message}`);
+      }
+    };
     subscriber.afterUpdate = async (event) => {
       if (!isActionEnabled(strapi2, uid, "update")) return;
-      const eventData = {
-        event: "update",
-        schema: event.model,
-        data: JSON.parse(JSON.stringify(event.result))
-        // Deep clone
-      };
+      const newData = JSON.parse(JSON.stringify(event.result));
+      const previousData = event.state.io?.previousData || null;
+      const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
       scheduleAfterTransaction(() => {
         try {
-          strapi2.$io.emit(eventData);
+          const diffService = strapi2.plugin(pluginId$5).service("diff");
+          const previewService = strapi2.plugin(pluginId$5).service("preview");
+          const fieldLevelEnabled = strapi2.$ioSettings?.fieldLevelChanges?.enabled !== false;
+          let eventPayload;
+          if (fieldLevelEnabled && previousData && diffService) {
+            eventPayload = diffService.createEventPayload("update", modelInfo, previousData, newData);
+          } else {
+            eventPayload = {
+              event: "update",
+              schema: modelInfo,
+              data: newData
+            };
+          }
+          strapi2.$io.emit(eventPayload);
+          if (previewService && newData.documentId) {
+            const diff2 = fieldLevelEnabled ? eventPayload.diff : null;
+            previewService.emitDraftChange(uid, newData.documentId, newData, diff2);
+          }
         } catch (error2) {
           strapi2.log.debug(`socket.io: Could not emit update event for ${uid}:`, error2.message);
         }
@@ -1023,14 +1180,14 @@ var config$1 = {
   validator(config2) {
   }
 };
-const { pluginId: pluginId$2 } = pluginId_1;
+const { pluginId: pluginId$4 } = pluginId_1;
 var settings$3 = ({ strapi: strapi2 }) => ({
   /**
    * GET /io/settings
    * Retrieve current plugin settings
    */
   async getSettings(ctx) {
-    const settingsService = strapi2.plugin(pluginId$2).service("settings");
+    const settingsService = strapi2.plugin(pluginId$4).service("settings");
     const settings2 = await settingsService.getSettings();
     ctx.body = { data: settings2 };
   },
@@ -1039,7 +1196,7 @@ var settings$3 = ({ strapi: strapi2 }) => ({
    * Update plugin settings and hot-reload Socket.IO
    */
   async updateSettings(ctx) {
-    const settingsService = strapi2.plugin(pluginId$2).service("settings");
+    const settingsService = strapi2.plugin(pluginId$4).service("settings");
     const { body } = ctx.request;
     await settingsService.getSettings();
     const updatedSettings = await settingsService.setSettings(body);
@@ -1072,7 +1229,7 @@ var settings$3 = ({ strapi: strapi2 }) => ({
    * Get connection and event statistics
    */
   async getStats(ctx) {
-    const monitoringService = strapi2.plugin(pluginId$2).service("monitoring");
+    const monitoringService = strapi2.plugin(pluginId$4).service("monitoring");
     const connectionStats = monitoringService.getConnectionStats();
     const eventStats = monitoringService.getEventStats();
     ctx.body = {
@@ -1087,7 +1244,7 @@ var settings$3 = ({ strapi: strapi2 }) => ({
    * Get recent event log
    */
   async getEventLog(ctx) {
-    const monitoringService = strapi2.plugin(pluginId$2).service("monitoring");
+    const monitoringService = strapi2.plugin(pluginId$4).service("monitoring");
     const limit = parseInt(ctx.query.limit) || 50;
     const log = monitoringService.getEventLog(limit);
     ctx.body = { data: log };
@@ -1097,7 +1254,7 @@ var settings$3 = ({ strapi: strapi2 }) => ({
    * Send a test event
    */
   async sendTestEvent(ctx) {
-    const monitoringService = strapi2.plugin(pluginId$2).service("monitoring");
+    const monitoringService = strapi2.plugin(pluginId$4).service("monitoring");
     const { eventName, data } = ctx.request.body;
     try {
       const result = monitoringService.sendTestEvent(eventName || "test", data || {});
@@ -1111,7 +1268,7 @@ var settings$3 = ({ strapi: strapi2 }) => ({
    * Reset monitoring statistics
    */
   async resetStats(ctx) {
-    const monitoringService = strapi2.plugin(pluginId$2).service("monitoring");
+    const monitoringService = strapi2.plugin(pluginId$4).service("monitoring");
     monitoringService.resetStats();
     ctx.body = { data: { success: true } };
   },
@@ -1135,7 +1292,7 @@ var settings$3 = ({ strapi: strapi2 }) => ({
    * Get lightweight stats for dashboard widget
    */
   async getMonitoringStats(ctx) {
-    const monitoringService = strapi2.plugin(pluginId$2).service("monitoring");
+    const monitoringService = strapi2.plugin(pluginId$4).service("monitoring");
     const connectionStats = monitoringService.getConnectionStats();
     const eventStats = monitoringService.getEventStats();
     ctx.body = {
@@ -1154,13 +1311,95 @@ var settings$3 = ({ strapi: strapi2 }) => ({
     };
   }
 });
+const { randomUUID } = require$$1__default.default;
+const sessionTokens = /* @__PURE__ */ new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, session] of sessionTokens.entries()) {
+    if (session.expiresAt < now) {
+      sessionTokens.delete(token);
+    }
+  }
+}, 5 * 60 * 1e3);
+var presence$3 = ({ strapi: strapi2 }) => ({
+  /**
+   * Creates a session token for admin users to connect to Socket.IO
+   * @param {object} ctx - Koa context
+   */
+  async createSession(ctx) {
+    const adminUser = ctx.state.user;
+    if (!adminUser) {
+      strapi2.log.warn("[plugin-io] Presence session requested without admin user");
+      return ctx.unauthorized("Admin authentication required");
+    }
+    try {
+      const token = randomUUID();
+      const expiresAt = Date.now() + 2 * 60 * 1e3;
+      sessionTokens.set(token, {
+        token,
+        user: {
+          id: adminUser.id,
+          email: adminUser.email,
+          firstname: adminUser.firstname,
+          lastname: adminUser.lastname
+        },
+        expiresAt
+      });
+      strapi2.log.info(`[plugin-io] Presence session created for admin user: ${adminUser.email}`);
+      ctx.body = {
+        token,
+        user: {
+          id: adminUser.id,
+          email: adminUser.email,
+          firstname: adminUser.firstname,
+          lastname: adminUser.lastname
+        },
+        wsPath: "/socket.io",
+        wsUrl: `${ctx.protocol}://${ctx.host}`
+      };
+    } catch (error2) {
+      strapi2.log.error("[plugin-io] Failed to create presence session:", error2);
+      return ctx.internalServerError("Failed to create session");
+    }
+  },
+  /**
+   * Validates and consumes a session token (one-time use)
+   * @param {string} token - Session token to validate
+   * @returns {object|null} Session data or null if invalid/expired
+   */
+  consumeSessionToken(token) {
+    if (!token) {
+      return null;
+    }
+    const session = sessionTokens.get(token);
+    if (!session) {
+      return null;
+    }
+    if (session.expiresAt < Date.now()) {
+      sessionTokens.delete(token);
+      return null;
+    }
+    return session;
+  }
+});
 const settings$2 = settings$3;
+const presence$2 = presence$3;
 var controllers$1 = {
-  settings: settings$2
+  settings: settings$2,
+  presence: presence$2
 };
 var admin$1 = {
   type: "admin",
   routes: [
+    // Presence Session - issues JWT token for Socket.IO connection
+    {
+      method: "POST",
+      path: "/presence/session",
+      handler: "presence.createSession",
+      config: {
+        policies: ["admin::isAuthenticatedAdmin"]
+      }
+    },
     {
       method: "GET",
       path: "/settings",
@@ -21500,9 +21739,9 @@ function padZeros(value, tok, options) {
   if (!tok.isPadded) {
     return value;
   }
-  let diff = Math.abs(tok.maxLen - String(value).length);
+  let diff2 = Math.abs(tok.maxLen - String(value).length);
   let relax = options.relaxZeros !== false;
-  switch (diff) {
+  switch (diff2) {
     case 0:
       return "";
     case 1:
@@ -21510,7 +21749,7 @@ function padZeros(value, tok, options) {
     case 2:
       return relax ? "0{0,2}" : "00";
     default: {
-      return relax ? `0{0,${diff}}` : `0{${diff}}`;
+      return relax ? `0{0,${diff2}}` : `0{${diff2}}`;
     }
   }
 }
@@ -29433,6 +29672,32 @@ var strategies = ({ strapi: strapi2 }) => {
   const apiTokenService = getService({ type: "admin", plugin: "api-token" });
   const jwtService = getService({ name: "jwt", plugin: "users-permissions" });
   const userService = getService({ name: "user", plugin: "users-permissions" });
+  const admin2 = {
+    name: "io-admin",
+    credentials: function(user) {
+      return `${this.name}-${user.id}`;
+    },
+    authenticate: async function(auth) {
+      const token2 = auth.token;
+      if (!token2) {
+        throw new UnauthorizedError2("Invalid admin credentials");
+      }
+      try {
+        const presenceController = strapi2.plugin("io").controller("presence");
+        const session = presenceController.consumeSessionToken(token2);
+        if (!session) {
+          throw new UnauthorizedError2("Invalid or expired session token");
+        }
+        return session.user;
+      } catch (error2) {
+        strapi2.log.warn("[plugin-io] Admin session verification failed:", error2.message);
+        throw new UnauthorizedError2("Invalid admin credentials");
+      }
+    },
+    getRoomName: function(user) {
+      return `${this.name}-user-${user.id}`;
+    }
+  };
   const role = {
     name: "io-role",
     credentials: function(role2) {
@@ -29575,6 +29840,7 @@ var strategies = ({ strapi: strapi2 }) => {
     }
   };
   return {
+    admin: admin2,
     role,
     token
   };
@@ -29668,12 +29934,12 @@ function transformEntry(entry, type2) {
     // meta: {},
   };
 }
-const { pluginId: pluginId$1 } = pluginId_1;
+const { pluginId: pluginId$3 } = pluginId_1;
 var settings$1 = ({ strapi: strapi2 }) => {
   const getPluginStore = () => {
     return strapi2.store({
       type: "plugin",
-      name: pluginId$1
+      name: pluginId$3
     });
   };
   const getDefaultSettings = () => ({
@@ -29776,6 +30042,41 @@ var settings$1 = ({ strapi: strapi2 }) => {
       enableConnectionLogging: true,
       enableEventLogging: false,
       maxEventLogSize: 100
+    },
+    // Presence System (Collaboration Awareness)
+    presence: {
+      enabled: true,
+      // Enable presence tracking
+      heartbeatInterval: 3e4,
+      // Heartbeat interval in ms
+      staleTimeout: 6e4,
+      // Time before connection considered stale
+      showAvatars: true,
+      // Show user avatars in UI
+      showTypingIndicator: true
+      // Show typing indicators
+    },
+    // Live Preview (Real-time Draft Updates)
+    livePreview: {
+      enabled: true,
+      // Enable live preview
+      draftEvents: true,
+      // Emit events for draft changes
+      debounceMs: 300,
+      // Debounce field changes
+      maxSubscriptionsPerSocket: 50
+      // Max preview subscriptions per socket
+    },
+    // Field-level Changes (Diff-based Updates)
+    fieldLevelChanges: {
+      enabled: true,
+      // Enable field-level diff
+      includeFullData: false,
+      // Include full data alongside diff
+      excludeFields: ["updatedAt", "updatedBy", "createdAt", "createdBy"],
+      // Fields to exclude from diff
+      maxDiffDepth: 3
+      // Maximum nesting depth for diff
     }
   });
   return {
@@ -29816,7 +30117,7 @@ var settings$1 = ({ strapi: strapi2 }) => {
     getDefaultSettings
   };
 };
-const { pluginId } = pluginId_1;
+const { pluginId: pluginId$2 } = pluginId_1;
 var monitoring$1 = ({ strapi: strapi2 }) => {
   let eventLog = [];
   let eventStats = {
@@ -29960,17 +30261,795 @@ var monitoring$1 = ({ strapi: strapi2 }) => {
     }
   };
 };
+const { pluginId: pluginId$1 } = pluginId_1;
+var presence$1 = ({ strapi: strapi2 }) => {
+  const activeConnections = /* @__PURE__ */ new Map();
+  const entityEditors = /* @__PURE__ */ new Map();
+  let cleanupInterval = null;
+  const getEntityKey = (uid, documentId) => `${uid}:${documentId}`;
+  const getPresenceSettings = () => {
+    const settings2 = strapi2.$ioSettings || {};
+    return {
+      enabled: settings2.presence?.enabled ?? true,
+      heartbeatInterval: settings2.presence?.heartbeatInterval ?? 3e4,
+      staleTimeout: settings2.presence?.staleTimeout ?? 6e4,
+      showAvatars: settings2.presence?.showAvatars ?? true
+    };
+  };
+  const broadcastPresenceUpdate = async (uid, documentId) => {
+    const io2 = strapi2.$io?.server;
+    if (!io2) return;
+    const entityKey = getEntityKey(uid, documentId);
+    const editorSocketIds = entityEditors.get(entityKey) || /* @__PURE__ */ new Set();
+    const editors = [];
+    for (const socketId of editorSocketIds) {
+      const connection = activeConnections.get(socketId);
+      if (connection?.user) {
+        editors.push({
+          socketId,
+          user: {
+            id: connection.user.id,
+            username: connection.user.username,
+            email: connection.user.email,
+            firstname: connection.user.firstname,
+            lastname: connection.user.lastname
+          },
+          joinedAt: connection.entities?.get(entityKey) || Date.now()
+        });
+      }
+    }
+    const roomName = `presence:${entityKey}`;
+    io2.to(roomName).emit("presence:update", {
+      uid,
+      documentId,
+      editors,
+      count: editors.length,
+      timestamp: Date.now()
+    });
+    strapi2.log.debug(`socket.io: Presence update for ${entityKey} - ${editors.length} editor(s)`);
+  };
+  return {
+    /**
+     * Registers a new socket connection for presence tracking
+     * @param {string} socketId - Socket ID
+     * @param {object} user - User object (can be null for anonymous)
+     */
+    registerConnection(socketId, user = null) {
+      const settings2 = getPresenceSettings();
+      if (!settings2.enabled) return;
+      activeConnections.set(socketId, {
+        user,
+        entities: /* @__PURE__ */ new Map(),
+        // entityKey -> joinedAt timestamp
+        lastSeen: Date.now(),
+        connectedAt: Date.now()
+      });
+      strapi2.log.debug(`socket.io: Presence registered for socket ${socketId}`);
+    },
+    /**
+     * Unregisters a socket connection and cleans up all entity presence
+     * @param {string} socketId - Socket ID
+     */
+    async unregisterConnection(socketId) {
+      const connection = activeConnections.get(socketId);
+      if (!connection) return;
+      if (connection.entities) {
+        for (const entityKey of connection.entities.keys()) {
+          const [uid, documentId] = entityKey.split(":");
+          await this.leaveEntity(socketId, uid, documentId, false);
+        }
+      }
+      activeConnections.delete(socketId);
+      strapi2.log.debug(`socket.io: Presence unregistered for socket ${socketId}`);
+    },
+    /**
+     * User joins an entity for editing
+     * @param {string} socketId - Socket ID
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @returns {object} Join result with current editors
+     */
+    async joinEntity(socketId, uid, documentId) {
+      const settings2 = getPresenceSettings();
+      if (!settings2.enabled) {
+        return { success: false, error: "Presence is disabled" };
+      }
+      const connection = activeConnections.get(socketId);
+      if (!connection) {
+        return { success: false, error: "Socket not registered for presence" };
+      }
+      const entityKey = getEntityKey(uid, documentId);
+      if (!entityEditors.has(entityKey)) {
+        entityEditors.set(entityKey, /* @__PURE__ */ new Set());
+      }
+      entityEditors.get(entityKey).add(socketId);
+      connection.entities.set(entityKey, Date.now());
+      connection.lastSeen = Date.now();
+      const io2 = strapi2.$io?.server;
+      const socket = io2?.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.join(`presence:${entityKey}`);
+      }
+      await broadcastPresenceUpdate(uid, documentId);
+      strapi2.log.info(`socket.io: User ${connection.user?.username || "anonymous"} joined entity ${entityKey}`);
+      return {
+        success: true,
+        entityKey,
+        editors: await this.getEntityEditors(uid, documentId)
+      };
+    },
+    /**
+     * User leaves an entity
+     * @param {string} socketId - Socket ID
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @param {boolean} broadcast - Whether to broadcast update (default: true)
+     * @returns {object} Leave result
+     */
+    async leaveEntity(socketId, uid, documentId, broadcast = true) {
+      const settings2 = getPresenceSettings();
+      if (!settings2.enabled) {
+        return { success: false, error: "Presence is disabled" };
+      }
+      const entityKey = getEntityKey(uid, documentId);
+      const connection = activeConnections.get(socketId);
+      const editors = entityEditors.get(entityKey);
+      if (editors) {
+        editors.delete(socketId);
+        if (editors.size === 0) {
+          entityEditors.delete(entityKey);
+        }
+      }
+      if (connection?.entities) {
+        connection.entities.delete(entityKey);
+      }
+      const io2 = strapi2.$io?.server;
+      const socket = io2?.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.leave(`presence:${entityKey}`);
+      }
+      if (broadcast) {
+        await broadcastPresenceUpdate(uid, documentId);
+      }
+      strapi2.log.debug(`socket.io: Socket ${socketId} left entity ${entityKey}`);
+      return { success: true, entityKey };
+    },
+    /**
+     * Gets all editors currently editing an entity
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @returns {Array} List of editors with user info
+     */
+    async getEntityEditors(uid, documentId) {
+      const entityKey = getEntityKey(uid, documentId);
+      const editorSocketIds = entityEditors.get(entityKey) || /* @__PURE__ */ new Set();
+      const editors = [];
+      for (const socketId of editorSocketIds) {
+        const connection = activeConnections.get(socketId);
+        if (connection?.user) {
+          editors.push({
+            socketId,
+            user: {
+              id: connection.user.id,
+              username: connection.user.username,
+              email: connection.user.email,
+              firstname: connection.user.firstname,
+              lastname: connection.user.lastname
+            },
+            joinedAt: connection.entities?.get(entityKey) || Date.now()
+          });
+        }
+      }
+      return editors;
+    },
+    /**
+     * Updates heartbeat for a socket to keep presence alive
+     * @param {string} socketId - Socket ID
+     * @returns {object} Heartbeat result
+     */
+    heartbeat(socketId) {
+      const connection = activeConnections.get(socketId);
+      if (!connection) {
+        return { success: false, error: "Socket not registered" };
+      }
+      connection.lastSeen = Date.now();
+      return { success: true, lastSeen: connection.lastSeen };
+    },
+    /**
+     * Cleans up stale connections that haven't sent heartbeat
+     * @returns {number} Number of connections cleaned up
+     */
+    async cleanup() {
+      const settings2 = getPresenceSettings();
+      const staleTimeout = settings2.staleTimeout;
+      const now = Date.now();
+      let cleanedUp = 0;
+      for (const [socketId, connection] of activeConnections) {
+        if (now - connection.lastSeen > staleTimeout) {
+          await this.unregisterConnection(socketId);
+          cleanedUp++;
+        }
+      }
+      if (cleanedUp > 0) {
+        strapi2.log.info(`socket.io: Presence cleanup removed ${cleanedUp} stale connection(s)`);
+      }
+      return cleanedUp;
+    },
+    /**
+     * Starts the cleanup interval
+     */
+    startCleanupInterval() {
+      const settings2 = getPresenceSettings();
+      if (!settings2.enabled) return;
+      cleanupInterval = setInterval(() => {
+        this.cleanup();
+      }, 6e4);
+      strapi2.log.debug("socket.io: Presence cleanup interval started");
+    },
+    /**
+     * Stops the cleanup interval
+     */
+    stopCleanupInterval() {
+      if (cleanupInterval) {
+        clearInterval(cleanupInterval);
+        cleanupInterval = null;
+      }
+    },
+    /**
+     * Gets presence statistics
+     * @returns {object} Presence stats
+     */
+    getStats() {
+      const totalConnections = activeConnections.size;
+      const totalEntitiesBeingEdited = entityEditors.size;
+      let authenticated = 0;
+      let anonymous = 0;
+      for (const connection of activeConnections.values()) {
+        if (connection.user) {
+          authenticated++;
+        } else {
+          anonymous++;
+        }
+      }
+      return {
+        totalConnections,
+        authenticated,
+        anonymous,
+        totalEntitiesBeingEdited,
+        entities: Array.from(entityEditors.entries()).map(([key, editors]) => ({
+          entityKey: key,
+          editorCount: editors.size
+        }))
+      };
+    },
+    /**
+     * Gets all entities a user is currently editing
+     * @param {string} socketId - Socket ID
+     * @returns {Array} List of entity keys
+     */
+    getUserEntities(socketId) {
+      const connection = activeConnections.get(socketId);
+      if (!connection) return [];
+      return Array.from(connection.entities.keys());
+    },
+    /**
+     * Checks if an entity is being edited by anyone
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @returns {boolean} True if entity has editors
+     */
+    isEntityBeingEdited(uid, documentId) {
+      const entityKey = getEntityKey(uid, documentId);
+      const editors = entityEditors.get(entityKey);
+      return editors ? editors.size > 0 : false;
+    },
+    /**
+     * Broadcasts a typing indicator for an entity
+     * @param {string} socketId - Socket ID of typing user
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @param {string} fieldName - Name of field being edited
+     */
+    broadcastTyping(socketId, uid, documentId, fieldName) {
+      const io2 = strapi2.$io?.server;
+      if (!io2) return;
+      const connection = activeConnections.get(socketId);
+      if (!connection?.user) return;
+      const entityKey = getEntityKey(uid, documentId);
+      const roomName = `presence:${entityKey}`;
+      const socket = io2.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.to(roomName).emit("presence:typing", {
+          uid,
+          documentId,
+          user: {
+            id: connection.user.id,
+            username: connection.user.username
+          },
+          fieldName,
+          timestamp: Date.now()
+        });
+      }
+    }
+  };
+};
+const { pluginId } = pluginId_1;
+var preview$1 = ({ strapi: strapi2 }) => {
+  const previewSubscribers = /* @__PURE__ */ new Map();
+  const socketState = /* @__PURE__ */ new Map();
+  const getEntityKey = (uid, documentId) => `${uid}:${documentId}`;
+  const getPreviewSettings = () => {
+    const settings2 = strapi2.$ioSettings || {};
+    return {
+      enabled: settings2.livePreview?.enabled ?? true,
+      draftEvents: settings2.livePreview?.draftEvents ?? true,
+      debounceMs: settings2.livePreview?.debounceMs ?? 300,
+      maxSubscriptionsPerSocket: settings2.livePreview?.maxSubscriptionsPerSocket ?? 50
+    };
+  };
+  const emitToSubscribers = (uid, documentId, eventType, data) => {
+    const io2 = strapi2.$io?.server;
+    if (!io2) return;
+    const entityKey = getEntityKey(uid, documentId);
+    const subscribers = previewSubscribers.get(entityKey);
+    if (!subscribers || subscribers.size === 0) return;
+    const roomName = `preview:${entityKey}`;
+    io2.to(roomName).emit(eventType, {
+      uid,
+      documentId,
+      ...data,
+      timestamp: Date.now()
+    });
+    strapi2.log.debug(`socket.io: Preview event '${eventType}' sent to ${subscribers.size} subscriber(s) for ${entityKey}`);
+  };
+  return {
+    /**
+     * Subscribes a socket to preview updates for an entity
+     * @param {string} socketId - Socket ID
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @returns {object} Subscription result
+     */
+    async subscribe(socketId, uid, documentId) {
+      const settings2 = getPreviewSettings();
+      if (!settings2.enabled) {
+        return { success: false, error: "Live preview is disabled" };
+      }
+      const entityKey = getEntityKey(uid, documentId);
+      const io2 = strapi2.$io?.server;
+      const socket = io2?.sockets.sockets.get(socketId);
+      if (!socket) {
+        return { success: false, error: "Socket not found" };
+      }
+      const currentSubs = Array.from(socket.rooms).filter((r) => r.startsWith("preview:")).length;
+      if (currentSubs >= settings2.maxSubscriptionsPerSocket) {
+        return { success: false, error: `Maximum preview subscriptions (${settings2.maxSubscriptionsPerSocket}) reached` };
+      }
+      if (!previewSubscribers.has(entityKey)) {
+        previewSubscribers.set(entityKey, /* @__PURE__ */ new Set());
+      }
+      previewSubscribers.get(entityKey).add(socketId);
+      socket.join(`preview:${entityKey}`);
+      if (!socketState.has(socketId)) {
+        socketState.set(socketId, { debounceTimers: /* @__PURE__ */ new Map() });
+      }
+      strapi2.log.debug(`socket.io: Socket ${socketId} subscribed to preview for ${entityKey}`);
+      try {
+        const entity = await strapi2.documents(uid).findOne({ documentId });
+        if (entity) {
+          socket.emit("preview:initial", {
+            uid,
+            documentId,
+            data: entity,
+            timestamp: Date.now()
+          });
+        }
+      } catch (err) {
+        strapi2.log.warn(`socket.io: Could not fetch initial preview data for ${entityKey}: ${err.message}`);
+      }
+      return {
+        success: true,
+        entityKey,
+        subscriberCount: previewSubscribers.get(entityKey).size
+      };
+    },
+    /**
+     * Unsubscribes a socket from preview updates
+     * @param {string} socketId - Socket ID
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @returns {object} Unsubscription result
+     */
+    unsubscribe(socketId, uid, documentId) {
+      const entityKey = getEntityKey(uid, documentId);
+      const subscribers = previewSubscribers.get(entityKey);
+      if (subscribers) {
+        subscribers.delete(socketId);
+        if (subscribers.size === 0) {
+          previewSubscribers.delete(entityKey);
+        }
+      }
+      const io2 = strapi2.$io?.server;
+      const socket = io2?.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.leave(`preview:${entityKey}`);
+      }
+      const state = socketState.get(socketId);
+      if (state?.debounceTimers.has(entityKey)) {
+        clearTimeout(state.debounceTimers.get(entityKey));
+        state.debounceTimers.delete(entityKey);
+      }
+      strapi2.log.debug(`socket.io: Socket ${socketId} unsubscribed from preview for ${entityKey}`);
+      return { success: true, entityKey };
+    },
+    /**
+     * Cleans up all subscriptions for a socket
+     * @param {string} socketId - Socket ID
+     */
+    cleanupSocket(socketId) {
+      for (const [entityKey, subscribers] of previewSubscribers) {
+        if (subscribers.has(socketId)) {
+          subscribers.delete(socketId);
+          if (subscribers.size === 0) {
+            previewSubscribers.delete(entityKey);
+          }
+        }
+      }
+      const state = socketState.get(socketId);
+      if (state) {
+        for (const timerId of state.debounceTimers.values()) {
+          clearTimeout(timerId);
+        }
+        socketState.delete(socketId);
+      }
+    },
+    /**
+     * Emits a draft change event to preview subscribers
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @param {object} data - Changed data
+     * @param {object} diff - Field-level diff (optional)
+     */
+    emitDraftChange(uid, documentId, data, diff2 = null) {
+      const settings2 = getPreviewSettings();
+      if (!settings2.enabled || !settings2.draftEvents) return;
+      emitToSubscribers(uid, documentId, "preview:change", {
+        data,
+        diff: diff2,
+        isDraft: true
+      });
+    },
+    /**
+     * Emits a debounced field change event
+     * @param {string} socketId - Socket ID of the editor
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @param {string} fieldName - Name of changed field
+     * @param {*} value - New field value
+     */
+    emitFieldChange(socketId, uid, documentId, fieldName, value) {
+      const settings2 = getPreviewSettings();
+      if (!settings2.enabled) return;
+      const entityKey = getEntityKey(uid, documentId);
+      const state = socketState.get(socketId);
+      if (state?.debounceTimers.has(entityKey)) {
+        clearTimeout(state.debounceTimers.get(entityKey));
+      }
+      const timerId = setTimeout(() => {
+        emitToSubscribers(uid, documentId, "preview:field", {
+          fieldName,
+          value,
+          editorSocketId: socketId
+        });
+        state?.debounceTimers.delete(entityKey);
+      }, settings2.debounceMs);
+      if (state) {
+        state.debounceTimers.set(entityKey, timerId);
+      }
+    },
+    /**
+     * Emits publish event to preview subscribers
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @param {object} data - Published data
+     */
+    emitPublish(uid, documentId, data) {
+      emitToSubscribers(uid, documentId, "preview:publish", {
+        data,
+        isDraft: false
+      });
+    },
+    /**
+     * Emits unpublish event to preview subscribers
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     */
+    emitUnpublish(uid, documentId) {
+      emitToSubscribers(uid, documentId, "preview:unpublish", {
+        isDraft: true
+      });
+    },
+    /**
+     * Gets the number of preview subscribers for an entity
+     * @param {string} uid - Content type UID
+     * @param {string} documentId - Document ID
+     * @returns {number} Subscriber count
+     */
+    getSubscriberCount(uid, documentId) {
+      const entityKey = getEntityKey(uid, documentId);
+      return previewSubscribers.get(entityKey)?.size || 0;
+    },
+    /**
+     * Gets all entities with active preview subscribers
+     * @returns {Array} List of entity keys with subscriber counts
+     */
+    getActivePreviewEntities() {
+      const entities = [];
+      for (const [entityKey, subscribers] of previewSubscribers) {
+        const [uid, documentId] = entityKey.split(":");
+        entities.push({
+          uid,
+          documentId,
+          entityKey,
+          subscriberCount: subscribers.size
+        });
+      }
+      return entities;
+    },
+    /**
+     * Checks if live preview is enabled
+     * @returns {boolean} True if enabled
+     */
+    isEnabled() {
+      return getPreviewSettings().enabled;
+    },
+    /**
+     * Gets preview statistics
+     * @returns {object} Preview stats
+     */
+    getStats() {
+      let totalSubscriptions = 0;
+      for (const subscribers of previewSubscribers.values()) {
+        totalSubscriptions += subscribers.size;
+      }
+      return {
+        totalEntitiesWithSubscribers: previewSubscribers.size,
+        totalSubscriptions,
+        entities: this.getActivePreviewEntities()
+      };
+    }
+  };
+};
+var diff$1 = ({ strapi: strapi2 }) => {
+  const getDiffSettings = () => {
+    const settings2 = strapi2.$ioSettings || {};
+    return {
+      enabled: settings2.fieldLevelChanges?.enabled ?? true,
+      includeFullData: settings2.fieldLevelChanges?.includeFullData ?? false,
+      excludeFields: settings2.fieldLevelChanges?.excludeFields ?? ["updatedAt", "updatedBy", "createdAt", "createdBy"],
+      maxDiffDepth: settings2.fieldLevelChanges?.maxDiffDepth ?? 3
+    };
+  };
+  const isPlainObject2 = (value) => {
+    return value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date);
+  };
+  const isEqual2 = (a, b) => {
+    if (a === b) return true;
+    if (a === null || b === null) return a === b;
+    if (typeof a !== typeof b) return false;
+    if (a instanceof Date && b instanceof Date) {
+      return a.getTime() === b.getTime();
+    }
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      return a.every((item, index2) => isEqual2(item, b[index2]));
+    }
+    if (isPlainObject2(a) && isPlainObject2(b)) {
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
+      if (keysA.length !== keysB.length) return false;
+      return keysA.every((key) => isEqual2(a[key], b[key]));
+    }
+    return false;
+  };
+  const safeClone = (value) => {
+    if (value === null || value === void 0) return value;
+    if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map(safeClone);
+    if (isPlainObject2(value)) {
+      const cloned = {};
+      for (const [key, val] of Object.entries(value)) {
+        cloned[key] = safeClone(val);
+      }
+      return cloned;
+    }
+    return value;
+  };
+  const calculateDiffInternal = (oldData, newData, options = {}, depth2 = 0) => {
+    const { excludeFields = [], maxDiffDepth = 3 } = options;
+    const diff2 = {};
+    if (!oldData || !newData) {
+      return { _replaced: true, old: safeClone(oldData), new: safeClone(newData) };
+    }
+    const allKeys = /* @__PURE__ */ new Set([...Object.keys(oldData || {}), ...Object.keys(newData || {})]);
+    for (const key of allKeys) {
+      if (excludeFields.includes(key)) continue;
+      const oldValue = oldData?.[key];
+      const newValue = newData?.[key];
+      if (isEqual2(oldValue, newValue)) continue;
+      if (isPlainObject2(oldValue) && isPlainObject2(newValue) && depth2 < maxDiffDepth) {
+        const nestedDiff = calculateDiffInternal(oldValue, newValue, options, depth2 + 1);
+        if (Object.keys(nestedDiff).length > 0) {
+          diff2[key] = nestedDiff;
+        }
+      } else {
+        diff2[key] = {
+          old: safeClone(oldValue),
+          new: safeClone(newValue)
+        };
+      }
+    }
+    return diff2;
+  };
+  return {
+    /**
+     * Calculates field-level diff between old and new data
+     * @param {object} oldData - Previous data state
+     * @param {object} newData - New data state
+     * @returns {object} Diff result with changed fields and metadata
+     */
+    calculateDiff(oldData, newData) {
+      const settings2 = getDiffSettings();
+      if (!settings2.enabled) {
+        return {
+          enabled: false,
+          hasChanges: !isEqual2(oldData, newData),
+          diff: null,
+          fullData: newData
+        };
+      }
+      const diff2 = calculateDiffInternal(oldData, newData, {
+        excludeFields: settings2.excludeFields,
+        maxDiffDepth: settings2.maxDiffDepth
+      });
+      const changedFields = Object.keys(diff2);
+      const hasChanges = changedFields.length > 0;
+      const result = {
+        enabled: true,
+        hasChanges,
+        changedFields,
+        changedFieldCount: changedFields.length,
+        diff: hasChanges ? diff2 : null,
+        timestamp: Date.now()
+      };
+      if (settings2.includeFullData) {
+        result.fullData = newData;
+      }
+      return result;
+    },
+    /**
+     * Applies a diff to a target object
+     * @param {object} target - Target object to apply diff to
+     * @param {object} diff - Diff to apply
+     * @returns {object} Updated target object
+     */
+    applyDiff(target, diff2) {
+      if (!diff2 || typeof diff2 !== "object") return target;
+      const result = { ...target };
+      for (const [key, change] of Object.entries(diff2)) {
+        if (change._replaced) {
+          result[key] = change.new;
+        } else if (change.old !== void 0 && change.new !== void 0) {
+          result[key] = change.new;
+        } else if (isPlainObject2(change)) {
+          result[key] = this.applyDiff(result[key] || {}, change);
+        }
+      }
+      return result;
+    },
+    /**
+     * Validates if a diff is applicable to a content type
+     * @param {string} uid - Content type UID
+     * @param {object} diff - Diff to validate
+     * @returns {object} Validation result
+     */
+    validateDiff(uid, diff2) {
+      if (!diff2) {
+        return { valid: true, errors: [] };
+      }
+      const contentType = strapi2.contentTypes[uid];
+      if (!contentType) {
+        return { valid: false, errors: [`Content type ${uid} not found`] };
+      }
+      const errors2 = [];
+      const attributes = contentType.attributes || {};
+      for (const field of Object.keys(diff2)) {
+        if (!attributes[field] && field !== "id" && field !== "documentId") {
+          errors2.push(`Field '${field}' does not exist in ${uid}`);
+        }
+      }
+      return {
+        valid: errors2.length === 0,
+        errors: errors2
+      };
+    },
+    /**
+     * Creates an event payload with diff information
+     * @param {string} eventType - Event type (create, update, delete)
+     * @param {object} schema - Content type schema info
+     * @param {object} oldData - Previous data (null for create)
+     * @param {object} newData - New data (null for delete)
+     * @returns {object} Event payload with diff
+     */
+    createEventPayload(eventType, schema2, oldData, newData) {
+      const settings2 = getDiffSettings();
+      if (eventType === "create") {
+        return {
+          event: eventType,
+          schema: { singularName: schema2.singularName, uid: schema2.uid },
+          data: newData,
+          diff: null,
+          timestamp: Date.now()
+        };
+      }
+      if (eventType === "delete") {
+        return {
+          event: eventType,
+          schema: { singularName: schema2.singularName, uid: schema2.uid },
+          data: { id: oldData?.id, documentId: oldData?.documentId },
+          deletedData: settings2.includeFullData ? oldData : null,
+          diff: null,
+          timestamp: Date.now()
+        };
+      }
+      const diffResult = this.calculateDiff(oldData, newData);
+      const payload = {
+        event: eventType,
+        schema: { singularName: schema2.singularName, uid: schema2.uid },
+        documentId: newData?.documentId || newData?.id,
+        diff: diffResult.diff,
+        changedFields: diffResult.changedFields,
+        hasChanges: diffResult.hasChanges,
+        timestamp: Date.now()
+      };
+      if (settings2.includeFullData || !settings2.enabled) {
+        payload.data = newData;
+      }
+      return payload;
+    },
+    /**
+     * Checks if diff feature is enabled
+     * @returns {boolean} True if enabled
+     */
+    isEnabled() {
+      return getDiffSettings().enabled;
+    },
+    /**
+     * Gets current diff settings
+     * @returns {object} Current settings
+     */
+    getSettings() {
+      return getDiffSettings();
+    }
+  };
+};
 const strategy = strategies;
 const sanitize = sanitize_1;
 const transform = transform$1;
 const settings = settings$1;
 const monitoring = monitoring$1;
+const presence = presence$1;
+const preview = preview$1;
+const diff = diff$1;
 var services$1 = {
   sanitize,
   strategy,
   transform,
   settings,
-  monitoring
+  monitoring,
+  presence,
+  preview,
+  diff
 };
 const bootstrap = bootstrap_1;
 const config = config$1;

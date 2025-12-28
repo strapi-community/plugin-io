@@ -11,7 +11,7 @@ const socket = io('http://localhost:1337', {
 });
 
 socket.on('connect', () => {
-  console.log('✅ Connected:', socket.id);
+  console.log('[SUCCESS] Connected:', socket.id);
   
   // Test room join
   socket.emit('join-room', 'test-room', (response) => {
@@ -37,7 +37,7 @@ socket.on('connect', () => {
   
   // Disconnect after tests
   setTimeout(() => {
-    console.log('\n✅ All tests completed');
+    console.log('\n[SUCCESS] All tests completed');
     socket.disconnect();
     process.exit(0);
   }, 2000);
@@ -48,7 +48,7 @@ socket.on('private-message', (data) => {
 });
 
 socket.on('connect_error', (error) => {
-  console.error('❌ Connection error:', error.message);
+  console.error('[ERROR] Connection error:', error.message);
   process.exit(1);
 });
 

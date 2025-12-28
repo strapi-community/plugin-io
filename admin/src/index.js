@@ -58,12 +58,26 @@ export default {
 				id: 'socket-io-stats-widget',
 				pluginId: PLUGIN_ID,
 			});
-			console.log(`[${PLUGIN_ID}] ✅ Socket.IO Stats Widget registered`);
+			console.log(`[${PLUGIN_ID}] [SUCCESS] Socket.IO Stats Widget registered`);
 		}
 	},
 
-	bootstrap(app) {
-		console.log(`[${PLUGIN_ID}] Bootstrapping plugin...`);
+	async bootstrap(app) {
+		console.log(`[${PLUGIN_ID}] [INFO] Bootstrapping plugin...`);
+
+		// Inject Live Presence Panel into Content Manager sidebar
+		try {
+			const { default: LivePresencePanel } = await import('./components/LivePresencePanel');
+			
+			const contentManagerPlugin = app.getPlugin('content-manager');
+			if (contentManagerPlugin && contentManagerPlugin.apis) {
+				contentManagerPlugin.apis.addEditViewSidePanel([LivePresencePanel]);
+				console.log(`[${PLUGIN_ID}] [SUCCESS] LivePresencePanel injected into sidebar`);
+			}
+		} catch (error) {
+			// Content Manager injection not available - this is expected in some Strapi versions
+			console.log(`[${PLUGIN_ID}] [INFO] Content Manager panel injection not available:`, error.message);
+		}
 	},
 
 	async registerTrads({ locales }) {

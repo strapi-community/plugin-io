@@ -39,6 +39,12 @@ Add real-time capabilities to your Strapi application with WebSocket support. Au
 - **Role-Based Access Control** - Built-in permission checks for JWT and API tokens
 - **Multi-Client Support** - Handle 2500+ concurrent connections efficiently
 
+### Live Presence (NEW)
+- **Real-Time Presence Awareness** - See who else is editing the same content
+- **Typing Indicator** - See when someone is typing and in which field
+- **Admin Panel Sidebar** - Live presence panel integrated into Content Manager
+- **Session-Based Auth** - Secure admin authentication for Socket.IO connections
+
 ### Developer Experience
 - **Visual Admin Panel** - Configure everything through the Strapi admin interface
 - **TypeScript Support** - Full type definitions for IntelliSense
@@ -833,6 +839,39 @@ Navigate to **Settings > Socket.IO > Monitoring** for live statistics:
 - Send test events
 - Reset statistics
 
+### Live Presence Panel
+
+When editing content in the Content Manager, a **Live Presence** panel appears in the sidebar showing:
+
+- **Connection Status** - Live indicator showing real-time sync is active
+- **Active Editors** - List of other users editing the same content
+- **Typing Indicator** - Shows when someone is typing and in which field
+
+**How It Works:**
+
+1. When you open a content entry, the panel connects via Socket.IO
+2. Other editors on the same entry appear in the panel
+3. Typing in any field broadcasts a typing indicator to others
+4. When you leave, others are notified
+
+**Example Display:**
+
+```
++-----------------------------+
+| Live Presence               |
++-----------------------------+
+| [*] Live                    |
+|     Real-time sync active   |
++-----------------------------+
+| ALSO EDITING (1)            |
+| +-------------------------+ |
+| | SA  Sarah Admin         | |
+| |     Typing in: title    | |
+| |            [Typing...]  | |
+| +-------------------------+ |
++-----------------------------+
+```
+
 ---
 
 ## Monitoring Service
@@ -1282,7 +1321,14 @@ Copyright (c) 2024 Strapi Community
 
 ## Changelog
 
-### v5.0.0 (Latest)
+### v5.1.0 (Latest)
+- **Live Presence System** - Real-time presence awareness in Content Manager
+- **Typing Indicator** - See when others are typing and in which field
+- **Admin Panel Sidebar** - Live presence panel integrated into edit view
+- **Admin Session Authentication** - Secure session tokens for Socket.IO
+- **Admin JWT Strategy** - New authentication strategy for admin users
+
+### v5.0.0
 - Strapi v5 support
 - Package renamed to `@strapi-community/plugin-io`
 - Enhanced TypeScript support

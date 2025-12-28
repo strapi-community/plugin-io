@@ -138,18 +138,66 @@ async function bootstrapLifecycles({ strapi }) {
 		};
 
 		// UPDATE - check dynamically if enabled
+		// Store previous data for diff calculation
+		subscriber.beforeUpdate = async (event) => {
+			if (!isActionEnabled(strapi, uid, 'update')) return;
+			
+			// Only fetch previous data if field-level changes are enabled
+			const fieldLevelEnabled = strapi.$ioSettings?.fieldLevelChanges?.enabled !== false;
+			if (!fieldLevelEnabled) return;
+
+			try {
+				// Get the documentId from params
+				const documentId = event.params.where?.documentId || event.params.documentId;
+				if (!documentId) return;
+
+				// Fetch current state before update
+				const existing = await strapi.documents(uid).findOne({ documentId });
+				if (existing) {
+					if (!event.state.io) event.state.io = {};
+					event.state.io.previousData = JSON.parse(JSON.stringify(existing));
+				}
+			} catch (error) {
+				strapi.log.debug(`socket.io: Could not fetch previous data for diff: ${error.message}`);
+			}
+		};
+
 		subscriber.afterUpdate = async (event) => {
 			if (!isActionEnabled(strapi, uid, 'update')) return;
+			
 			// Clone data to avoid transaction context issues
-			const eventData = {
-				event: 'update',
-				schema: event.model,
-				data: JSON.parse(JSON.stringify(event.result)), // Deep clone
-			};
+			const newData = JSON.parse(JSON.stringify(event.result));
+			const previousData = event.state.io?.previousData || null;
+			const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
+			
 			// Schedule emission after transaction commit
 			scheduleAfterTransaction(() => {
 				try {
-					strapi.$io.emit(eventData);
+					// Get diff service
+					const diffService = strapi.plugin(pluginId).service('diff');
+					const previewService = strapi.plugin(pluginId).service('preview');
+					const fieldLevelEnabled = strapi.$ioSettings?.fieldLevelChanges?.enabled !== false;
+
+					// Calculate diff if enabled and we have previous data
+					let eventPayload;
+					if (fieldLevelEnabled && previousData && diffService) {
+						eventPayload = diffService.createEventPayload('update', modelInfo, previousData, newData);
+					} else {
+						eventPayload = {
+							event: 'update',
+							schema: modelInfo,
+							data: newData,
+						};
+					}
+
+					// Emit main event
+					strapi.$io.emit(eventPayload);
+
+					// Also emit to preview subscribers
+					if (previewService && newData.documentId) {
+						const diff = fieldLevelEnabled ? eventPayload.diff : null;
+						previewService.emitDraftChange(uid, newData.documentId, newData, diff);
+					}
 				} catch (error) {
 					strapi.log.debug(`socket.io: Could not emit update event for ${uid}:`, error.message);
 				}
@@ -159,9 +207,9 @@ async function bootstrapLifecycles({ strapi }) {
 			// Don't do any queries in before* hooks to avoid transaction conflicts
 			// Just store the params for use in afterUpdateMany
 			if (!isActionEnabled(strapi, uid, 'update')) return;
-				if (!event.state.io) {
-					event.state.io = {};
-				}
+			if (!event.state.io) {
+				event.state.io = {};
+			}
 			event.state.io.params = event.params;
 		};
 		subscriber.afterUpdateMany = async (event) => {

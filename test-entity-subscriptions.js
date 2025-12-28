@@ -22,14 +22,14 @@ const socket = io(SERVER_URL, {
 });
 
 socket.on('connect', () => {
-  console.log('✅ Connected to server');
+  console.log('[SUCCESS] Connected to server');
   console.log(`   Socket ID: ${socket.id}\n`);
   
   runTests();
 });
 
 socket.on('connect_error', (error) => {
-  console.error('❌ Connection error:', error.message);
+  console.error('[ERROR] Connection error:', error.message);
   process.exit(1);
 });
 
@@ -60,10 +60,10 @@ async function runTests() {
   // Test 0: Subscribe to ALL session events (for create events)
   console.log('Test 0: Subscribe to ALL session events (to catch creates)');
   socket.on('session:create', (data) => {
-    console.log('\n🎉 Received session:create event!');
+    console.log('\n[EVENT] Received session:create event!');
     console.log(JSON.stringify(data, null, 2));
   });
-  console.log('✅ Listening for session:create events\n');
+  console.log('[INFO] Listening for session:create events\n');
   
   await sleep(500);
   
@@ -71,9 +71,9 @@ async function runTests() {
   console.log('Test 1: Subscribe to session with ID 94');
   socket.emit('subscribe-entity', { uid: 'api::session.session', id: 94 }, (response) => {
     if (response.success) {
-      console.log(`✅ Successfully subscribed to: ${response.room}`);
+      console.log(`[SUCCESS] Successfully subscribed to: ${response.room}`);
     } else {
-      console.log(`❌ Subscription failed: ${response.error}`);
+      console.log(`[ERROR] Subscription failed: ${response.error}`);
     }
   });
   
@@ -83,9 +83,9 @@ async function runTests() {
   console.log('\nTest 2: Subscribe to session with ID 95');
   socket.emit('subscribe-entity', { uid: 'api::session.session', id: 95 }, (response) => {
     if (response.success) {
-      console.log(`✅ Successfully subscribed to: ${response.room}`);
+      console.log(`[SUCCESS] Successfully subscribed to: ${response.room}`);
     } else {
-      console.log(`❌ Subscription failed: ${response.error}`);
+      console.log(`[ERROR] Subscription failed: ${response.error}`);
     }
   });
   
@@ -95,12 +95,12 @@ async function runTests() {
   console.log('\nTest 3: Get all entity subscriptions');
   socket.emit('get-entity-subscriptions', (response) => {
     if (response.success) {
-      console.log(`✅ Current subscriptions (${response.subscriptions.length}):`);
+      console.log(`[SUCCESS] Current subscriptions (${response.subscriptions.length}):`);
       response.subscriptions.forEach(sub => {
         console.log(`   - ${sub.room} (uid: ${sub.uid}, id: ${sub.id})`);
       });
     } else {
-      console.log(`❌ Failed to get subscriptions: ${response.error}`);
+      console.log(`[ERROR] Failed to get subscriptions: ${response.error}`);
     }
   });
   
@@ -112,7 +112,7 @@ async function runTests() {
     if (response.success) {
       console.log(`⚠️  Unexpected success: ${response.room}`);
     } else {
-      console.log(`✅ Correctly rejected: ${response.error}`);
+      console.log(`[SUCCESS] Correctly rejected: ${response.error}`);
     }
   });
   
@@ -122,9 +122,9 @@ async function runTests() {
   console.log('\nTest 5: Unsubscribe from session 94');
   socket.emit('unsubscribe-entity', { uid: 'api::session.session', id: 94 }, (response) => {
     if (response.success) {
-      console.log(`✅ Successfully unsubscribed from: ${response.room}`);
+      console.log(`[SUCCESS] Successfully unsubscribed from: ${response.room}`);
     } else {
-      console.log(`❌ Unsubscribe failed: ${response.error}`);
+      console.log(`[ERROR] Unsubscribe failed: ${response.error}`);
     }
   });
   
@@ -134,7 +134,7 @@ async function runTests() {
   console.log('\nTest 6: Verify subscriptions after unsubscribe');
   socket.emit('get-entity-subscriptions', (response) => {
     if (response.success) {
-      console.log(`✅ Remaining subscriptions (${response.subscriptions.length}):`);
+      console.log(`[SUCCESS] Remaining subscriptions (${response.subscriptions.length}):`);
       if (response.subscriptions.length === 0) {
         console.log('   (none)');
       } else {
@@ -148,7 +148,7 @@ async function runTests() {
   await sleep(2000);
   
   console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('\n✅ Tests completed!');
+  console.log('\n[SUCCESS] Tests completed!');
   console.log('\n📝 Next steps:');
   console.log('   1. 🆕 CREATE a new session → Will trigger session:create event');
   console.log('   2. ✏️  UPDATE session with ID 94 or 95 → Will trigger session:update event');

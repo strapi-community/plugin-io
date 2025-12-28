@@ -5,6 +5,9 @@ const sanitize = require('./sanitize');
 const transform = require('./transform');
 const settings = require('./settings');
 const monitoring = require('./monitoring');
+const presence = require('./presence');
+const preview = require('./preview');
+const diff = require('./diff');
 
 module.exports = {
 	sanitize,
@@ -12,4 +15,7 @@ module.exports = {
 	transform,
 	settings,
 	monitoring,
+	presence,
+	preview,
+	diff,
 };

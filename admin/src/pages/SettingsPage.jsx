@@ -103,6 +103,25 @@ const ResponsiveButtonGroup = styled(Flex)`
   }
 `;
 
+// Toggle Card for consistent styling
+const ToggleCard = styled(Box)`
+  padding: 16px;
+  background: ${({ $active, $color }) => $active ? `${$color}15` : '#ffffff'};
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid ${({ $active, $color }) => $active ? $color : '#dcdce4'};
+  transition: all 0.2s ease;
+  height: 100%;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    border-color: ${({ $color }) => $color};
+    background: ${({ $color }) => `${$color}08`};
+  }
+`;
+
 // Styled Input wrappers for better mobile UX
 const InputWrapper = styled.div`
   width: 100%;
@@ -819,20 +838,11 @@ const SettingsPage = () => {
             </Typography>
           </ResponsiveSection>
 
-          <Grid.Root gap={3}>
+          <Grid.Root gap={4}>
             <Grid.Item col={6} s={12}>
-              <Box
-                padding={4}
-                background={settings.security?.requireAuthentication ? 'success100' : 'neutral0'}
-                hasRadius
-                style={{
-                  cursor: 'pointer',
-                  border: `2px solid ${settings.security?.requireAuthentication ? '#5cb176' : '#dcdce4'}`,
-                  transition: 'all 0.2s ease',
-                  minHeight: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
+              <ToggleCard
+                $active={settings.security?.requireAuthentication}
+                $color="#5cb176"
                 onClick={() => updateSecurity('requireAuthentication', !settings.security?.requireAuthentication)}
               >
                 <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
@@ -841,33 +851,20 @@ const SettingsPage = () => {
                     onChange={(e) => updateSecurity('requireAuthentication', e.target.checked)}
                   />
                   <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography
-                      variant="omega"
-                      fontWeight={settings.security?.requireAuthentication ? 'bold' : 'normal'}
-                      textColor={settings.security?.requireAuthentication ? 'success700' : 'neutral800'}
-                    >
+                    <Typography variant="omega" fontWeight="semiBold">
                       {t('security.requireAuth', 'Require Authentication')}
                     </Typography>
-                    <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                      {settings.security?.requireAuthentication ? '✓ Active' : 'Inactive'}
+                    <Typography variant="pi" textColor="neutral600">
+                      {settings.security?.requireAuthentication ? 'Active' : 'Inactive'}
                     </Typography>
                   </Flex>
                 </Flex>
-              </Box>
+              </ToggleCard>
             </Grid.Item>
-            <Grid.Item col={4} s={12}>
-              <Box
-                padding={4}
-                background={settings.security?.rateLimiting?.enabled ? 'warning100' : 'neutral0'}
-                hasRadius
-                style={{
-                  cursor: 'pointer',
-                  border: `2px solid ${settings.security?.rateLimiting?.enabled ? '#f59e0b' : '#dcdce4'}`,
-                  transition: 'all 0.2s ease',
-                  minHeight: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
+            <Grid.Item col={6} s={12}>
+              <ToggleCard
+                $active={settings.security?.rateLimiting?.enabled}
+                $color="#f59e0b"
                 onClick={() => updateSecurity('rateLimiting', { ...settings.security?.rateLimiting, enabled: !settings.security?.rateLimiting?.enabled })}
               >
                 <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
@@ -876,30 +873,35 @@ const SettingsPage = () => {
                     onChange={(e) => updateSecurity('rateLimiting', { ...settings.security?.rateLimiting, enabled: e.target.checked })}
                   />
                   <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography
-                      variant="omega"
-                      fontWeight={settings.security?.rateLimiting?.enabled ? 'bold' : 'normal'}
-                      textColor={settings.security?.rateLimiting?.enabled ? 'warning700' : 'neutral800'}
-                    >
+                    <Typography variant="omega" fontWeight="semiBold">
                       {t('security.rateLimiting', 'Enable Rate Limiting')}
                     </Typography>
-                    <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                      {settings.security?.rateLimiting?.enabled ? '✓ Active' : 'Inactive'}
+                    <Typography variant="pi" textColor="neutral600">
+                      {settings.security?.rateLimiting?.enabled ? 'Active' : 'Inactive'}
                     </Typography>
                   </Flex>
                 </Flex>
-              </Box>
+              </ToggleCard>
             </Grid.Item>
-            {settings.security?.rateLimiting?.enabled && (
-              <Grid.Item col={6} s={12}>
-                <NumberInput
-                  label={t('security.maxEventsPerSecond', 'Max Events/Second')}
-                  value={settings.security?.rateLimiting?.maxEventsPerSecond || 10}
-                  onValueChange={(value) => updateSecurity('rateLimiting', { ...settings.security?.rateLimiting, maxEventsPerSecond: value })}
-                />
-              </Grid.Item>
-            )}
           </Grid.Root>
+          
+          {settings.security?.rateLimiting?.enabled && (
+            <Box paddingTop={3}>
+              <Grid.Root gap={4}>
+                <Grid.Item col={6} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('security.maxEventsPerSecond', 'Max Events/Second')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.security?.rateLimiting?.maxEventsPerSecond || 10}
+                        onValueChange={(value) => updateSecurity('rateLimiting', { ...settings.security?.rateLimiting, maxEventsPerSecond: value })}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+              </Grid.Root>
+            </Box>
+          )}
 
           <Box paddingTop={4} paddingBottom={2}>
             <Divider />
@@ -908,27 +910,18 @@ const SettingsPage = () => {
           {/* Events Settings */}
           <ResponsiveSection>
             <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('events.title', 'Event Configuration')}
+              {t('events.title', 'Real-time Events')}
             </ResponsiveSectionTitle>
             <Typography variant="pi" textColor="neutral600">
-              {t('events.description', 'Global event settings')}
+              {t('events.description', 'Configure which events are sent for which content types')}
             </Typography>
           </ResponsiveSection>
 
-          <Grid.Root gap={3}>
+          <Grid.Root gap={4}>
             <Grid.Item col={4} s={12}>
-              <Box
-                padding={4}
-                background={settings.events?.customEventNames ? 'primary100' : 'neutral0'}
-                hasRadius
-                style={{
-                  cursor: 'pointer',
-                  border: `2px solid ${settings.events?.customEventNames ? '#4945ff' : '#dcdce4'}`,
-                  transition: 'all 0.2s ease',
-                  minHeight: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
+              <ToggleCard
+                $active={settings.events?.customEventNames}
+                $color="#4945ff"
                 onClick={() => updateEvents('customEventNames', !settings.events?.customEventNames)}
               >
                 <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
@@ -937,33 +930,20 @@ const SettingsPage = () => {
                     onChange={(e) => updateEvents('customEventNames', e.target.checked)}
                   />
                   <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography
-                      variant="omega"
-                      fontWeight={settings.events?.customEventNames ? 'bold' : 'normal'}
-                      textColor={settings.events?.customEventNames ? 'primary700' : 'neutral800'}
-                    >
+                    <Typography variant="omega" fontWeight="semiBold">
                       {t('events.customNames', 'Use Custom Event Names')}
                     </Typography>
-                    <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                      {settings.events?.customEventNames ? '✓ Active' : 'Inactive'}
+                    <Typography variant="pi" textColor="neutral600">
+                      {settings.events?.customEventNames ? 'Active' : 'Inactive'}
                     </Typography>
                   </Flex>
                 </Flex>
-              </Box>
+              </ToggleCard>
             </Grid.Item>
             <Grid.Item col={4} s={12}>
-              <Box
-                padding={4}
-                background={settings.events?.includeRelations ? 'primary100' : 'neutral0'}
-                hasRadius
-                style={{
-                  cursor: 'pointer',
-                  border: `2px solid ${settings.events?.includeRelations ? '#4945ff' : '#dcdce4'}`,
-                  transition: 'all 0.2s ease',
-                  minHeight: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
+              <ToggleCard
+                $active={settings.events?.includeRelations}
+                $color="#4945ff"
                 onClick={() => updateEvents('includeRelations', !settings.events?.includeRelations)}
               >
                 <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
@@ -972,33 +952,20 @@ const SettingsPage = () => {
                     onChange={(e) => updateEvents('includeRelations', e.target.checked)}
                   />
                   <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography
-                      variant="omega"
-                      fontWeight={settings.events?.includeRelations ? 'bold' : 'normal'}
-                      textColor={settings.events?.includeRelations ? 'primary700' : 'neutral800'}
-                    >
+                    <Typography variant="omega" fontWeight="semiBold">
                       {t('events.includeRelations', 'Include Relations')}
                     </Typography>
-                    <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                      {settings.events?.includeRelations ? '✓ Active' : 'Inactive'}
+                    <Typography variant="pi" textColor="neutral600">
+                      {settings.events?.includeRelations ? 'Active' : 'Inactive'}
                     </Typography>
                   </Flex>
                 </Flex>
-              </Box>
+              </ToggleCard>
             </Grid.Item>
             <Grid.Item col={4} s={12}>
-              <Box
-                padding={4}
-                background={settings.events?.onlyPublished ? 'primary100' : 'neutral0'}
-                hasRadius
-                style={{
-                  cursor: 'pointer',
-                  border: `2px solid ${settings.events?.onlyPublished ? '#4945ff' : '#dcdce4'}`,
-                  transition: 'all 0.2s ease',
-                  minHeight: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
+              <ToggleCard
+                $active={settings.events?.onlyPublished}
+                $color="#4945ff"
                 onClick={() => updateEvents('onlyPublished', !settings.events?.onlyPublished)}
               >
                 <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
@@ -1007,19 +974,15 @@ const SettingsPage = () => {
                     onChange={(e) => updateEvents('onlyPublished', e.target.checked)}
                   />
                   <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography
-                      variant="omega"
-                      fontWeight={settings.events?.onlyPublished ? 'bold' : 'normal'}
-                      textColor={settings.events?.onlyPublished ? 'primary700' : 'neutral800'}
-                    >
+                    <Typography variant="omega" fontWeight="semiBold">
                       {t('events.onlyPublished', 'Only Published Content')}
                     </Typography>
-                    <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                      {settings.events?.onlyPublished ? '✓ Active' : 'Inactive'}
+                    <Typography variant="pi" textColor="neutral600">
+                      {settings.events?.onlyPublished ? 'Active' : 'Inactive'}
                     </Typography>
                   </Flex>
                 </Flex>
-              </Box>
+              </ToggleCard>
             </Grid.Item>
           </Grid.Root>
 
@@ -1233,8 +1196,8 @@ const SettingsPage = () => {
                                   </Grid.Item>
                                   <Grid.Item col={2}>
                                     <Flex justifyContent="center">
-                                      <Typography variant="sigma" textColor="neutral600">
-                                        {t('entitySubscriptions.allow', 'ENTITIES')} 🆕
+                                        <Typography variant="sigma" textColor="neutral600">
+                                        {t('entitySubscriptions.allow', 'ENTITIES')} [NEW]
                                       </Typography>
                                     </Flex>
                                   </Grid.Item>
@@ -1549,7 +1512,7 @@ const SettingsPage = () => {
                         <Badge>
                           /{ns}
                           {config.requireAuth && (
-                            <span style={{ marginLeft: '4px' }}>🔒</span>
+                            <span style={{ marginLeft: '4px' }}>[AUTH]</span>
                           )}
                           <Button
                             variant="ghost"
@@ -1587,7 +1550,7 @@ const SettingsPage = () => {
             <Flex justifyContent="space-between" alignItems="center">
               <Box>
                 <ResponsiveSectionTitle variant="delta" as="h2">
-                  {t('entitySubscriptions.title', 'Entity Subscriptions')} 🆕
+                  {t('entitySubscriptions.title', 'Entity Subscriptions')} [NEW]
                 </ResponsiveSectionTitle>
                 <Typography variant="pi" textColor="neutral600">
                   {t('entitySubscriptions.description', 'Allow clients to subscribe to specific entities')}
@@ -1640,6 +1603,208 @@ const SettingsPage = () => {
             <Divider />
           </Box>
 
+          {/* Presence System (Collaboration) */}
+          <ResponsiveSection>
+            <Flex justifyContent="space-between" alignItems="center">
+              <Box>
+                <ResponsiveSectionTitle variant="delta" as="h2">
+                  {t('presence.title', 'Presence System')} [NEW]
+                </ResponsiveSectionTitle>
+                <Typography variant="pi" textColor="neutral600">
+                  {t('presence.description', 'Real-time collaboration awareness - see who is editing what')}
+                </Typography>
+              </Box>
+              <Toggle
+                checked={settings.presence?.enabled ?? true}
+                onChange={(e) => updateSettings((prev) => ({
+                  ...prev,
+                  presence: { ...prev.presence, enabled: e.target.checked }
+                }))}
+              />
+            </Flex>
+          </ResponsiveSection>
+
+          {settings.presence?.enabled !== false && (
+            <Box paddingTop={3}>
+              <Grid.Root gap={3}>
+                <Grid.Item col={4} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('presence.heartbeat', 'Heartbeat Interval (ms)')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.presence?.heartbeatInterval ?? 30000}
+                        onValueChange={(value) => updateSettings((prev) => ({
+                          ...prev,
+                          presence: { ...prev.presence, heartbeatInterval: value }
+                        }))}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+                <Grid.Item col={4} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('presence.staleTimeout', 'Stale Timeout (ms)')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.presence?.staleTimeout ?? 60000}
+                        onValueChange={(value) => updateSettings((prev) => ({
+                          ...prev,
+                          presence: { ...prev.presence, staleTimeout: value }
+                        }))}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+                <Grid.Item col={4} s={12}>
+                  <Flex gap={2} alignItems="center" paddingTop={6}>
+                    <Checkbox
+                      checked={settings.presence?.showTypingIndicator ?? true}
+                      onCheckedChange={(checked) => updateSettings((prev) => ({
+                        ...prev,
+                        presence: { ...prev.presence, showTypingIndicator: checked }
+                      }))}
+                    />
+                    <Typography variant="omega">{t('presence.typing', 'Show Typing Indicators')}</Typography>
+                  </Flex>
+                </Grid.Item>
+              </Grid.Root>
+            </Box>
+          )}
+
+          <Box paddingTop={4} paddingBottom={2}>
+            <Divider />
+          </Box>
+
+          {/* Live Preview */}
+          <ResponsiveSection>
+            <Flex justifyContent="space-between" alignItems="center">
+              <Box>
+                <ResponsiveSectionTitle variant="delta" as="h2">
+                  {t('livePreview.title', 'Live Preview')} [NEW]
+                </ResponsiveSectionTitle>
+                <Typography variant="pi" textColor="neutral600">
+                  {t('livePreview.description', 'Real-time preview of draft changes for frontends')}
+                </Typography>
+              </Box>
+              <Toggle
+                checked={settings.livePreview?.enabled ?? true}
+                onChange={(e) => updateSettings((prev) => ({
+                  ...prev,
+                  livePreview: { ...prev.livePreview, enabled: e.target.checked }
+                }))}
+              />
+            </Flex>
+          </ResponsiveSection>
+
+          {settings.livePreview?.enabled !== false && (
+            <Box paddingTop={3}>
+              <Grid.Root gap={3}>
+                <Grid.Item col={4} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('livePreview.debounce', 'Debounce (ms)')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.livePreview?.debounceMs ?? 300}
+                        onValueChange={(value) => updateSettings((prev) => ({
+                          ...prev,
+                          livePreview: { ...prev.livePreview, debounceMs: value }
+                        }))}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+                <Grid.Item col={4} s={12}>
+                  <Flex gap={2} alignItems="center" paddingTop={6}>
+                    <Checkbox
+                      checked={settings.livePreview?.draftEvents ?? true}
+                      onCheckedChange={(checked) => updateSettings((prev) => ({
+                        ...prev,
+                        livePreview: { ...prev.livePreview, draftEvents: checked }
+                      }))}
+                    />
+                    <Typography variant="omega">{t('livePreview.draftEvents', 'Emit Draft Events')}</Typography>
+                  </Flex>
+                </Grid.Item>
+                <Grid.Item col={4} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('livePreview.maxSubs', 'Max Subscriptions/Socket')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.livePreview?.maxSubscriptionsPerSocket ?? 50}
+                        onValueChange={(value) => updateSettings((prev) => ({
+                          ...prev,
+                          livePreview: { ...prev.livePreview, maxSubscriptionsPerSocket: value }
+                        }))}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+              </Grid.Root>
+            </Box>
+          )}
+
+          <Box paddingTop={4} paddingBottom={2}>
+            <Divider />
+          </Box>
+
+          {/* Field-level Changes */}
+          <ResponsiveSection>
+            <Flex justifyContent="space-between" alignItems="center">
+              <Box>
+                <ResponsiveSectionTitle variant="delta" as="h2">
+                  {t('fieldChanges.title', 'Field-level Changes')} [NEW]
+                </ResponsiveSectionTitle>
+                <Typography variant="pi" textColor="neutral600">
+                  {t('fieldChanges.description', 'Send only changed fields instead of full entities (bandwidth optimization)')}
+                </Typography>
+              </Box>
+              <Toggle
+                checked={settings.fieldLevelChanges?.enabled ?? true}
+                onChange={(e) => updateSettings((prev) => ({
+                  ...prev,
+                  fieldLevelChanges: { ...prev.fieldLevelChanges, enabled: e.target.checked }
+                }))}
+              />
+            </Flex>
+          </ResponsiveSection>
+
+          {settings.fieldLevelChanges?.enabled !== false && (
+            <Box paddingTop={3}>
+              <Grid.Root gap={3}>
+                <Grid.Item col={4} s={12}>
+                  <Flex gap={2} alignItems="center" paddingTop={2}>
+                    <Checkbox
+                      checked={settings.fieldLevelChanges?.includeFullData ?? false}
+                      onCheckedChange={(checked) => updateSettings((prev) => ({
+                        ...prev,
+                        fieldLevelChanges: { ...prev.fieldLevelChanges, includeFullData: checked }
+                      }))}
+                    />
+                    <Typography variant="omega">{t('fieldChanges.includeFullData', 'Include Full Data')}</Typography>
+                  </Flex>
+                </Grid.Item>
+                <Grid.Item col={4} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('fieldChanges.maxDepth', 'Max Diff Depth')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.fieldLevelChanges?.maxDiffDepth ?? 3}
+                        onValueChange={(value) => updateSettings((prev) => ({
+                          ...prev,
+                          fieldLevelChanges: { ...prev.fieldLevelChanges, maxDiffDepth: value }
+                        }))}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+              </Grid.Root>
+            </Box>
+          )}
+
+          <Box paddingTop={4} paddingBottom={2}>
+            <Divider />
+          </Box>
+
           {/* Monitoring Section */}
           <ResponsiveSection>
             <ResponsiveSectionTitle variant="delta" as="h2">
@@ -1647,22 +1812,20 @@ const SettingsPage = () => {
             </ResponsiveSectionTitle>
           </ResponsiveSection>
 
-          <Grid.Root gap={3}>
+          <Grid.Root gap={4}>
             <Grid.Item col={6} s={12}>
-              <Box
-                padding={4}
-                background={settings.monitoring?.enableConnectionLogging ? 'primary100' : 'neutral0'}
-                hasRadius
-                style={{ cursor: 'pointer', border: `1px solid ${settings.monitoring?.enableConnectionLogging ? '#4945ff' : '#dcdce4'}` }}
+              <ToggleCard
+                $active={settings.monitoring?.enableConnectionLogging}
+                $color="#4945ff"
                 onClick={() => updateMonitoring('enableConnectionLogging', !settings.monitoring?.enableConnectionLogging)}
               >
-                <Flex gap={3} alignItems="center">
-                  <Checkbox
+                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
+                  <Toggle
                     checked={settings.monitoring?.enableConnectionLogging || false}
-                    onCheckedChange={(checked) => updateMonitoring('enableConnectionLogging', checked)}
+                    onChange={(e) => updateMonitoring('enableConnectionLogging', e.target.checked)}
                   />
                   <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="bold">
+                    <Typography variant="omega" fontWeight="semiBold">
                       {t('monitoring.connectionLogging', 'Connection Logging')}
                     </Typography>
                     <Typography variant="pi" textColor="neutral600">
@@ -1670,23 +1833,21 @@ const SettingsPage = () => {
                     </Typography>
                   </Flex>
                 </Flex>
-              </Box>
+              </ToggleCard>
             </Grid.Item>
-            <Grid.Item col={4} s={12}>
-              <Box
-                padding={4}
-                background={settings.monitoring?.enableEventLogging ? 'primary100' : 'neutral0'}
-                hasRadius
-                style={{ cursor: 'pointer', border: `1px solid ${settings.monitoring?.enableEventLogging ? '#4945ff' : '#dcdce4'}` }}
+            <Grid.Item col={6} s={12}>
+              <ToggleCard
+                $active={settings.monitoring?.enableEventLogging}
+                $color="#4945ff"
                 onClick={() => updateMonitoring('enableEventLogging', !settings.monitoring?.enableEventLogging)}
               >
-                <Flex gap={3} alignItems="center">
-                  <Checkbox
+                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
+                  <Toggle
                     checked={settings.monitoring?.enableEventLogging || false}
-                    onCheckedChange={(checked) => updateMonitoring('enableEventLogging', checked)}
+                    onChange={(e) => updateMonitoring('enableEventLogging', e.target.checked)}
                   />
                   <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="bold">
+                    <Typography variant="omega" fontWeight="semiBold">
                       {t('monitoring.eventLogging', 'Event Logging')}
                     </Typography>
                     <Typography variant="pi" textColor="neutral600">
@@ -1694,22 +1855,27 @@ const SettingsPage = () => {
                     </Typography>
                   </Flex>
                 </Flex>
-              </Box>
+              </ToggleCard>
             </Grid.Item>
-            {settings.monitoring?.enableEventLogging && (
-              <Grid.Item col={12} s={12}>
-                <ResponsiveField>
-                  <InputWrapper>
-                <NumberInput
-                  label={t('monitoring.maxLogSize', 'Max Log Size')}
-                  value={settings.monitoring?.maxEventLogSize || 100}
-                  onValueChange={(value) => updateMonitoring('maxEventLogSize', value)}
-                />
-                  </InputWrapper>
-                </ResponsiveField>
-              </Grid.Item>
-            )}
           </Grid.Root>
+          
+          {settings.monitoring?.enableEventLogging && (
+            <Box paddingTop={3}>
+              <Grid.Root gap={4}>
+                <Grid.Item col={6} s={12}>
+                  <ResponsiveField>
+                    <Field.Label>{t('monitoring.maxLogSize', 'Max Log Size')}</Field.Label>
+                    <InputWrapper>
+                      <NumberInput
+                        value={settings.monitoring?.maxEventLogSize || 100}
+                        onValueChange={(value) => updateMonitoring('maxEventLogSize', value)}
+                      />
+                    </InputWrapper>
+                  </ResponsiveField>
+                </Grid.Item>
+              </Grid.Root>
+            </Box>
+          )}
         </ResponsiveCard>
 
         {/* Info Box */}

@@ -111,6 +111,31 @@ module.exports = ({ strapi }) => {
 			enableEventLogging: false,
 			maxEventLogSize: 100,
 		},
+
+		// Presence System (Collaboration Awareness)
+		presence: {
+			enabled: true, // Enable presence tracking
+			heartbeatInterval: 30000, // Heartbeat interval in ms
+			staleTimeout: 60000, // Time before connection considered stale
+			showAvatars: true, // Show user avatars in UI
+			showTypingIndicator: true, // Show typing indicators
+		},
+
+		// Live Preview (Real-time Draft Updates)
+		livePreview: {
+			enabled: true, // Enable live preview
+			draftEvents: true, // Emit events for draft changes
+			debounceMs: 300, // Debounce field changes
+			maxSubscriptionsPerSocket: 50, // Max preview subscriptions per socket
+		},
+
+		// Field-level Changes (Diff-based Updates)
+		fieldLevelChanges: {
+			enabled: true, // Enable field-level diff
+			includeFullData: false, // Include full data alongside diff
+			excludeFields: ['updatedAt', 'updatedBy', 'createdAt', 'createdBy'], // Fields to exclude from diff
+			maxDiffDepth: 3, // Maximum nesting depth for diff
+		},
 	});
 
 	return {
