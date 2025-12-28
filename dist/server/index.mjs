@@ -634,7 +634,9 @@ async function bootstrapIO$1({ strapi: strapi2 }) {
     });
     socket.on("get-entity-subscriptions", (callback) => {
       const rooms = Array.from(socket.rooms).filter((r) => r !== socket.id && r.includes(":")).map((room) => {
-        const [uid, id] = room.split(":");
+        const lastColonIndex = room.lastIndexOf(":");
+        const uid = room.substring(0, lastColonIndex);
+        const id = room.substring(lastColonIndex + 1);
         return { uid, id, room };
       });
       if (callback) callback({ success: true, subscriptions: rooms });
@@ -1316,7 +1318,7 @@ const sessionTokens = /* @__PURE__ */ new Map();
 const activeSockets = /* @__PURE__ */ new Map();
 const refreshThrottle = /* @__PURE__ */ new Map();
 const SESSION_TTL = 10 * 60 * 1e3;
-const REFRESH_COOLDOWN = 30 * 1e3;
+const REFRESH_COOLDOWN = 3 * 1e3;
 const CLEANUP_INTERVAL = 2 * 60 * 1e3;
 const hashToken = (token) => {
   return createHash("sha256").update(token).digest("hex");
@@ -1367,7 +1369,7 @@ var presence$3 = ({ strapi: strapi2 }) => ({
         userId: adminUser.id,
         user: {
           id: adminUser.id,
-          // Only store minimal user data needed for display
+          email: adminUser.email,
           firstname: adminUser.firstname,
           lastname: adminUser.lastname
         },
@@ -30553,7 +30555,10 @@ var presence$1 = ({ strapi: strapi2 }) => {
      */
     registerConnection(socketId, user = null) {
       const settings2 = getPresenceSettings();
-      if (!settings2.enabled) return;
+      if (!settings2.enabled) {
+        strapi2.log.warn(`socket.io: Presence disabled, skipping registration for ${socketId}`);
+        return;
+      }
       activeConnections.set(socketId, {
         user,
         entities: /* @__PURE__ */ new Map(),
@@ -30561,7 +30566,8 @@ var presence$1 = ({ strapi: strapi2 }) => {
         lastSeen: Date.now(),
         connectedAt: Date.now()
       });
-      strapi2.log.debug(`socket.io: Presence registered for socket ${socketId}`);
+      const username = user?.username || user?.firstname || "anonymous";
+      strapi2.log.info(`socket.io: Presence registered for ${username} (socket: ${socketId}, total: ${activeConnections.size})`);
     },
     /**
      * Unregisters a socket connection and cleans up all entity presence
@@ -30572,7 +30578,9 @@ var presence$1 = ({ strapi: strapi2 }) => {
       if (!connection) return;
       if (connection.entities) {
         for (const entityKey of connection.entities.keys()) {
-          const [uid, documentId] = entityKey.split(":");
+          const lastColonIndex = entityKey.lastIndexOf(":");
+          const uid = entityKey.substring(0, lastColonIndex);
+          const documentId = entityKey.substring(lastColonIndex + 1);
           await this.leaveEntity(socketId, uid, documentId, false);
         }
       }
@@ -30821,7 +30829,9 @@ var presence$1 = ({ strapi: strapi2 }) => {
         const editingEntities = [];
         if (connection.entities) {
           for (const [entityKey, joinedAt] of connection.entities) {
-            const [uid, documentId] = entityKey.split(":");
+            const lastColonIndex = entityKey.lastIndexOf(":");
+            const uid = entityKey.substring(0, lastColonIndex);
+            const documentId = entityKey.substring(lastColonIndex + 1);
             let contentTypeName = uid;
             try {
               const contentType = strapi2.contentTypes[uid];
@@ -31105,7 +31115,9 @@ var preview$1 = ({ strapi: strapi2 }) => {
     getActivePreviewEntities() {
       const entities = [];
       for (const [entityKey, subscribers] of previewSubscribers) {
-        const [uid, documentId] = entityKey.split(":");
+        const lastColonIndex = entityKey.lastIndexOf(":");
+        const uid = entityKey.substring(0, lastColonIndex);
+        const documentId = entityKey.substring(lastColonIndex + 1);
         entities.push({
           uid,
           documentId,

@@ -1,12 +1,14 @@
 /**
  * Who's Online Widget - Shows online users and what they're editing
  * Dashboard widget for real-time team collaboration awareness
+ * Connects to Socket.IO to register presence on dashboard
  */
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Box, Flex, Typography, Badge } from '@strapi/design-system';
 import { User, Pencil, Clock } from '@strapi/icons';
 import { useFetchClient } from '@strapi/strapi/admin';
 import styled, { keyframes } from 'styled-components';
+import { io } from 'socket.io-client';
 
 import { PLUGIN_ID } from '../pluginId';
 
@@ -37,9 +39,9 @@ const LiveDot = styled.span`
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: ${({ theme }) => theme.colors.success500};
+  background: ${({ theme, $connected }) => $connected ? theme.colors.success500 : theme.colors.neutral400};
   margin-right: ${({ theme }) => theme.spaces[2]};
-  animation: ${pulse} 2s ease-in-out infinite;
+  animation: ${({ $connected }) => $connected ? pulse : 'none'} 2s ease-in-out infinite;
 `;
 
 const CountBadge = styled.span`
@@ -127,7 +129,7 @@ const UserMeta = styled.div`
   margin-top: 2px;
 `;
 
-const EditingBadge = styled.span`
+const EditingBadge = styled.a`
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -135,9 +137,20 @@ const EditingBadge = styled.span`
   font-weight: 500;
   color: ${({ theme }) => theme.colors.success700};
   background: ${({ theme }) => theme.colors.success100};
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 10px;
   margin-top: ${({ theme }) => theme.spaces[1]};
+  word-break: break-all;
+  max-width: 100%;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  
+  &:hover {
+    background: ${({ theme }) => theme.colors.success200};
+    color: ${({ theme }) => theme.colors.success800};
+    transform: translateY(-1px);
+  }
 `;
 
 const IdleBadge = styled.span`
@@ -154,9 +167,25 @@ const IdleBadge = styled.span`
 `;
 
 const EmptyState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
-  padding: ${({ theme }) => theme.spaces[6]};
+  padding: ${({ theme }) => theme.spaces[8]} ${({ theme }) => theme.spaces[4]};
   color: ${({ theme }) => theme.colors.neutral500};
+  min-height: 180px;
+`;
+
+const EmptyIcon = styled.div`
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: ${({ theme }) => theme.colors.neutral100};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: ${({ theme }) => theme.spaces[3]};
 `;
 
 const LoadingContainer = styled.div`
@@ -216,12 +245,15 @@ const formatDuration = (seconds) => {
 /**
  * Who's Online Widget Component
  * Shows all online users in the Strapi admin and what they're editing
+ * Automatically connects to Socket.IO to register presence
  */
 export const OnlineEditorsWidget = () => {
-  const { get } = useFetchClient();
+  const { get, post } = useFetchClient();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const socketRef = useRef(null);
 
   /**
    * Fetches online users from the API
@@ -229,7 +261,8 @@ export const OnlineEditorsWidget = () => {
   const fetchOnlineUsers = useCallback(async () => {
     try {
       const response = await get(`/${PLUGIN_ID}/online-users`);
-      setData(response.data);
+      // API returns { data: { users: [...], counts: {...} } }
+      setData(response.data?.data || response.data);
       setError(null);
       setLoading(false);
     } catch (err) {
@@ -239,12 +272,78 @@ export const OnlineEditorsWidget = () => {
     }
   }, [get]);
 
+  /**
+   * Connects to Socket.IO to register this user as online
+   */
   useEffect(() => {
-    fetchOnlineUsers();
+    let cancelled = false;
+    let socket = null;
 
-    // Poll every 10 seconds for real-time updates
-    const interval = setInterval(fetchOnlineUsers, 10000);
+    const connectSocket = async () => {
+      try {
+        // Get session token for Socket.IO auth
+        const { data: sessionData } = await post(`/${PLUGIN_ID}/presence/session`, {});
+        
+        if (cancelled || !sessionData?.token) return;
 
+        const socketUrl = sessionData.wsUrl || `${window.location.protocol}//${window.location.host}`;
+        socket = io(socketUrl, {
+          path: sessionData.wsPath || '/socket.io',
+          transports: ['websocket', 'polling'],
+          auth: {
+            token: sessionData.token,
+            strategy: 'admin-jwt',
+            isAdmin: true,
+          },
+          reconnection: true,
+          reconnectionAttempts: 3,
+        });
+
+        socketRef.current = socket;
+
+        socket.on('connect', () => {
+          if (!cancelled) {
+            setConnected(true);
+            console.log(`[${PLUGIN_ID}] Dashboard presence connected`);
+            // Fetch users after connecting
+            fetchOnlineUsers();
+          }
+        });
+
+        socket.on('disconnect', () => {
+          if (!cancelled) {
+            setConnected(false);
+          }
+        });
+
+        socket.on('connect_error', (err) => {
+          console.warn(`[${PLUGIN_ID}] Dashboard socket error:`, err.message);
+        });
+
+        // Listen for presence updates to refresh the list
+        socket.on('presence:update', () => {
+          fetchOnlineUsers();
+        });
+
+      } catch (err) {
+        console.error('[plugin-io] Failed to connect dashboard socket:', err);
+      }
+    };
+
+    connectSocket();
+
+    return () => {
+      cancelled = true;
+      if (socket) {
+        socket.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, [post, fetchOnlineUsers]);
+
+  // Poll for updates (backup for presence:update events)
+  useEffect(() => {
+    const interval = setInterval(fetchOnlineUsers, 15000);
     return () => clearInterval(interval);
   }, [fetchOnlineUsers]);
 
@@ -274,7 +373,7 @@ export const OnlineEditorsWidget = () => {
       {/* Header */}
       <HeaderContainer>
         <Flex alignItems="center" gap={2}>
-          <LiveDot />
+          <LiveDot $connected={connected} />
           <Typography variant="omega" fontWeight="bold" textColor="neutral800">
             Who's Online
           </Typography>
@@ -294,9 +393,14 @@ export const OnlineEditorsWidget = () => {
       {/* User List */}
       {users.length === 0 ? (
         <EmptyState>
-          <User width="32" height="32" style={{ opacity: 0.3, marginBottom: 8 }} />
-          <Typography variant="pi" textColor="neutral500">
+          <EmptyIcon>
+            <User width="28" height="28" fill="#a5a5ba" />
+          </EmptyIcon>
+          <Typography variant="omega" fontWeight="semiBold" textColor="neutral600">
             No one else is online
+          </Typography>
+          <Typography variant="pi" textColor="neutral500" style={{ marginTop: 4 }}>
+            You're the only one here right now
           </Typography>
         </EmptyState>
       ) : (
@@ -319,9 +423,15 @@ export const OnlineEditorsWidget = () => {
                 </UserMeta>
                 {userData.isEditing ? (
                   userData.editingEntities.map((entity, idx) => (
-                    <EditingBadge key={idx}>
+                    <EditingBadge 
+                      key={idx}
+                      href={`/admin/content-manager/collection-types/${entity.uid}/${entity.documentId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Open in new tab"
+                    >
                       <Pencil width="10" height="10" />
-                      Editing {entity.contentTypeName}
+                      {entity.contentTypeName} - {entity.documentId}
                     </EditingBadge>
                   ))
                 ) : (

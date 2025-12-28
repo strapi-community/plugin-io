@@ -290,7 +290,10 @@ module.exports = ({ strapi }) => {
 		getActivePreviewEntities() {
 			const entities = [];
 			for (const [entityKey, subscribers] of previewSubscribers) {
-				const [uid, documentId] = entityKey.split(':');
+				// Split from last colon to handle uid with colons (e.g., plugin::name.model)
+				const lastColonIndex = entityKey.lastIndexOf(':');
+				const uid = entityKey.substring(0, lastColonIndex);
+				const documentId = entityKey.substring(lastColonIndex + 1);
 				entities.push({
 					uid,
 					documentId,

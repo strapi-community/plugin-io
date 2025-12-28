@@ -92,7 +92,10 @@ module.exports = ({ strapi }) => {
 		 */
 		registerConnection(socketId, user = null) {
 			const settings = getPresenceSettings();
-			if (!settings.enabled) return;
+			if (!settings.enabled) {
+				strapi.log.warn(`socket.io: Presence disabled, skipping registration for ${socketId}`);
+				return;
+			}
 
 			activeConnections.set(socketId, {
 				user,
@@ -101,7 +104,8 @@ module.exports = ({ strapi }) => {
 				connectedAt: Date.now(),
 			});
 
-			strapi.log.debug(`socket.io: Presence registered for socket ${socketId}`);
+			const username = user?.username || user?.firstname || 'anonymous';
+			strapi.log.info(`socket.io: Presence registered for ${username} (socket: ${socketId}, total: ${activeConnections.size})`);
 		},
 
 		/**
@@ -115,7 +119,10 @@ module.exports = ({ strapi }) => {
 			// Leave all entities this socket was editing
 			if (connection.entities) {
 				for (const entityKey of connection.entities.keys()) {
-					const [uid, documentId] = entityKey.split(':');
+					// Split from last colon to handle uid with colons (e.g., plugin::name.model)
+					const lastColonIndex = entityKey.lastIndexOf(':');
+					const uid = entityKey.substring(0, lastColonIndex);
+					const documentId = entityKey.substring(lastColonIndex + 1);
 					await this.leaveEntity(socketId, uid, documentId, false);
 				}
 			}
@@ -420,7 +427,11 @@ module.exports = ({ strapi }) => {
 				const editingEntities = [];
 				if (connection.entities) {
 					for (const [entityKey, joinedAt] of connection.entities) {
-						const [uid, documentId] = entityKey.split(':');
+						// entityKey format: "api::article.article:documentId" or "plugin::users-permissions.user:documentId"
+						// Split from the LAST colon to separate uid from documentId
+						const lastColonIndex = entityKey.lastIndexOf(':');
+						const uid = entityKey.substring(0, lastColonIndex);
+						const documentId = entityKey.substring(lastColonIndex + 1);
 						
 						// Try to get a friendly content type name
 						let contentTypeName = uid;

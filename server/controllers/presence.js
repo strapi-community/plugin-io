@@ -16,7 +16,7 @@ const refreshThrottle = new Map();
 
 // Configuration
 const SESSION_TTL = 10 * 60 * 1000; // 10 minutes TTL
-const REFRESH_COOLDOWN = 30 * 1000; // 30 seconds between refreshes
+const REFRESH_COOLDOWN = 3 * 1000; // 3 seconds between refreshes (allow multiple widgets)
 const CLEANUP_INTERVAL = 2 * 60 * 1000; // Cleanup every 2 minutes
 
 /**
@@ -94,7 +94,7 @@ module.exports = ({ strapi }) => ({
         userId: adminUser.id,
         user: {
           id: adminUser.id,
-          // Only store minimal user data needed for display
+          email: adminUser.email,
           firstname: adminUser.firstname,
           lastname: adminUser.lastname,
         },

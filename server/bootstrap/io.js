@@ -531,7 +531,10 @@ async function bootstrapIO({ strapi }) {
 			const rooms = Array.from(socket.rooms)
 				.filter((r) => r !== socket.id && r.includes(':'))
 				.map((room) => {
-					const [uid, id] = room.split(':');
+					// Split from last colon to handle uid with colons (e.g., plugin::name.model)
+					const lastColonIndex = room.lastIndexOf(':');
+					const uid = room.substring(0, lastColonIndex);
+					const id = room.substring(lastColonIndex + 1);
 					return { uid, id, room };
 				});
 			
