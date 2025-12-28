@@ -1,3 +1,10 @@
+# [5.1.0](https://github.com/strapi-community/plugin-io/compare/5.0.6...5.1.0) (2025-12-28)
+
+
+### Features
+
+* add Live Presence System with typing indicators ([29390fb](https://github.com/strapi-community/plugin-io/commit/29390fb0406ea70f009f26ee646dfc9c1b0bf8ad))
+
 ## [5.0.6](https://github.com/strapi-community/plugin-io/compare/5.0.5...5.0.6) (2025-12-28)
 
 
