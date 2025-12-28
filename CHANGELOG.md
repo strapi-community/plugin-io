@@ -1,3 +1,12 @@
+## [5.0.6](https://github.com/strapi-community/plugin-io/compare/5.0.5...5.0.6) (2025-12-28)
+
+
+### Bug Fixes
+
+* correct version to 5.0.5 and add tagFormat for existing tags ([bdcaee2](https://github.com/strapi-community/plugin-io/commit/bdcaee2808214200e07014e6cee3469bca467934))
+* migrate to semantic-release and fix date-fns v4 ESM compatibility ([31a3e05](https://github.com/strapi-community/plugin-io/commit/31a3e0531398702c0d8fbdadde87119a07b7c23d))
+* remove package-lock.json to fix cross-platform SWC native binding issues ([d3715ff](https://github.com/strapi-community/plugin-io/commit/d3715ff4db824d8b7bce217a31689618c569c8ef))
+
 # 1.0.0 (2025-12-28)
 
 
