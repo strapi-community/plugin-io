@@ -1,3 +1,68 @@
+# 1.0.0 (2025-12-28)
+
+
+### Bug Fixes
+
+* add dark mode support for event type filter select ([6647ff1](https://github.com/strapi-community/plugin-io/commit/6647ff1101a06bc58f8bd3d0bb605f41fd552095))
+* **apiTokens:** account for full_access expiresAt null and not having ability ([#87](https://github.com/strapi-community/plugin-io/issues/87)) ([2d49409](https://github.com/strapi-community/plugin-io/commit/2d49409eb4749683b9dc3d73aebbb27241782520))
+* **bootstrap-io:** events are not processed ([1117144](https://github.com/strapi-community/plugin-io/commit/11171448e3ebeac07ff2c3e123f8a516c2294cc2))
+* **bootstrapIO:** $io.socket is not $io.server ([2d5b082](https://github.com/strapi-community/plugin-io/commit/2d5b08242f08e8f938d03b61248fa6d9061de1b9))
+* **config:** default origin should be expected port instead of admin portal ([5027dd8](https://github.com/strapi-community/plugin-io/commit/5027dd8e4c02aacc50a694abba4a08107c413e74))
+* **config:** event is expected to be an object instead of an array ([99b6e89](https://github.com/strapi-community/plugin-io/commit/99b6e89335b94b7a902e46c5c0eccc920fd81c54))
+* **config:** invalid events type default ([91f372a](https://github.com/strapi-community/plugin-io/commit/91f372a993ae3882372e21795ef4778403363d1c))
+* **defaults:** `POST` must be allowed ([54c4bf5](https://github.com/strapi-community/plugin-io/commit/54c4bf5efe46a33128bb53bfbabd323dd0768d3c))
+* **docs:** error on build due to esm ([fba0100](https://github.com/strapi-community/plugin-io/commit/fba01005027426cf8c9fc4a942ab9b9a1c46979f))
+* downgrade date-fns to v3.x for CommonJS compatibility ([c739fb9](https://github.com/strapi-community/plugin-io/commit/c739fb98f6fdfd400cd10b7925f89a0603f07f65))
+* **emit:** `singleType` content types action should be find not findOne ([fd4d3cc](https://github.com/strapi-community/plugin-io/commit/fd4d3ccc4ec5d58210d9b0981d7e7c8e3c04c4e8))
+* **emit:** account for publish/unpublish ([#20](https://github.com/strapi-community/plugin-io/issues/20)) ([bac0948](https://github.com/strapi-community/plugin-io/commit/bac0948d132c75ed02030318f9e8ac2723d9ef5f)), closes [#15](https://github.com/strapi-community/plugin-io/issues/15)
+* **emit:** account for single content type `createOrUpdate` ([#21](https://github.com/strapi-community/plugin-io/issues/21)) ([fff808b](https://github.com/strapi-community/plugin-io/commit/fff808bf7d610e4cb8179e9ae501e34e9d3b5e77))
+* **emit:** only emit event if room has permission for action ([116f718](https://github.com/strapi-community/plugin-io/commit/116f7189d7be4e17f99b4ac83a295bd4d23694af))
+* **engines:** incorrect engine range ([#39](https://github.com/strapi-community/plugin-io/issues/39)) ([f9a5853](https://github.com/strapi-community/plugin-io/commit/f9a5853088ec51c561a8079c88bb3d8829c3e3a5))
+* **events:** listen for bulkDelete ([#36](https://github.com/strapi-community/plugin-io/issues/36)) ([6183917](https://github.com/strapi-community/plugin-io/commit/618391794e2c8053b7c5b3de62c71dab2ed2dbfa))
+* **getEventType:** `afterFindOne` event should be `findOne` ([1239ed4](https://github.com/strapi-community/plugin-io/commit/1239ed4ce20f6ca752b742898f5336719aad522d))
+* **getModelMeta:** `publish` action should require update permission ([#22](https://github.com/strapi-community/plugin-io/issues/22)) ([9d22fee](https://github.com/strapi-community/plugin-io/commit/9d22fee769e3dac4ad30f5e435804287223be6b8))
+* **handshake:** ensure the u&p plugin is present before attempting access ([015f38a](https://github.com/strapi-community/plugin-io/commit/015f38aaa1061e8f3ace11bc3e7b1650e4e0008e))
+* **handshake:** reject unconfirmed and/or blocked users ([#27](https://github.com/strapi-community/plugin-io/issues/27)) ([6f8e7eb](https://github.com/strapi-community/plugin-io/commit/6f8e7ebcc7074fac579202533bbf0f0d0be922b6))
+* **handshake:** unable to verify ([585ac00](https://github.com/strapi-community/plugin-io/commit/585ac00c8fad9238ce9ca93b84576a1a4c809132))
+* **jwt:** `getAdvancedSettings` is undefined ([134fb73](https://github.com/strapi-community/plugin-io/commit/134fb73380bef969d5facca968b2449b051880a0))
+* **middleware:** account for custom routes ([#4](https://github.com/strapi-community/plugin-io/issues/4)) ([b1d765c](https://github.com/strapi-community/plugin-io/commit/b1d765c90be758a272b0933f965eca53e858fdf1))
+* **middleware:** missing model prefix for component relations ([#43](https://github.com/strapi-community/plugin-io/issues/43)) ([7504d23](https://github.com/strapi-community/plugin-io/commit/7504d23639292ed0c76e1095356c603760d1666e)), closes [#38](https://github.com/strapi-community/plugin-io/issues/38)
+* migrate to semantic-release and fix date-fns v4 ESM compatibility ([31a3e05](https://github.com/strapi-community/plugin-io/commit/31a3e0531398702c0d8fbdadde87119a07b7c23d))
+* Publishing version 5.0.3 to npm ([792a0ec](https://github.com/strapi-community/plugin-io/commit/792a0ec11cd960f056416dd8bc0de123f2e6436a))
+* **raw emit:** add default options ([#5](https://github.com/strapi-community/plugin-io/issues/5)) ([bc34b52](https://github.com/strapi-community/plugin-io/commit/bc34b52514effda46b80af8f9190667b6b06e1e6))
+* **raw emit:** room not respected ([#8](https://github.com/strapi-community/plugin-io/issues/8)) ([1092597](https://github.com/strapi-community/plugin-io/commit/109259792ec294f11ab625a1d241e4577fb63d8e))
+* Remove eval() from transaction context loading ([126abbf](https://github.com/strapi-community/plugin-io/commit/126abbf3aa0120508df521008c604eebb10c4b51))
+* remove package-lock.json to fix cross-platform SWC native binding issues ([d3715ff](https://github.com/strapi-community/plugin-io/commit/d3715ff4db824d8b7bce217a31689618c569c8ef))
+* remove spinner buttons from number inputs in settings ([9a1892b](https://github.com/strapi-community/plugin-io/commit/9a1892ba99d50b6a3c731e9b9be26a17f407b0bb))
+* **role scopeFn:** scopes are not being applied ([e0a4e89](https://github.com/strapi-community/plugin-io/commit/e0a4e89ba980e8fc6dad0f7dd6668e94d02bb570))
+* **sanitize:** data array is undefined ([275a71f](https://github.com/strapi-community/plugin-io/commit/275a71f5a7bb32965fb5f02d6775a3050447feba))
+* Security & Transaction Fixes for Strapi v5 ([124d6eb](https://github.com/strapi-community/plugin-io/commit/124d6eb43623637309998acc44993e641a4e4ae6))
+* **server events:** custom events not registered ([#65](https://github.com/strapi-community/plugin-io/issues/65)) ([b14dfc5](https://github.com/strapi-community/plugin-io/commit/b14dfc510941eb4fd0c8ab92776eff12db250865))
+* **services:sanitize:** output sanitize transforms should now be a function ([e3530fc](https://github.com/strapi-community/plugin-io/commit/e3530fc0465d003542c8967af57db883d322a0d2))
+* **socketio:emit:** remove roomname from data ([2249d5b](https://github.com/strapi-community/plugin-io/commit/2249d5bab06bbe032076552447a85f6669de172b))
+* **socketio:** ensure top level permissions are respected ([28413f2](https://github.com/strapi-community/plugin-io/commit/28413f21d92ba328342f7579eee7503a19858670))
+* **strategies:apiToken:** authentication results in error ([#79](https://github.com/strapi-community/plugin-io/issues/79)) ([aca9a1e](https://github.com/strapi-community/plugin-io/commit/aca9a1e858e0bd045b9b15618e73c29194330bec))
+* **strategies:role:** verification is happening after connection ([9fdd4fb](https://github.com/strapi-community/plugin-io/commit/9fdd4fbceaa105783642e2344d497d3f7214578a))
+* update repository URLs from strapi-plugin-io to plugin-io ([091eb53](https://github.com/strapi-community/plugin-io/commit/091eb531d47a5599f71000fa5af100ba82ff4ad1))
+* use npm install instead of npm ci for cross-platform SWC compatibility ([e3fe3b8](https://github.com/strapi-community/plugin-io/commit/e3fe3b864bd6465bafe6e96a6b69292f46894d1e))
+
+
+### Features
+
+* **.github:** add PR and issue templates ([#11](https://github.com/strapi-community/plugin-io/issues/11)) ([8f8606b](https://github.com/strapi-community/plugin-io/commit/8f8606b55c591059279ad66b0a89ba52b9518971))
+* **config:** add defaults and validation ([384ce81](https://github.com/strapi-community/plugin-io/commit/384ce814513535311d69c0ded496b9fe7e6196e2))
+* improve dark mode support for monitoring page ([21ce9ec](https://github.com/strapi-community/plugin-io/commit/21ce9ec6f90ec7074013436b0df58f4db4560a6d))
+* init commit ([933244d](https://github.com/strapi-community/plugin-io/commit/933244dc16a36f84fab42a9475dcd2709ca4cb26))
+* **io:** add raw emit ([#3](https://github.com/strapi-community/plugin-io/issues/3)) ([268d13d](https://github.com/strapi-community/plugin-io/commit/268d13d73be6c43458c5502e6ea61c2e1007b200))
+* **io:** add server side events ([a7e7c57](https://github.com/strapi-community/plugin-io/commit/a7e7c57cbfe1d4e3745f21a5696a4271d8826201))
+* **middeware:** add handshake ([5cad6bb](https://github.com/strapi-community/plugin-io/commit/5cad6bb8dec42c24a37863f2e9488a71e046715c))
+* modernize npm publish workflow with OIDC provenance ([ac6df84](https://github.com/strapi-community/plugin-io/commit/ac6df847ca13ff1da10b522693da8330407a14a6))
+* modernize npm publish workflow with OIDC provenance ([#107](https://github.com/strapi-community/plugin-io/issues/107)) ([ac5953c](https://github.com/strapi-community/plugin-io/commit/ac5953c0763799b7e084c6083918fba6cdb0ba18))
+* **services:** add transform and sanitize ([130829a](https://github.com/strapi-community/plugin-io/commit/130829a11331b8cbc0431f14f1485546aea546a3))
+* Strapi v5 Support with Dashboard Widget & Mobile-Optimized UI ([24a2565](https://github.com/strapi-community/plugin-io/commit/24a25653a97566d579f50fd06b7dce38dc2f2a1b)), closes [#95](https://github.com/strapi-community/plugin-io/issues/95) [#82](https://github.com/strapi-community/plugin-io/issues/82)
+* **structures:** add SocketIO ([1eae26b](https://github.com/strapi-community/plugin-io/commit/1eae26b554ea93d70b51f340671a020a5363aee1))
+* **v2.0:** init commit ([d2092ef](https://github.com/strapi-community/plugin-io/commit/d2092effa14a0eb0a245637f84c67352822b5ae1))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -300,4 +365,3 @@ Strapi v4 support ended with version 2.x. Please upgrade to Strapi v5 and use v5
 ---
 
 *For older versions and legacy documentation, see [GitHub Releases](https://github.com/strapi-community/strapi-plugin-io/releases)*
-
