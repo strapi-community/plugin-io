@@ -1,3 +1,15 @@
+# [5.2.0](https://github.com/strapi-community/plugin-io/compare/5.1.0...5.2.0) (2025-12-28)
+
+
+### Bug Fixes
+
+* admin users now properly authenticated instead of showing anonymous ([6478777](https://github.com/strapi-community/plugin-io/commit/647877731f2d529d550b05740aea2547a0ada6f2))
+
+
+### Features
+
+* enhanced session token security with hashing, rate limiting, and auto-refresh ([88631ed](https://github.com/strapi-community/plugin-io/commit/88631ed3f83ef6c43d6908782f3f8d99a27606bf))
+
 # [5.1.0](https://github.com/strapi-community/plugin-io/compare/5.0.6...5.1.0) (2025-12-28)
 
 
