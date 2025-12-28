@@ -105,5 +105,14 @@ module.exports = {
 				policies: ['admin::isAuthenticatedAdmin'],
 			},
 		},
+		// Who's Online: Get all online users with editing info
+		{
+			method: 'GET',
+			path: '/online-users',
+			handler: 'presence.getOnlineUsers',
+			config: {
+				policies: ['admin::isAuthenticatedAdmin'],
+			},
+		},
 	],
 };

@@ -403,5 +403,101 @@ module.exports = ({ strapi }) => {
 				});
 			}
 		},
+
+		/**
+		 * Gets all online users with their currently editing entities
+		 * Used for the "Who's Online" dashboard widget
+		 * @returns {Array} List of online users with their editing info
+		 */
+		getOnlineUsers() {
+			const users = [];
+			const now = Date.now();
+
+			for (const [socketId, connection] of activeConnections) {
+				if (!connection.user) continue; // Skip anonymous connections
+
+				// Get all entities this user is editing
+				const editingEntities = [];
+				if (connection.entities) {
+					for (const [entityKey, joinedAt] of connection.entities) {
+						const [uid, documentId] = entityKey.split(':');
+						
+						// Try to get a friendly content type name
+						let contentTypeName = uid;
+						try {
+							const contentType = strapi.contentTypes[uid];
+							if (contentType?.info?.displayName) {
+								contentTypeName = contentType.info.displayName;
+							} else if (contentType?.info?.singularName) {
+								contentTypeName = contentType.info.singularName;
+							}
+						} catch (e) {
+							// Keep uid as fallback
+						}
+
+						editingEntities.push({
+							uid,
+							documentId,
+							contentTypeName,
+							joinedAt,
+							editingFor: Math.floor((now - joinedAt) / 1000), // seconds
+						});
+					}
+				}
+
+				users.push({
+					socketId,
+					user: {
+						id: connection.user.id,
+						username: connection.user.username,
+						email: connection.user.email,
+						firstname: connection.user.firstname,
+						lastname: connection.user.lastname,
+						isAdmin: connection.user.isAdmin || false,
+					},
+					connectedAt: connection.connectedAt,
+					lastSeen: connection.lastSeen,
+					onlineFor: Math.floor((now - connection.connectedAt) / 1000), // seconds
+					editingEntities,
+					isEditing: editingEntities.length > 0,
+				});
+			}
+
+			// Sort: users editing something first, then by connection time
+			users.sort((a, b) => {
+				if (a.isEditing && !b.isEditing) return -1;
+				if (!a.isEditing && b.isEditing) return 1;
+				return b.connectedAt - a.connectedAt;
+			});
+
+			return users;
+		},
+
+		/**
+		 * Gets count of online users
+		 * @returns {object} Online user counts
+		 */
+		getOnlineCounts() {
+			let total = 0;
+			let admins = 0;
+			let users = 0;
+			let editing = 0;
+
+			for (const connection of activeConnections.values()) {
+				if (!connection.user) continue;
+				
+				total++;
+				if (connection.user.isAdmin) {
+					admins++;
+				} else {
+					users++;
+				}
+				if (connection.entities?.size > 0) {
+					editing++;
+				}
+			}
+
+			return { total, admins, users, editing };
+		},
 	};
 };

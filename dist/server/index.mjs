@@ -1530,6 +1530,32 @@ var presence$3 = ({ strapi: strapi2 }) => ({
       strapi2.log.error("[plugin-io] Failed to invalidate user sessions:", error2);
       return ctx.internalServerError("Failed to invalidate sessions");
     }
+  },
+  /**
+   * HTTP Handler: Gets all online users with their editing info
+   * Used for the "Who's Online" dashboard widget
+   * @param {object} ctx - Koa context
+   */
+  async getOnlineUsers(ctx) {
+    const adminUser = ctx.state.user;
+    if (!adminUser) {
+      return ctx.unauthorized("Admin authentication required");
+    }
+    try {
+      const presenceService = strapi2.plugin("io").service("presence");
+      const onlineUsers = presenceService.getOnlineUsers();
+      const counts = presenceService.getOnlineCounts();
+      ctx.body = {
+        data: {
+          users: onlineUsers,
+          counts,
+          timestamp: Date.now()
+        }
+      };
+    } catch (error2) {
+      strapi2.log.error("[plugin-io] Failed to get online users:", error2);
+      return ctx.internalServerError("Failed to get online users");
+    }
   }
 });
 const settings$2 = settings$3;
@@ -1636,6 +1662,15 @@ var admin$1 = {
       method: "POST",
       path: "/security/invalidate/:userId",
       handler: "presence.invalidateUserSessionsHandler",
+      config: {
+        policies: ["admin::isAuthenticatedAdmin"]
+      }
+    },
+    // Who's Online: Get all online users with editing info
+    {
+      method: "GET",
+      path: "/online-users",
+      handler: "presence.getOnlineUsers",
       config: {
         policies: ["admin::isAuthenticatedAdmin"]
       }
@@ -30772,6 +30807,88 @@ var presence$1 = ({ strapi: strapi2 }) => {
           timestamp: Date.now()
         });
       }
+    },
+    /**
+     * Gets all online users with their currently editing entities
+     * Used for the "Who's Online" dashboard widget
+     * @returns {Array} List of online users with their editing info
+     */
+    getOnlineUsers() {
+      const users = [];
+      const now = Date.now();
+      for (const [socketId, connection] of activeConnections) {
+        if (!connection.user) continue;
+        const editingEntities = [];
+        if (connection.entities) {
+          for (const [entityKey, joinedAt] of connection.entities) {
+            const [uid, documentId] = entityKey.split(":");
+            let contentTypeName = uid;
+            try {
+              const contentType = strapi2.contentTypes[uid];
+              if (contentType?.info?.displayName) {
+                contentTypeName = contentType.info.displayName;
+              } else if (contentType?.info?.singularName) {
+                contentTypeName = contentType.info.singularName;
+              }
+            } catch (e) {
+            }
+            editingEntities.push({
+              uid,
+              documentId,
+              contentTypeName,
+              joinedAt,
+              editingFor: Math.floor((now - joinedAt) / 1e3)
+              // seconds
+            });
+          }
+        }
+        users.push({
+          socketId,
+          user: {
+            id: connection.user.id,
+            username: connection.user.username,
+            email: connection.user.email,
+            firstname: connection.user.firstname,
+            lastname: connection.user.lastname,
+            isAdmin: connection.user.isAdmin || false
+          },
+          connectedAt: connection.connectedAt,
+          lastSeen: connection.lastSeen,
+          onlineFor: Math.floor((now - connection.connectedAt) / 1e3),
+          // seconds
+          editingEntities,
+          isEditing: editingEntities.length > 0
+        });
+      }
+      users.sort((a, b) => {
+        if (a.isEditing && !b.isEditing) return -1;
+        if (!a.isEditing && b.isEditing) return 1;
+        return b.connectedAt - a.connectedAt;
+      });
+      return users;
+    },
+    /**
+     * Gets count of online users
+     * @returns {object} Online user counts
+     */
+    getOnlineCounts() {
+      let total = 0;
+      let admins = 0;
+      let users = 0;
+      let editing = 0;
+      for (const connection of activeConnections.values()) {
+        if (!connection.user) continue;
+        total++;
+        if (connection.user.isAdmin) {
+          admins++;
+        } else {
+          users++;
+        }
+        if (connection.entities?.size > 0) {
+          editing++;
+        }
+      }
+      return { total, admins, users, editing };
     }
   };
 };

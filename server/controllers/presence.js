@@ -293,4 +293,34 @@ module.exports = ({ strapi }) => ({
       return ctx.internalServerError('Failed to invalidate sessions');
     }
   },
+
+  /**
+   * HTTP Handler: Gets all online users with their editing info
+   * Used for the "Who's Online" dashboard widget
+   * @param {object} ctx - Koa context
+   */
+  async getOnlineUsers(ctx) {
+    const adminUser = ctx.state.user;
+    
+    if (!adminUser) {
+      return ctx.unauthorized('Admin authentication required');
+    }
+
+    try {
+      const presenceService = strapi.plugin('io').service('presence');
+      const onlineUsers = presenceService.getOnlineUsers();
+      const counts = presenceService.getOnlineCounts();
+
+      ctx.body = {
+        data: {
+          users: onlineUsers,
+          counts,
+          timestamp: Date.now(),
+        },
+      };
+    } catch (error) {
+      strapi.log.error('[plugin-io] Failed to get online users:', error);
+      return ctx.internalServerError('Failed to get online users');
+    }
+  },
 });

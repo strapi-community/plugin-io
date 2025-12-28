@@ -45,6 +45,7 @@ export default {
 
 		// Register Socket.IO Stats Widget for Homepage (Strapi v5.13+)
 		if ('widgets' in app) {
+			// Stats Widget
 			app.widgets.register({
 				icon: PluginIcon,
 				title: {
@@ -58,7 +59,23 @@ export default {
 				id: 'socket-io-stats-widget',
 				pluginId: PLUGIN_ID,
 			});
-			console.log(`[${PLUGIN_ID}] [SUCCESS] Socket.IO Stats Widget registered`);
+
+			// Who's Online Widget
+			app.widgets.register({
+				icon: PluginIcon,
+				title: {
+					id: `${PLUGIN_ID}.widget.online-editors.title`,
+					defaultMessage: "Who's Online",
+				},
+				component: async () => {
+					const component = await import('./components/OnlineEditorsWidget');
+					return component.OnlineEditorsWidget;
+				},
+				id: 'socket-io-online-editors-widget',
+				pluginId: PLUGIN_ID,
+			});
+
+			console.log(`[${PLUGIN_ID}] [SUCCESS] Dashboard widgets registered`);
 		}
 	},
 
