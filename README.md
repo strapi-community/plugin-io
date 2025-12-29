@@ -898,13 +898,17 @@ Authorization: Bearer <admin-jwt>
 
 The plugin provides a full admin interface for configuration and monitoring.
 
-### Dashboard Widget
+### Dashboard Widgets
 
 > **Requires Strapi v5.13+**
 
-After installation, a live statistics widget appears on your Strapi admin homepage:
+After installation, live statistics widgets appear on your Strapi admin homepage:
 
-**Widget Shows:**
+#### Socket.IO Statistics Widget
+
+![Socket.IO Statistics Widget](./pics/widget.png)
+
+**Shows:**
 - Live connection status (pulsing indicator when active)
 - Active connections count
 - Active rooms count
@@ -913,11 +917,23 @@ After installation, a live statistics widget appears on your Strapi admin homepa
 
 Updates automatically every 5 seconds.
 
+#### Who's Online Widget
+
+![Who's Online Widget](./pics/whoisonlinewidget.png)
+
+**Shows:**
+- List of currently online admin users
+- User avatars with role badges
+- Online status and last activity
+- Quick access to view all activity
+
 ### Settings Page
 
 Navigate to **Settings > Socket.IO > Settings** for visual configuration:
 
 **Path:** `/admin/settings/io/settings`
+
+![Socket.IO Settings](./pics/settings.png)
 
 #### General Settings
 - Enable/disable the plugin
@@ -956,6 +972,8 @@ Navigate to **Settings > Socket.IO > Monitoring** for live statistics:
 
 **Path:** `/admin/settings/io/monitoring`
 
+![Monitoring & Logging](./pics/monitoringSettings.png)
+
 - View active connections with user details
 - See event logs in real-time
 - Monitor performance metrics (events/second)
@@ -971,30 +989,14 @@ When editing content in the Content Manager, a **Live Presence** panel appears i
 - **Active Editors** - List of other users editing the same content
 - **Typing Indicator** - Shows when someone is typing and in which field
 
+![Live Presence Panel](./pics/livepresenceindi.png)
+
 **How It Works:**
 
 1. When you open a content entry, the panel connects via Socket.IO
 2. Other editors on the same entry appear in the panel
 3. Typing in any field broadcasts a typing indicator to others
 4. When you leave, others are notified
-
-**Example Display:**
-
-```
-+-----------------------------+
-| Live Presence               |
-+-----------------------------+
-| [*] Live                    |
-|     Real-time sync active   |
-+-----------------------------+
-| ALSO EDITING (1)            |
-| +-------------------------+ |
-| | SA  Sarah Admin         | |
-| |     Typing in: title    | |
-| |            [Typing...]  | |
-| +-------------------------+ |
-+-----------------------------+
-```
 
 ---
 
