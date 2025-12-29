@@ -1,3 +1,10 @@
+## [5.3.1](https://github.com/strapi-community/plugin-io/compare/5.3.0...5.3.1) (2025-12-29)
+
+
+### Bug Fixes
+
+* readme update ([1d55244](https://github.com/strapi-community/plugin-io/commit/1d552442ae8314686b5f1c7d6a3ffb08b8a31717))
+
 # [5.3.0](https://github.com/strapi-community/plugin-io/compare/5.2.0...5.3.0) (2025-12-28)
 
 
