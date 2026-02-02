@@ -1,3 +1,10 @@
+## [5.3.2](https://github.com/strapi-community/plugin-io/compare/5.3.1...5.3.2) (2026-02-02)
+
+
+### Bug Fixes
+
+* **admin-strategy:** add missing getRooms and verify methods ([0fe8aef](https://github.com/strapi-community/plugin-io/commit/0fe8aefe78b43a22a98af89f983211d6be58badb))
+
 ## [5.3.1](https://github.com/strapi-community/plugin-io/compare/5.3.0...5.3.1) (2025-12-29)
 
 
