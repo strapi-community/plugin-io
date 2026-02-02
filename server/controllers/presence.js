@@ -206,6 +206,29 @@ module.exports = ({ strapi }) => ({
   },
 
   /**
+   * Returns all active (non-expired) admin sessions
+   * Used by admin strategy for broadcasting to connected admin users
+   * @returns {Array} Array of active session objects
+   */
+  getActiveSessions() {
+    const now = Date.now();
+    const activeSessions = [];
+    
+    for (const session of sessionTokens.values()) {
+      if (session.expiresAt > now) {
+        activeSessions.push({
+          userId: session.userId,
+          user: session.user,
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt,
+        });
+      }
+    }
+    
+    return activeSessions;
+  },
+
+  /**
    * Gets session statistics (for monitoring) - internal method
    * @returns {object} Session statistics
    */

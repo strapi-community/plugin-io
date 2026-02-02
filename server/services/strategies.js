@@ -85,6 +85,46 @@ module.exports = ({ strapi }) => {
 		getRoomName: function (user) {
 			return `${this.name}-user-${user.id}`;
 		},
+		/**
+		 * Admin users have full access - verify always passes
+		 * @param {object} auth - Auth object
+		 * @param {object} config - Config with scope
+		 */
+		verify: function (auth, config) {
+			// Admin users have full access to everything
+			// No verification needed
+			return;
+		},
+		/**
+		 * Returns active admin sessions for broadcast
+		 * Admin users have full access, so we return them with full_access permissions
+		 * @returns {Promise<Array>} Array of admin session objects with permissions
+		 */
+		getRooms: async function () {
+			try {
+				const presenceController = strapi.plugin('io').controller('presence');
+				
+				// Check if presence controller and getActiveSessions exist
+				if (!presenceController?.getActiveSessions) {
+					return [];
+				}
+				
+				const activeSessions = presenceController.getActiveSessions();
+				
+				// Transform sessions to room objects with full_access permissions
+				// Admin users have full access by nature
+				return activeSessions.map((session) => ({
+					id: session.userId,
+					name: `admin-${session.userId}`,
+					type: 'full-access', // Grants full access to all content types
+					permissions: [], // Empty permissions array - full-access type bypasses permission check
+					...session,
+				}));
+			} catch (error) {
+				strapi.log.warn('[plugin-io] Admin getRooms error:', error.message);
+				return [];
+			}
+		},
 	};
 
 	const role = {
