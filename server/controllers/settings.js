@@ -1,6 +1,88 @@
 'use strict';
 
 const { pluginId } = require('../utils/pluginId');
+const { errors } = require('@strapi/utils');
+const { z } = require('zod');
+
+const settingsSchema = z.object({
+	enabled: z.boolean().optional(),
+	cors: z.object({
+		origins: z.array(z.string()).optional(),
+		methods: z.array(z.string()).optional(),
+		credentials: z.boolean().optional(),
+	}).optional(),
+	connection: z.object({
+		maxConnections: z.number().int().positive().optional(),
+		pingTimeout: z.number().int().positive().optional(),
+		pingInterval: z.number().int().positive().optional(),
+		connectionTimeout: z.number().int().positive().optional(),
+		allowEIO3: z.boolean().optional(),
+	}).optional(),
+	security: z.object({
+		requireAuthentication: z.boolean().optional(),
+		rateLimiting: z.object({
+			enabled: z.boolean().optional(),
+			maxEventsPerSecond: z.number().int().positive().optional(),
+		}).optional(),
+		ipWhitelist: z.array(z.string()).optional(),
+		ipBlacklist: z.array(z.string()).optional(),
+	}).optional(),
+	contentTypes: z.record(z.any()).optional(),
+	events: z.object({
+		customEventNames: z.boolean().optional(),
+		includeRelations: z.boolean().optional(),
+		excludeFields: z.array(z.string()).optional(),
+		onlyPublished: z.boolean().optional(),
+	}).optional(),
+	rooms: z.object({
+		autoJoinByRole: z.record(z.array(z.string())).optional(),
+		enablePrivateRooms: z.boolean().optional(),
+	}).optional(),
+	entitySubscriptions: z.object({
+		enabled: z.boolean().optional(),
+		maxSubscriptionsPerSocket: z.number().int().positive().optional(),
+		requireVerification: z.boolean().optional(),
+		allowedContentTypes: z.array(z.string()).optional(),
+		enableMetrics: z.boolean().optional(),
+	}).optional(),
+	rolePermissions: z.record(z.any()).optional(),
+	redis: z.object({
+		enabled: z.boolean().optional(),
+		url: z.string().optional(),
+	}).optional(),
+	namespaces: z.object({
+		enabled: z.boolean().optional(),
+		list: z.record(z.any()).optional(),
+	}).optional(),
+	middleware: z.object({
+		enabled: z.boolean().optional(),
+		handlers: z.array(z.any()).optional(),
+	}).optional(),
+	monitoring: z.object({
+		enableConnectionLogging: z.boolean().optional(),
+		enableEventLogging: z.boolean().optional(),
+		maxEventLogSize: z.number().int().positive().optional(),
+	}).optional(),
+	presence: z.object({
+		enabled: z.boolean().optional(),
+		heartbeatInterval: z.number().int().positive().optional(),
+		staleTimeout: z.number().int().positive().optional(),
+		showAvatars: z.boolean().optional(),
+		showTypingIndicator: z.boolean().optional(),
+	}).optional(),
+	livePreview: z.object({
+		enabled: z.boolean().optional(),
+		draftEvents: z.boolean().optional(),
+		debounceMs: z.number().int().nonnegative().optional(),
+		maxSubscriptionsPerSocket: z.number().int().positive().optional(),
+	}).optional(),
+	fieldLevelChanges: z.object({
+		enabled: z.boolean().optional(),
+		includeFullData: z.boolean().optional(),
+		excludeFields: z.array(z.string()).optional(),
+		maxDiffDepth: z.number().int().positive().optional(),
+	}).optional(),
+}).strict();
 
 /**
  * Settings controller for io plugin
@@ -8,7 +90,8 @@ const { pluginId } = require('../utils/pluginId');
 module.exports = ({ strapi }) => ({
 	/**
 	 * GET /io/settings
-	 * Retrieve current plugin settings
+	 * @route GET /io/settings
+	 * @returns {object} Current plugin settings
 	 */
 	async getSettings(ctx) {
 		const settingsService = strapi.plugin(pluginId).service('settings');
@@ -18,36 +101,31 @@ module.exports = ({ strapi }) => ({
 
 	/**
 	 * PUT /io/settings
-	 * Update plugin settings and hot-reload Socket.IO
+	 * @route PUT /io/settings
+	 * @returns {object} Updated plugin settings
+	 * @throws {ValidationError} If body fails Zod validation
 	 */
 	async updateSettings(ctx) {
 		const settingsService = strapi.plugin(pluginId).service('settings');
 		const { body } = ctx.request;
 
 		if (!body || typeof body !== 'object' || Array.isArray(body)) {
-			return ctx.badRequest('Request body must be a JSON object');
+			throw new errors.ValidationError('Request body must be a JSON object');
 		}
 
-		const ALLOWED_KEYS = [
-			'enabled', 'cors', 'connection', 'security', 'contentTypes', 'events',
-			'rooms', 'entitySubscriptions', 'rolePermissions', 'redis', 'namespaces',
-			'middleware', 'monitoring', 'presence', 'livePreview', 'fieldLevelChanges',
-		];
-		const unknownKeys = Object.keys(body).filter((k) => !ALLOWED_KEYS.includes(k));
-		if (unknownKeys.length > 0) {
-			return ctx.badRequest(`Unknown settings keys: ${unknownKeys.join(', ')}`);
+		const parsed = settingsSchema.safeParse(body);
+		if (!parsed.success) {
+			const details = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+			throw new errors.ValidationError(`Invalid settings: ${details}`);
 		}
 
 		const oldSettings = await settingsService.getSettings();
-		const updatedSettings = await settingsService.setSettings(body);
+		const updatedSettings = await settingsService.setSettings(parsed.data);
 
-		// Update stored settings reference for lifecycle hooks
 		strapi.$ioSettings = updatedSettings;
 
-		// Hot-reload: Update connection logging handler
 		let reloaded = false;
 		if (strapi.$io?.server) {
-			// Log the change
 			strapi.log.info(`socket.io: Settings updated (origin: ${updatedSettings.cors?.origin}, contentTypes: ${updatedSettings.contentTypes?.length || 0})`);
 			reloaded = true;
 		}
@@ -106,19 +184,17 @@ module.exports = ({ strapi }) => ({
 
 	/**
 	 * POST /io/test-event
-	 * Send a test event
+	 * @route POST /io/test-event
+	 * @returns {object} Test event result
+	 * @throws {ApplicationError} If Socket.IO is not initialised
 	 */
 	async sendTestEvent(ctx) {
 		const monitoringService = strapi.plugin(pluginId).service('monitoring');
 		const { eventName, data } = ctx.request.body;
 
-		try {
-			const safeName = (eventName || 'test').replace(/[^a-zA-Z0-9:._-]/g, '').substring(0, 50);
+		const safeName = (eventName || 'test').replace(/[^a-zA-Z0-9:._-]/g, '').substring(0, 50);
 		const result = monitoringService.sendTestEvent(safeName, data || {});
-			ctx.body = { data: result };
-		} catch (error) {
-			ctx.throw(500, error.message);
-		}
+		ctx.body = { data: result };
 	},
 
 	/**
@@ -133,11 +209,14 @@ module.exports = ({ strapi }) => ({
 
 	/**
 	 * GET /io/roles
-	 * Get available user roles for permissions configuration
+	 * @route GET /io/roles
+	 * @returns {object} Available user roles
 	 */
 	async getRoles(ctx) {
-		// Use Document Service API (Strapi v5)
-		const roles = await strapi.documents('plugin::users-permissions.role').findMany({});
+		const roles = await strapi.documents('plugin::users-permissions.role').findMany({
+			fields: ['id', 'name', 'type', 'description'],
+			limit: 100,
+		});
 		ctx.body = {
 			data: roles.map((role) => ({
 				id: role.id,

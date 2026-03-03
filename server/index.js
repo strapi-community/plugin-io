@@ -61,7 +61,7 @@ const destroy = async ({ strapi }) => {
 			]);
 		}
 
-		strapi.log.info('socket.io: Plugin destroyed – all handles released');
+		strapi.log.info('socket.io: Plugin destroyed - all handles released');
 	} catch (err) {
 		strapi.log.error(`socket.io: Error during destroy: ${err.message}`);
 	}

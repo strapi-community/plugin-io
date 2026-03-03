@@ -138,7 +138,7 @@ module.exports = ({ strapi }) => {
 				throw new UnauthorizedError('Invalid credentials');
 			}
 
-			// ⚠️ LEGITIMATE EXCEPTION: admin::api-token is a Strapi Core Admin entity
+			// [EXCEPTION] admin::api-token is a Strapi Core Admin entity
 			// Official Strapi implementation uses strapi.db.query() for admin::api-token
 			// Source: https://github.com/strapi/strapi/blob/main/packages/core/admin/server/strategies/api-token.js
 			// This is NOT a mistake - Strapi Core itself uses Query Engine for admin entities
@@ -163,7 +163,7 @@ module.exports = ({ strapi }) => {
 			}
 
 			// Update lastUsedAt if the token has not been used in the last hour
-			// ⚠️ LEGITIMATE EXCEPTION: Using Query Engine as per Strapi Core implementation
+			// [EXCEPTION] Using Query Engine as per Strapi Core implementation
 			if (!apiToken.lastUsedAt || differenceInHours(currentDate, parseISO(apiToken.lastUsedAt)) >= 1) {
 				await strapi.db.query('admin::api-token').update({
 					where: { id: apiToken.id },
@@ -218,7 +218,7 @@ module.exports = ({ strapi }) => {
 		},
 		getRooms: function () {
 			// Fetch active token types
-			// ⚠️ LEGITIMATE EXCEPTION: Using Query Engine as per Strapi Core implementation
+			// [EXCEPTION] Using Query Engine as per Strapi Core implementation
 			return strapi.db.query('admin::api-token').findMany({
 				select: ['id', 'type', 'name'],
 				where: {

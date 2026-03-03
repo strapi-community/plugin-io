@@ -77,6 +77,12 @@ function redactUrl(url) {
 	}
 }
 
+/**
+ * Initialises the Socket.IO server, wires up authentication middleware,
+ * registers all socket event handlers, and starts background services
+ * @param {object} params - Strapi bootstrap params
+ * @param {object} params.strapi - Strapi instance
+ */
 async function bootstrapIO({ strapi }) {
 	const settingsService = strapi.plugin(pluginId).service('settings');
 	const settings = await settingsService.getSettings();
