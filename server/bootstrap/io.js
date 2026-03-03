@@ -3,6 +3,80 @@
 const { SocketIO } = require('../structures');
 const { pluginId } = require('../utils/pluginId');
 
+/**
+ * UUID v4 format regex for admin session token detection
+ */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Maximum allowed byte length for preview field-change values
+ */
+const MAX_FIELD_VALUE_SIZE = 100_000;
+
+/**
+ * Wraps a socket event handler with payload validation and error handling
+ * to prevent process crashes from malformed client data (C1 fix)
+ * @param {Function} handler - The event handler function
+ * @param {boolean} expectsObject - Whether the first argument must be a plain object
+ * @returns {Function} Wrapped handler
+ */
+function safeHandler(handler, expectsObject = true) {
+	return function (...args) {
+		try {
+			if (expectsObject) {
+				const data = args[0];
+				if (!data || typeof data !== 'object' || Array.isArray(data)) {
+					const callback = typeof args[args.length - 1] === 'function' ? args[args.length - 1] : null;
+					if (callback) callback({ success: false, error: 'Invalid payload' });
+					return;
+				}
+			}
+			const result = handler.apply(this, args);
+			if (result && typeof result.catch === 'function') {
+				result.catch((err) => {
+					strapi.log.error(`socket.io: Unhandled error in event handler: ${err.message}`);
+					const callback = typeof args[args.length - 1] === 'function' ? args[args.length - 1] : null;
+					if (callback) callback({ success: false, error: 'Internal error' });
+				});
+			}
+		} catch (err) {
+			strapi.log.error(`socket.io: Error in event handler: ${err.message}`);
+			const callback = typeof args[args.length - 1] === 'function' ? args[args.length - 1] : null;
+			if (callback) callback({ success: false, error: 'Internal error' });
+		}
+	};
+}
+
+/**
+ * Resolves the real client IP, respecting x-forwarded-for behind reverse proxies
+ * @param {object} socket - Socket.IO socket instance
+ * @returns {string} Client IP address
+ */
+function resolveClientIp(socket) {
+	const xff = socket.handshake.headers?.['x-forwarded-for'];
+	if (xff) {
+		return xff.split(',')[0].trim();
+	}
+	return socket.handshake.address;
+}
+
+/**
+ * Redacts password from a URL string for safe logging
+ * @param {string} url - URL that may contain credentials
+ * @returns {string} URL with password replaced by ***
+ */
+function redactUrl(url) {
+	try {
+		const parsed = new URL(url);
+		if (parsed.password) {
+			parsed.password = '***';
+		}
+		return parsed.toString();
+	} catch {
+		return url.replace(/:([^@/]+)@/, ':***@');
+	}
+}
+
 async function bootstrapIO({ strapi }) {
 	const settingsService = strapi.plugin(pluginId).service('settings');
 	const settings = await settingsService.getSettings();
@@ -19,7 +93,7 @@ async function bootstrapIO({ strapi }) {
 		connectTimeout: settings.connection?.connectionTimeout || 45000,
 		maxHttpBufferSize: 1e6,
 		transports: ['websocket', 'polling'],
-		allowEIO3: true,
+		allowEIO3: settings.connection?.allowEIO3 ?? false,
 	};
 
 	// Redis Adapter for multi-server scaling
@@ -36,7 +110,8 @@ async function bootstrapIO({ strapi }) {
 			await Promise.all([pubClient.connect(), subClient.connect()]);
 			
 			serverOptions.adapter = createAdapter(pubClient, subClient);
-			strapi.log.info(`socket.io: Redis adapter enabled (${settings.redis.url})`);
+			serverOptions._redisClients = { pubClient, subClient };
+			strapi.log.info(`socket.io: Redis adapter enabled (${redactUrl(settings.redis.url)})`);
 		} catch (err) {
 			strapi.log.error(`socket.io: Redis adapter failed: ${err.message}`);
 		}
@@ -44,6 +119,7 @@ async function bootstrapIO({ strapi }) {
 
 	const io = new SocketIO(serverOptions);
 	strapi.$io = io;
+	strapi.$io._redisClients = serverOptions._redisClients || null;
 	strapi.$ioSettings = settings;
 
 	// Apply sensitive fields sanitization middleware
@@ -80,7 +156,7 @@ async function bootstrapIO({ strapi }) {
 
 	// Connection Middleware
 	io.server.use(async (socket, next) => {
-		const clientIp = socket.handshake.address;
+		const clientIp = resolveClientIp(socket);
 
 		if (settings.security?.ipWhitelist?.length > 0) {
 			if (!settings.security.ipWhitelist.includes(clientIp)) {
@@ -97,36 +173,23 @@ async function bootstrapIO({ strapi }) {
 			return next(new Error('Max connections reached'));
 		}
 
-		const token = socket.handshake.auth?.token || socket.handshake.query?.token;
-		const strategy = socket.handshake.auth?.strategy;
-		const isAdmin = socket.handshake.auth?.isAdmin === true;
+		const token = socket.handshake.auth?.token;
 		
 		if (token) {
-			// Check if this is an admin session token
-			if (isAdmin || strategy === 'admin-jwt') {
-				try {
-					const presenceController = strapi.plugin(pluginId).controller('presence');
-					const session = presenceController.consumeSessionToken(token);
-					
-					if (session) {
-						socket.user = {
-							id: session.userId,
-							username: `${session.user.firstname || ''} ${session.user.lastname || ''}`.trim() || `Admin ${session.userId}`,
-							email: session.user.email || `admin-${session.userId}`,
-							role: 'strapi-super-admin',
-							isAdmin: true,
-						};
-						socket.adminUser = session.user;
-						
-						// Register socket for tracking
-						presenceController.registerSocket(socket.id, token);
-						
-						strapi.log.info(`socket.io: Admin authenticated - ${socket.user.username} (ID: ${session.userId})`);
-					} else {
-						strapi.log.warn(`socket.io: Admin session token invalid or expired`);
-					}
-				} catch (err) {
-					strapi.log.warn(`socket.io: Admin session verification failed: ${err.message}`);
+			const isAdminToken = UUID_REGEX.test(token);
+			if (isAdminToken) {
+				if (socket.adminUser) {
+					const admin = socket.adminUser;
+					socket.user = {
+						id: admin.id,
+						username: `${admin.firstname || ''} ${admin.lastname || ''}`.trim() || `Admin ${admin.id}`,
+						email: admin.email || `admin-${admin.id}`,
+						role: 'strapi-super-admin',
+						isAdmin: true,
+					};
+					strapi.log.info(`socket.io: Admin connected - ${socket.user.username} (ID: ${admin.id})`);
+				} else {
+					strapi.log.warn('socket.io: Admin token present but handshake did not authenticate');
 				}
 			} else {
 				// Try users-permissions JWT
@@ -224,7 +287,7 @@ async function bootstrapIO({ strapi }) {
 
 	// Connection Handler
 	io.server.on('connection', (socket) => {
-		const clientIp = socket.handshake.address || 'unknown';
+		const clientIp = resolveClientIp(socket);
 		const username = socket.user?.username || 'anonymous';
 		
 		if (settings.monitoring?.enableConnectionLogging) {
@@ -284,13 +347,18 @@ async function bootstrapIO({ strapi }) {
 		});
 
 		socket.on('leave-room', (roomName, callback) => {
-			if (typeof roomName === 'string' && roomName.length > 0) {
-				socket.leave(roomName);
-				strapi.log.debug(`socket.io: Socket ${socket.id} left room: ${roomName}`);
-				if (callback) callback({ success: true, room: roomName });
-			} else {
+			if (typeof roomName !== 'string' || roomName.length === 0) {
 				if (callback) callback({ success: false, error: 'Invalid room name' });
+				return;
 			}
+			const sanitizedRoom = roomName.replace(/[^a-zA-Z0-9\-_:]/g, '');
+			if (sanitizedRoom !== roomName) {
+				if (callback) callback({ success: false, error: 'Room name contains invalid characters' });
+				return;
+			}
+			socket.leave(roomName);
+			strapi.log.debug(`socket.io: Socket ${socket.id} left room: ${roomName}`);
+			if (callback) callback({ success: true, room: roomName });
 		});
 
 		socket.on('get-rooms', (callback) => {
@@ -301,7 +369,7 @@ async function bootstrapIO({ strapi }) {
 		// ===== PRESENCE EVENTS =====
 		
 		// Join entity for presence tracking
-		socket.on('presence:join', async ({ uid, documentId }, callback) => {
+		socket.on('presence:join', safeHandler(async ({ uid, documentId }, callback) => {
 			if (settings.presence?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Presence is disabled' });
 				return;
@@ -314,10 +382,10 @@ async function bootstrapIO({ strapi }) {
 
 			const result = await presenceService.joinEntity(socket.id, uid, documentId);
 			if (callback) callback(result);
-		});
+		}));
 
 		// Leave entity presence
-		socket.on('presence:leave', async ({ uid, documentId }, callback) => {
+		socket.on('presence:leave', safeHandler(async ({ uid, documentId }, callback) => {
 			if (settings.presence?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Presence is disabled' });
 				return;
@@ -330,7 +398,7 @@ async function bootstrapIO({ strapi }) {
 
 			const result = await presenceService.leaveEntity(socket.id, uid, documentId);
 			if (callback) callback(result);
-		});
+		}));
 
 		// Presence heartbeat
 		socket.on('presence:heartbeat', (callback) => {
@@ -339,13 +407,15 @@ async function bootstrapIO({ strapi }) {
 		});
 
 		// Typing indicator
-		socket.on('presence:typing', ({ uid, documentId, fieldName }) => {
+		socket.on('presence:typing', safeHandler(({ uid, documentId, fieldName }) => {
 			if (settings.presence?.enabled === false) return;
+			if (!socket.user) return;
+			if (typeof fieldName !== 'string' || fieldName.length > 200) return;
 			presenceService.broadcastTyping(socket.id, uid, documentId, fieldName);
-		});
+		}));
 
 		// Check if entity is being edited
-		socket.on('presence:check', async ({ uid, documentId }, callback) => {
+		socket.on('presence:check', safeHandler(async ({ uid, documentId }, callback) => {
 			if (settings.presence?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Presence is disabled' });
 				return;
@@ -353,12 +423,12 @@ async function bootstrapIO({ strapi }) {
 
 			const editors = await presenceService.getEntityEditors(uid, documentId);
 			if (callback) callback({ success: true, editors, isBeingEdited: editors.length > 0 });
-		});
+		}));
 
 		// ===== LIVE PREVIEW EVENTS =====
 
 		// Subscribe to live preview updates
-		socket.on('preview:subscribe', async ({ uid, documentId }, callback) => {
+		socket.on('preview:subscribe', safeHandler(async ({ uid, documentId }, callback) => {
 			if (settings.livePreview?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Live preview is disabled' });
 				return;
@@ -369,12 +439,20 @@ async function bootstrapIO({ strapi }) {
 				return;
 			}
 
+			const userRole = socket.userRole || 'public';
+			const rolePerms = (settings.rolePermissions || {})[userRole] || {};
+			const ctPerms = rolePerms.contentTypes?.[uid];
+			if (!ctPerms && settings.security?.requireAuthentication) {
+				if (callback) callback({ success: false, error: 'Permission denied' });
+				return;
+			}
+
 			const result = await previewService.subscribe(socket.id, uid, documentId);
 			if (callback) callback(result);
-		});
+		}));
 
 		// Unsubscribe from live preview
-		socket.on('preview:unsubscribe', ({ uid, documentId }, callback) => {
+		socket.on('preview:unsubscribe', safeHandler(({ uid, documentId }, callback) => {
 			if (!uid || !documentId) {
 				if (callback) callback({ success: false, error: 'uid and documentId are required' });
 				return;
@@ -382,16 +460,20 @@ async function bootstrapIO({ strapi }) {
 
 			const result = previewService.unsubscribe(socket.id, uid, documentId);
 			if (callback) callback(result);
-		});
+		}));
 
 		// Field change for live preview (editor sends this)
-		socket.on('preview:field-change', ({ uid, documentId, fieldName, value }) => {
+		socket.on('preview:field-change', safeHandler(({ uid, documentId, fieldName, value }) => {
 			if (settings.livePreview?.enabled === false) return;
+			if (!socket.user) return;
+			if (typeof fieldName !== 'string' || fieldName.length > 200) return;
+			const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+			if (serialized && serialized.length > MAX_FIELD_VALUE_SIZE) return;
 			previewService.emitFieldChange(socket.id, uid, documentId, fieldName, value);
-		});
+		}));
 
 		// Entity Subscription (NEW - for entity-specific events)
-		socket.on('subscribe-entity', async ({ uid, id }, callback) => {
+		socket.on('subscribe-entity', safeHandler(async ({ uid, id }, callback) => {
 			// Check if entity subscriptions are enabled
 			if (settings.entitySubscriptions?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Entity subscriptions are disabled' });
@@ -494,9 +576,9 @@ async function bootstrapIO({ strapi }) {
 			
 			strapi.log.debug(`socket.io: Socket ${socket.id} subscribed to entity: ${entityRoomName}`);
 			if (callback) callback({ success: true, room: entityRoomName, uid, id });
-		});
+		}));
 
-		socket.on('unsubscribe-entity', ({ uid, id }, callback) => {
+		socket.on('unsubscribe-entity', safeHandler(({ uid, id }, callback) => {
 			// Check if entity subscriptions are enabled
 			if (settings.entitySubscriptions?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Entity subscriptions are disabled' });
@@ -524,14 +606,13 @@ async function bootstrapIO({ strapi }) {
 			
 			strapi.log.debug(`socket.io: Socket ${socket.id} unsubscribed from entity: ${entityRoomName}`);
 			if (callback) callback({ success: true, room: entityRoomName, uid, id });
-		});
+		}));
 
 		// Get Entity Subscriptions
 		socket.on('get-entity-subscriptions', (callback) => {
 			const rooms = Array.from(socket.rooms)
-				.filter((r) => r !== socket.id && r.includes(':'))
+				.filter((r) => r !== socket.id && /^(api|plugin)::/.test(r) && !r.startsWith('presence:') && !r.startsWith('preview:'))
 				.map((room) => {
-					// Split from last colon to handle uid with colons (e.g., plugin::name.model)
 					const lastColonIndex = room.lastIndexOf(':');
 					const uid = room.substring(0, lastColonIndex);
 					const id = room.substring(lastColonIndex + 1);
@@ -542,7 +623,7 @@ async function bootstrapIO({ strapi }) {
 		});
 
 		// Private Messages (with security)
-		socket.on('private-message', ({ to, message }, callback) => {
+		socket.on('private-message', safeHandler(({ to, message }, callback) => {
 			// Check if private rooms are enabled
 			if (settings.rooms?.enablePrivateRooms === false) {
 				strapi.log.warn(`socket.io: Private messages disabled for socket ${socket.id}`);
@@ -580,7 +661,7 @@ async function bootstrapIO({ strapi }) {
 
 			strapi.log.debug(`socket.io: Private message from ${socket.id} to ${to}`);
 			if (callback) callback({ success: true });
-		});
+		}));
 
 		// Disconnect Handler
 		socket.on('disconnect', async (reason) => {

@@ -18,4 +18,5 @@ module.exports = {
 	presence,
 	preview,
 	diff,
+	security: require('../src/services/security'),
 };

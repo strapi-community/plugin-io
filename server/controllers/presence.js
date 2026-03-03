@@ -19,6 +19,9 @@ const SESSION_TTL = 10 * 60 * 1000; // 10 minutes TTL
 const REFRESH_COOLDOWN = 3 * 1000; // 3 seconds between refreshes (allow multiple widgets)
 const CLEANUP_INTERVAL = 2 * 60 * 1000; // Cleanup every 2 minutes
 
+// Stored interval reference so destroy() can clear it
+let tokenCleanupInterval = null;
+
 /**
  * Hashes a token for secure storage (don't store plaintext tokens)
  * @param {string} token - The plaintext token
@@ -29,9 +32,9 @@ const hashToken = (token) => {
 };
 
 /**
- * Cleanup expired tokens periodically
+ * Runs expired-token cleanup once
  */
-setInterval(() => {
+const runTokenCleanup = () => {
   const now = Date.now();
   let cleaned = 0;
   
@@ -42,7 +45,6 @@ setInterval(() => {
     }
   }
   
-  // Also cleanup stale refresh throttle entries (older than 1 hour)
   for (const [userId, lastRefresh] of refreshThrottle.entries()) {
     if (now - lastRefresh > 60 * 60 * 1000) {
       refreshThrottle.delete(userId);
@@ -52,13 +54,39 @@ setInterval(() => {
   if (cleaned > 0) {
     console.log(`[plugin-io] [CLEANUP] Removed ${cleaned} expired session tokens`);
   }
-}, CLEANUP_INTERVAL);
+};
+
+/**
+ * Starts the periodic token cleanup interval
+ */
+const startTokenCleanup = () => {
+  if (!tokenCleanupInterval) {
+    tokenCleanupInterval = setInterval(runTokenCleanup, CLEANUP_INTERVAL);
+  }
+};
+
+/**
+ * Stops the periodic token cleanup interval
+ */
+const stopTokenCleanup = () => {
+  if (tokenCleanupInterval) {
+    clearInterval(tokenCleanupInterval);
+    tokenCleanupInterval = null;
+  }
+};
+
+// Interval is started lazily on first session creation, not at module load.
 
 /**
  * Presence Controller for Socket.IO Admin Sessions
  * Issues secure session tokens for admin users to connect to Socket.IO
  */
 module.exports = ({ strapi }) => ({
+  /**
+   * Stops the background token cleanup interval (called on plugin destroy)
+   */
+  stopTokenCleanup,
+
   /**
    * Creates a session token for admin users to connect to Socket.IO
    * Implements rate limiting and secure token storage
@@ -82,8 +110,9 @@ module.exports = ({ strapi }) => ({
       return ctx.tooManyRequests(`Please wait ${waitTime} seconds before requesting a new session`);
     }
 
+    startTokenCleanup();
+
     try {
-      // Generate a cryptographically secure random token
       const token = randomUUID();
       const tokenHash = hashToken(token);
       const expiresAt = now + SESSION_TTL;

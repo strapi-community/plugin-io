@@ -24,7 +24,20 @@ module.exports = ({ strapi }) => ({
 		const settingsService = strapi.plugin(pluginId).service('settings');
 		const { body } = ctx.request;
 
-		// Get old settings to compare
+		if (!body || typeof body !== 'object' || Array.isArray(body)) {
+			return ctx.badRequest('Request body must be a JSON object');
+		}
+
+		const ALLOWED_KEYS = [
+			'enabled', 'cors', 'connection', 'security', 'contentTypes', 'events',
+			'rooms', 'entitySubscriptions', 'rolePermissions', 'redis', 'namespaces',
+			'middleware', 'monitoring', 'presence', 'livePreview', 'fieldLevelChanges',
+		];
+		const unknownKeys = Object.keys(body).filter((k) => !ALLOWED_KEYS.includes(k));
+		if (unknownKeys.length > 0) {
+			return ctx.badRequest(`Unknown settings keys: ${unknownKeys.join(', ')}`);
+		}
+
 		const oldSettings = await settingsService.getSettings();
 		const updatedSettings = await settingsService.setSettings(body);
 
@@ -100,7 +113,8 @@ module.exports = ({ strapi }) => ({
 		const { eventName, data } = ctx.request.body;
 
 		try {
-			const result = monitoringService.sendTestEvent(eventName || 'test', data || {});
+			const safeName = (eventName || 'test').replace(/[^a-zA-Z0-9:._-]/g, '').substring(0, 50);
+		const result = monitoringService.sendTestEvent(safeName, data || {});
 			ctx.body = { data: result };
 		} catch (error) {
 			ctx.throw(500, error.message);

@@ -130,8 +130,10 @@ module.exports = ({ strapi }) => {
 		 */
 		getEventsPerSecond() {
 			const now = Date.now();
-			const elapsed = (now - eventStats.lastReset) / 1000;
-			return elapsed > 0 ? (eventStats.totalEvents / elapsed).toFixed(2) : 0;
+			const windowMs = 60_000;
+			const recentEvents = eventLog.filter((e) => now - e.timestamp < windowMs);
+			const elapsed = Math.min((now - eventStats.lastReset) / 1000, windowMs / 1000);
+			return elapsed > 0 ? Number((recentEvents.length / elapsed).toFixed(2)) : 0;
 		},
 
 		/**
@@ -155,14 +157,15 @@ module.exports = ({ strapi }) => {
 				throw new Error('Socket.IO not initialized');
 			}
 
+			const safeName = `test:${eventName.replace(/[^a-zA-Z0-9:._-]/g, '')}`;
 			const testData = {
 				...data,
 				timestamp: Date.now(),
 				test: true,
 			};
 
-			io.emit(eventName, testData);
-			this.logEvent('test', { eventName, data: testData });
+			io.emit(safeName, testData);
+			this.logEvent('test', { eventName: safeName, data: testData });
 
 			return {
 				success: true,

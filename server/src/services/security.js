@@ -28,11 +28,14 @@ module.exports = ({ strapi }) => {
 		}
 	}, 60 * 1000);
 
-	// Cleanup on shutdown
-	process.on('SIGTERM', () => clearInterval(cleanupInterval));
-	process.on('SIGINT', () => clearInterval(cleanupInterval));
-
 	return {
+		/**
+		 * Stops the background cleanup interval (called on plugin destroy)
+		 */
+		stopCleanupInterval() {
+			clearInterval(cleanupInterval);
+		},
+
 		/**
 		 * Check if request should be rate limited
 		 * @param {string} identifier - Unique identifier (IP, user ID, etc.)

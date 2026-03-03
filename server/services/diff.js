@@ -35,10 +35,11 @@ module.exports = ({ strapi }) => {
 	 * @param {*} b - Second value
 	 * @returns {boolean} True if equal
 	 */
-	const isEqual = (a, b) => {
+	const isEqual = (a, b, depth = 0) => {
 		if (a === b) return true;
 		if (a === null || b === null) return a === b;
 		if (typeof a !== typeof b) return false;
+		if (depth > 30) return JSON.stringify(a) === JSON.stringify(b);
 
 		if (a instanceof Date && b instanceof Date) {
 			return a.getTime() === b.getTime();
@@ -46,14 +47,14 @@ module.exports = ({ strapi }) => {
 
 		if (Array.isArray(a) && Array.isArray(b)) {
 			if (a.length !== b.length) return false;
-			return a.every((item, index) => isEqual(item, b[index]));
+			return a.every((item, index) => isEqual(item, b[index], depth + 1));
 		}
 
 		if (isPlainObject(a) && isPlainObject(b)) {
 			const keysA = Object.keys(a);
 			const keysB = Object.keys(b);
 			if (keysA.length !== keysB.length) return false;
-			return keysA.every((key) => isEqual(a[key], b[key]));
+			return keysA.every((key) => isEqual(a[key], b[key], depth + 1));
 		}
 
 		return false;

@@ -64,7 +64,7 @@ class SocketIO {
 						const data = transformService.response({ data: sanitizedData, schema });
 						
 						// Emit to role-based room (existing behavior)
-						this._socket.to(roomName.replace(' ', '-')).emit(eventName, { ...data });
+						this._socket.to(roomName.replaceAll(' ', '-')).emit(eventName, { ...data });
 						
 						// Also emit to entity-specific room if ID exists
 						if (entityRoomName) {

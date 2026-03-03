@@ -138,6 +138,30 @@ module.exports = ({ strapi }) => {
 		},
 	});
 
+	/**
+	 * Deep merges source into target, preserving nested keys
+	 * @param {object} target - Base object
+	 * @param {object} source - Object with overrides
+	 * @returns {object} Merged result
+	 */
+	const deepMerge = (target, source) => {
+		const result = { ...target };
+		for (const key of Object.keys(source)) {
+			const targetVal = target[key];
+			const sourceVal = source[key];
+			if (
+				targetVal && sourceVal &&
+				typeof targetVal === 'object' && !Array.isArray(targetVal) &&
+				typeof sourceVal === 'object' && !Array.isArray(sourceVal)
+			) {
+				result[key] = deepMerge(targetVal, sourceVal);
+			} else {
+				result[key] = sourceVal;
+			}
+		}
+		return result;
+	};
+
 	return {
 		/**
 		 * Get current settings (merged with defaults)
@@ -164,10 +188,7 @@ module.exports = ({ strapi }) => {
 			const pluginStore = getPluginStore();
 			const currentSettings = await this.getSettings();
 
-			const updatedSettings = {
-				...currentSettings,
-				...newSettings,
-			};
+			const updatedSettings = deepMerge(currentSettings, newSettings);
 
 			await pluginStore.set({
 				key: 'settings',

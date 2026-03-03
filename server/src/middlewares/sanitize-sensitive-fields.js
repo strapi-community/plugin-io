@@ -7,6 +7,7 @@
 
 const SENSITIVE_FIELDS = [
 	'password',
+	'passwordHash',
 	'resetPasswordToken',
 	'registrationToken',
 	'confirmationToken',
@@ -14,35 +15,36 @@ const SENSITIVE_FIELDS = [
 	'secretKey',
 	'apiKey',
 	'secret',
-	'hash',
 ];
+
+const MAX_SANITIZE_DEPTH = 20;
 
 /**
  * Recursively remove sensitive fields from an object
  * @param {*} obj - Object to sanitize
  * @returns {*} Sanitized object
  */
-function deepSanitize(obj) {
+function deepSanitize(obj, depth = 0) {
 	if (!obj || typeof obj !== 'object') {
 		return obj;
 	}
 
-	// Handle arrays
-	if (Array.isArray(obj)) {
-		return obj.map(item => deepSanitize(item));
+	if (depth >= MAX_SANITIZE_DEPTH) {
+		return obj;
 	}
 
-	// Handle objects
+	if (Array.isArray(obj)) {
+		return obj.map(item => deepSanitize(item, depth + 1));
+	}
+
 	const sanitized = {};
 	for (const [key, value] of Object.entries(obj)) {
-		// Skip sensitive fields
 		if (SENSITIVE_FIELDS.includes(key)) {
 			continue;
 		}
 
-		// Recursively sanitize nested objects/arrays
 		if (value && typeof value === 'object') {
-			sanitized[key] = deepSanitize(value);
+			sanitized[key] = deepSanitize(value, depth + 1);
 		} else {
 			sanitized[key] = value;
 		}
