@@ -17,6 +17,64 @@ function getTransactionCtx() {
 const { pluginId } = require('../utils/pluginId');
 
 /**
+ * Builds a populate config from a content type's schema, selecting only
+ * relation, media, component and dynamic-zone attributes (avoids populate: '*')
+ * @param {object} strapi - Strapi instance
+ * @param {string} uid - Content type UID
+ * @returns {object} Populate config for Document Service queries
+ */
+function buildPopulateFromSchema(strapi, uid) {
+	const contentType = strapi.contentTypes[uid];
+	if (!contentType?.attributes) return {};
+
+	const populate = {};
+	for (const [key, attr] of Object.entries(contentType.attributes)) {
+		if (
+			attr.type === 'relation' ||
+			attr.type === 'media' ||
+			attr.type === 'component' ||
+			attr.type === 'dynamiczone'
+		) {
+			populate[key] = true;
+		}
+	}
+	return populate;
+}
+
+/**
+ * Re-fetches an entity with populated relations after a lifecycle event.
+ * Falls back to the raw event.result when documentId is missing or fetch fails.
+ * @param {object} strapi - Strapi instance
+ * @param {string} uid - Content type UID
+ * @param {object} rawResult - The raw event.result from the lifecycle hook
+ * @returns {Promise<object>} Entity data with relations populated
+ */
+async function fetchWithRelations(strapi, uid, rawResult) {
+	const documentId = rawResult?.documentId;
+	if (!documentId) return rawResult;
+
+	try {
+		const populate = buildPopulateFromSchema(strapi, uid);
+		if (Object.keys(populate).length === 0) return rawResult;
+
+		const fetched = await strapi.documents(uid).findOne({ documentId, populate });
+		return fetched || rawResult;
+	} catch (err) {
+		strapi.log.debug(`socket.io: Could not re-fetch ${uid} with relations: ${err.message}`);
+		return rawResult;
+	}
+}
+
+/**
+ * Checks whether relation population is enabled in plugin settings
+ * @param {object} strapi - Strapi instance
+ * @returns {boolean} True when includeRelations is enabled
+ */
+function shouldPopulateRelations(strapi) {
+	return strapi.$ioSettings?.events?.includeRelations === true;
+}
+
+/**
  * Run callback after the current transaction commits (if any).
  * Falls back to a plain setTimeout when no transaction is active.
  */
@@ -87,22 +145,20 @@ async function bootstrapLifecycles({ strapi }) {
 		// CREATE - check dynamically if enabled
 		subscriber.afterCreate = async (event) => {
 			if (!isActionEnabled(strapi, uid, 'create')) return;
-			// Skip if no result data
 			if (!event.result) {
 				strapi.log.debug(`socket.io: No result data in afterCreate for ${uid}`);
 				return;
 			}
-			// Clone data to avoid transaction context issues
 			try {
-				const eventData = {
-					event: 'create',
-					schema: event.model,
-					data: JSON.parse(JSON.stringify(event.result)), // Deep clone
-				};
-				// Schedule emission after transaction commit
-				scheduleAfterTransaction(() => {
+				const rawData = JSON.parse(JSON.stringify(event.result));
+				const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
+
+				scheduleAfterTransaction(async () => {
 					try {
-						strapi.$io.emit(eventData);
+						const data = shouldPopulateRelations(strapi)
+							? await fetchWithRelations(strapi, uid, rawData)
+							: rawData;
+						strapi.$io.emit({ event: 'create', schema: modelInfo, data });
 					} catch (error) {
 						strapi.log.error(`socket.io: Could not emit create event for ${uid}:`, error.message);
 					}
@@ -115,13 +171,13 @@ async function bootstrapLifecycles({ strapi }) {
 			if (!isActionEnabled(strapi, uid, 'create')) return;
 			const query = buildEventQuery({ event });
 			if (query.filters) {
-				// Clone query to avoid transaction context issues
 				const clonedQuery = JSON.parse(JSON.stringify(query));
+				if (shouldPopulateRelations(strapi)) {
+					clonedQuery.populate = buildPopulateFromSchema(strapi, uid);
+				}
 				const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
-				// Schedule query after transaction commit
 				scheduleAfterTransaction(async () => {
 					try {
-						// Use Document Service API (Strapi v5)
 						const records = await strapi.documents(uid).findMany(clonedQuery);
 						records.forEach((r) => {
 							strapi.$io.emit({
@@ -142,17 +198,18 @@ async function bootstrapLifecycles({ strapi }) {
 		subscriber.beforeUpdate = async (event) => {
 			if (!isActionEnabled(strapi, uid, 'update')) return;
 			
-			// Only fetch previous data if field-level changes are enabled
 			const fieldLevelEnabled = strapi.$ioSettings?.fieldLevelChanges?.enabled !== false;
 			if (!fieldLevelEnabled) return;
 
 			try {
-				// Get the documentId from params
 				const documentId = event.params.where?.documentId || event.params.documentId;
 				if (!documentId) return;
 
-				// Fetch current state before update
-				const existing = await strapi.documents(uid).findOne({ documentId });
+				const query = { documentId };
+				if (shouldPopulateRelations(strapi)) {
+					query.populate = buildPopulateFromSchema(strapi, uid);
+				}
+				const existing = await strapi.documents(uid).findOne(query);
 				if (existing) {
 					if (!event.state.io) event.state.io = {};
 					event.state.io.previousData = JSON.parse(JSON.stringify(existing));
@@ -165,20 +222,20 @@ async function bootstrapLifecycles({ strapi }) {
 		subscriber.afterUpdate = async (event) => {
 			if (!isActionEnabled(strapi, uid, 'update')) return;
 			
-			// Clone data to avoid transaction context issues
-			const newData = JSON.parse(JSON.stringify(event.result));
+			const rawData = JSON.parse(JSON.stringify(event.result));
 			const previousData = event.state.io?.previousData || null;
 			const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
 			
-			// Schedule emission after transaction commit
-			scheduleAfterTransaction(() => {
+			scheduleAfterTransaction(async () => {
 				try {
-					// Get diff service
+					const newData = shouldPopulateRelations(strapi)
+						? await fetchWithRelations(strapi, uid, rawData)
+						: rawData;
+
 					const diffService = strapi.plugin(pluginId).service('diff');
 					const previewService = strapi.plugin(pluginId).service('preview');
 					const fieldLevelEnabled = strapi.$ioSettings?.fieldLevelChanges?.enabled !== false;
 
-					// Calculate diff if enabled and we have previous data
 					let eventPayload;
 					if (fieldLevelEnabled && previousData && diffService) {
 						eventPayload = diffService.createEventPayload('update', modelInfo, previousData, newData);
@@ -190,10 +247,8 @@ async function bootstrapLifecycles({ strapi }) {
 						};
 					}
 
-					// Emit main event
 					strapi.$io.emit(eventPayload);
 
-					// Also emit to preview subscribers
 					if (previewService && newData.documentId) {
 						const diff = fieldLevelEnabled ? eventPayload.diff : null;
 						previewService.emitDraftChange(uid, newData.documentId, newData, diff);
@@ -214,31 +269,30 @@ async function bootstrapLifecycles({ strapi }) {
 		};
 		subscriber.afterUpdateMany = async (event) => {
 			if (!isActionEnabled(strapi, uid, 'update')) return;
-			// Fetch the updated records using params from beforeUpdateMany
 			const params = event.state.io?.params;
 			if (!params || !params.where) return;
 			
-			// Clone params to avoid transaction context issues
 			const clonedWhere = JSON.parse(JSON.stringify(params.where));
 			const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
-		// Schedule query after transaction commit
-		scheduleAfterTransaction(async () => {
+			const query = { filters: clonedWhere };
+			if (shouldPopulateRelations(strapi)) {
+				query.populate = buildPopulateFromSchema(strapi, uid);
+			}
+
+			scheduleAfterTransaction(async () => {
 				try {
-			// Use Document Service API (Strapi v5)
-			const records = await strapi.documents(uid).findMany({
-						filters: clonedWhere,
-			});
-			records.forEach((r) => {
-				strapi.$io.emit({
-					event: 'update',
+					const records = await strapi.documents(uid).findMany(query);
+					records.forEach((r) => {
+						strapi.$io.emit({
+							event: 'update',
 							schema: { singularName: modelInfo.singularName, uid: modelInfo.uid },
-					data: r,
-				});
-			});
-			} catch (error) {
+							data: r,
+						});
+					});
+				} catch (error) {
 					strapi.log.debug(`socket.io: Could not fetch records in afterUpdateMany for ${uid}:`, error.message);
 				}
-		}, 50);
+			}, 50);
 		};
 
 		// DELETE - check dynamically if enabled
