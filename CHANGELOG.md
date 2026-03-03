@@ -1,3 +1,10 @@
+## [5.3.3](https://github.com/strapi-community/plugin-io/compare/5.3.2...5.3.3) (2026-03-03)
+
+
+### Bug Fixes
+
+* **security:** patch 25 vulnerabilities across Socket.IO plugin ([0fa0d78](https://github.com/strapi-community/plugin-io/commit/0fa0d787f8a1d89dbecd21df4b26645ead09fbe3))
+
 ## [5.3.2](https://github.com/strapi-community/plugin-io/compare/5.3.1...5.3.2) (2026-02-02)
 
 
