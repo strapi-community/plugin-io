@@ -1,3 +1,10 @@
+## [5.3.4](https://github.com/strapi-community/plugin-io/compare/5.3.3...5.3.4) (2026-03-03)
+
+
+### Bug Fixes
+
+* **standards:** enforce coding rules and add Zod validation ([632c6e1](https://github.com/strapi-community/plugin-io/commit/632c6e18406685d52adf78d71448e6badc11bbef))
+
 ## [5.3.3](https://github.com/strapi-community/plugin-io/compare/5.3.2...5.3.3) (2026-03-03)
 
 
