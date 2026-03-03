@@ -1,3 +1,10 @@
+## [5.3.6](https://github.com/strapi-community/plugin-io/compare/5.3.5...5.3.6) (2026-03-03)
+
+
+### Bug Fixes
+
+* **security:** require auth for presence events and fix zod 3.25 interop ([a880763](https://github.com/strapi-community/plugin-io/commit/a8807630ca843a80ea3b826a43b676819f9aeebe))
+
 ## [5.3.5](https://github.com/strapi-community/plugin-io/compare/5.3.4...5.3.5) (2026-03-03)
 
 
