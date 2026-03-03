@@ -1,6 +1,6 @@
 'use strict';
 
-const { z } = require('zod');
+const z = require('zod');
 
 const Event = z.object({
 	name: z.string(),

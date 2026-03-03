@@ -2,7 +2,7 @@
 
 const { pluginId } = require('../utils/pluginId');
 const { errors } = require('@strapi/utils');
-const { z } = require('zod');
+const z = require('zod');
 
 const settingsSchema = z.object({
 	enabled: z.boolean().optional(),

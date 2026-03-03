@@ -1,23 +1,4 @@
-"use strict";
-const React = require("react");
-function _interopNamespace(e) {
-  if (e && e.__esModule) return e;
-  const n = Object.create(null, { [Symbol.toStringTag]: { value: "Module" } });
-  if (e) {
-    for (const k in e) {
-      if (k !== "default") {
-        const d = Object.getOwnPropertyDescriptor(e, k);
-        Object.defineProperty(n, k, d.get ? d : {
-          enumerable: true,
-          get: () => e[k]
-        });
-      }
-    }
-  }
-  n.default = e;
-  return Object.freeze(n);
-}
-const React__namespace = /* @__PURE__ */ _interopNamespace(React);
+import * as React from "react";
 var __assign = function() {
   __assign = Object.assign || function __assign2(t) {
     for (var s, i = 1, n = arguments.length; i < n; i++) {
@@ -39,10 +20,162 @@ function __rest(s, e) {
     }
   return t;
 }
+function __spreadArray(to, from, pack) {
+  if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+    if (ar || !(i in from)) {
+      if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+      ar[i] = from[i];
+    }
+  }
+  return to.concat(ar || Array.prototype.slice.call(from));
+}
 typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
   var e = new Error(message);
   return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
 };
+function memoize(fn, options) {
+  var cache = options && options.cache ? options.cache : cacheDefault;
+  var serializer = options && options.serializer ? options.serializer : serializerDefault;
+  var strategy = options && options.strategy ? options.strategy : strategyDefault;
+  return strategy(fn, {
+    cache,
+    serializer
+  });
+}
+function isPrimitive(value) {
+  return value == null || typeof value === "number" || typeof value === "boolean";
+}
+function monadic(fn, cache, serializer, arg) {
+  var cacheKey = isPrimitive(arg) ? arg : serializer(arg);
+  var computedValue = cache.get(cacheKey);
+  if (typeof computedValue === "undefined") {
+    computedValue = fn.call(this, arg);
+    cache.set(cacheKey, computedValue);
+  }
+  return computedValue;
+}
+function variadic(fn, cache, serializer) {
+  var args = Array.prototype.slice.call(arguments, 3);
+  var cacheKey = serializer(args);
+  var computedValue = cache.get(cacheKey);
+  if (typeof computedValue === "undefined") {
+    computedValue = fn.apply(this, args);
+    cache.set(cacheKey, computedValue);
+  }
+  return computedValue;
+}
+function assemble(fn, context, strategy, cache, serialize) {
+  return strategy.bind(context, fn, cache, serialize);
+}
+function strategyDefault(fn, options) {
+  var strategy = fn.length === 1 ? monadic : variadic;
+  return assemble(fn, this, strategy, options.cache.create(), options.serializer);
+}
+function strategyVariadic(fn, options) {
+  return assemble(fn, this, variadic, options.cache.create(), options.serializer);
+}
+var serializerDefault = function() {
+  return JSON.stringify(arguments);
+};
+function ObjectWithoutPrototypeCache() {
+  this.cache = /* @__PURE__ */ Object.create(null);
+}
+ObjectWithoutPrototypeCache.prototype.get = function(key) {
+  return this.cache[key];
+};
+ObjectWithoutPrototypeCache.prototype.set = function(key, value) {
+  this.cache[key] = value;
+};
+var cacheDefault = {
+  create: function create() {
+    return new ObjectWithoutPrototypeCache();
+  }
+};
+var strategies = {
+  variadic: strategyVariadic
+};
+function invariant(condition, message, Err) {
+  if (Err === void 0) {
+    Err = Error;
+  }
+  if (!condition) {
+    throw new Err(message);
+  }
+}
+memoize(function() {
+  var _a;
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  return new ((_a = Intl.NumberFormat).bind.apply(_a, __spreadArray([void 0], args, false)))();
+}, {
+  strategy: strategies.variadic
+});
+memoize(function() {
+  var _a;
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  return new ((_a = Intl.DateTimeFormat).bind.apply(_a, __spreadArray([void 0], args, false)))();
+}, {
+  strategy: strategies.variadic
+});
+memoize(function() {
+  var _a;
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  return new ((_a = Intl.PluralRules).bind.apply(_a, __spreadArray([void 0], args, false)))();
+}, {
+  strategy: strategies.variadic
+});
+memoize(function() {
+  var _a;
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  return new ((_a = Intl.Locale).bind.apply(_a, __spreadArray([void 0], args, false)))();
+}, {
+  strategy: strategies.variadic
+});
+memoize(function() {
+  var _a;
+  var args = [];
+  for (var _i = 0; _i < arguments.length; _i++) {
+    args[_i] = arguments[_i];
+  }
+  return new ((_a = Intl.ListFormat).bind.apply(_a, __spreadArray([void 0], args, false)))();
+}, {
+  strategy: strategies.variadic
+});
+var defaultErrorHandler = function(error) {
+  if (process.env.NODE_ENV !== "production") {
+    console.error(error);
+  }
+};
+var defaultWarnHandler = function(warning) {
+  if (process.env.NODE_ENV !== "production") {
+    console.warn(warning);
+  }
+};
+var DEFAULT_INTL_CONFIG = {
+  formats: {},
+  messages: {},
+  timeZone: void 0,
+  defaultLocale: "en",
+  defaultFormats: {},
+  fallbackOnEmptyString: true,
+  onError: defaultErrorHandler,
+  onWarn: defaultWarnHandler
+};
+function invariantIntlContext(intl) {
+  invariant(intl, "[React Intl] Could not find required `intl` object. <IntlProvider> needs to exist in the component ancestry.");
+}
+__assign(__assign({}, DEFAULT_INTL_CONFIG), { textComponent: React.Fragment });
 var reactIs$1 = { exports: {} };
 var reactIs_production_min = {};
 /** @license React v16.13.1
@@ -334,44 +467,12 @@ var MEMO_STATICS = {
 var TYPE_STATICS = {};
 TYPE_STATICS[reactIs.ForwardRef] = FORWARD_REF_STATICS;
 TYPE_STATICS[reactIs.Memo] = MEMO_STATICS;
-function invariant(condition, message, Err) {
-  if (Err === void 0) {
-    Err = Error;
-  }
-  if (!condition) {
-    throw new Err(message);
-  }
-}
-var defaultErrorHandler = function(error) {
-  if (process.env.NODE_ENV !== "production") {
-    console.error(error);
-  }
-};
-var defaultWarnHandler = function(warning) {
-  if (process.env.NODE_ENV !== "production") {
-    console.warn(warning);
-  }
-};
-var DEFAULT_INTL_CONFIG = {
-  formats: {},
-  messages: {},
-  timeZone: void 0,
-  defaultLocale: "en",
-  defaultFormats: {},
-  fallbackOnEmptyString: true,
-  onError: defaultErrorHandler,
-  onWarn: defaultWarnHandler
-};
-function invariantIntlContext(intl) {
-  invariant(intl, "[React Intl] Could not find required `intl` object. <IntlProvider> needs to exist in the component ancestry.");
-}
-__assign(__assign({}, DEFAULT_INTL_CONFIG), { textComponent: React__namespace.Fragment });
-var IntlContext = typeof window !== "undefined" && !window.__REACT_INTL_BYPASS_GLOBAL_CONTEXT__ ? window.__REACT_INTL_CONTEXT__ || (window.__REACT_INTL_CONTEXT__ = React__namespace.createContext(null)) : React__namespace.createContext(null);
+var IntlContext = typeof window !== "undefined" && !window.__REACT_INTL_BYPASS_GLOBAL_CONTEXT__ ? window.__REACT_INTL_CONTEXT__ || (window.__REACT_INTL_CONTEXT__ = React.createContext(null)) : React.createContext(null);
 IntlContext.Consumer;
 IntlContext.Provider;
 var Context = IntlContext;
 function useIntl() {
-  var intl = React__namespace.useContext(Context);
+  var intl = React.useContext(Context);
   invariantIntlContext(intl);
   return intl;
 }
@@ -412,8 +513,8 @@ function createFormattedComponent(name) {
     if (typeof children === "function") {
       return children(formattedValue);
     }
-    var Text = intl.textComponent || React__namespace.Fragment;
-    return React__namespace.createElement(Text, null, formattedValue);
+    var Text = intl.textComponent || React.Fragment;
+    return React.createElement(Text, null, formattedValue);
   };
   Component.displayName = DisplayName[name];
   return Component;
@@ -425,4 +526,6 @@ createFormattedComponent("formatList");
 createFormattedComponent("formatDisplayName");
 createFormattedDateTimePartsComponent("formatDate");
 createFormattedDateTimePartsComponent("formatTime");
-exports.useIntl = useIntl;
+export {
+  useIntl as u
+};

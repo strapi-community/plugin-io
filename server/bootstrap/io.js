@@ -374,10 +374,15 @@ async function bootstrapIO({ strapi }) {
 
 		// ===== PRESENCE EVENTS =====
 		
-		// Join entity for presence tracking
+		// Join entity for presence tracking (requires authentication)
 		socket.on('presence:join', safeHandler(async ({ uid, documentId }, callback) => {
 			if (settings.presence?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Presence is disabled' });
+				return;
+			}
+
+			if (!socket.user) {
+				if (callback) callback({ success: false, error: 'Authentication required for presence' });
 				return;
 			}
 
@@ -390,10 +395,15 @@ async function bootstrapIO({ strapi }) {
 			if (callback) callback(result);
 		}));
 
-		// Leave entity presence
+		// Leave entity presence (requires authentication)
 		socket.on('presence:leave', safeHandler(async ({ uid, documentId }, callback) => {
 			if (settings.presence?.enabled === false) {
 				if (callback) callback({ success: false, error: 'Presence is disabled' });
+				return;
+			}
+
+			if (!socket.user) {
+				if (callback) callback({ success: false, error: 'Authentication required for presence' });
 				return;
 			}
 
@@ -406,8 +416,12 @@ async function bootstrapIO({ strapi }) {
 			if (callback) callback(result);
 		}));
 
-		// Presence heartbeat
+		// Presence heartbeat (requires authentication)
 		socket.on('presence:heartbeat', (callback) => {
+			if (!socket.user) {
+				if (callback) callback({ success: false, error: 'Authentication required for presence' });
+				return;
+			}
 			const result = presenceService.heartbeat(socket.id);
 			if (callback) callback(result);
 		});
