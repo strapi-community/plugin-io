@@ -1,3 +1,10 @@
+## [5.3.5](https://github.com/strapi-community/plugin-io/compare/5.3.4...5.3.5) (2026-03-03)
+
+
+### Bug Fixes
+
+* **lifecycle:** populate relations in emitted events ([#82](https://github.com/strapi-community/plugin-io/issues/82)) ([dcdfc9f](https://github.com/strapi-community/plugin-io/commit/dcdfc9f8c901af6c7a60e6c35b52431f1b00242b))
+
 ## [5.3.4](https://github.com/strapi-community/plugin-io/compare/5.3.3...5.3.4) (2026-03-03)
 
 
