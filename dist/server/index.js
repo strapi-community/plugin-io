@@ -17417,12 +17417,12 @@ function requireWhich() {
   which.sync = whichSync;
   return which_1;
 }
-var pathKey$1 = { exports: {} };
-var hasRequiredPathKey$1;
-function requirePathKey$1() {
-  if (hasRequiredPathKey$1) return pathKey$1.exports;
-  hasRequiredPathKey$1 = 1;
-  const pathKey2 = (options = {}) => {
+var pathKey = { exports: {} };
+var hasRequiredPathKey;
+function requirePathKey() {
+  if (hasRequiredPathKey) return pathKey.exports;
+  hasRequiredPathKey = 1;
+  const pathKey$1 = (options = {}) => {
     const environment = options.env || process.env;
     const platform = options.platform || process.platform;
     if (platform !== "win32") {
@@ -17430,9 +17430,9 @@ function requirePathKey$1() {
     }
     return Object.keys(environment).reverse().find((key) => key.toUpperCase() === "PATH") || "Path";
   };
-  pathKey$1.exports = pathKey2;
-  pathKey$1.exports.default = pathKey2;
-  return pathKey$1.exports;
+  pathKey.exports = pathKey$1;
+  pathKey.exports.default = pathKey$1;
+  return pathKey.exports;
 }
 var resolveCommand_1;
 var hasRequiredResolveCommand;
@@ -17441,7 +17441,7 @@ function requireResolveCommand() {
   hasRequiredResolveCommand = 1;
   const path = require$$0__default$3.default;
   const which = requireWhich();
-  const getPathKey = requirePathKey$1();
+  const getPathKey = requirePathKey();
   function resolveCommandAttempt(parsed, withoutPathExt) {
     const env2 = parsed.options.env || process.env;
     const cwd = process.cwd();
@@ -17708,23 +17708,6 @@ function requireStripFinalNewline() {
   return stripFinalNewline;
 }
 var npmRunPath = { exports: {} };
-var pathKey = { exports: {} };
-var hasRequiredPathKey;
-function requirePathKey() {
-  if (hasRequiredPathKey) return pathKey.exports;
-  hasRequiredPathKey = 1;
-  const pathKey$12 = (options = {}) => {
-    const environment = options.env || process.env;
-    const platform = options.platform || process.platform;
-    if (platform !== "win32") {
-      return "PATH";
-    }
-    return Object.keys(environment).reverse().find((key) => key.toUpperCase() === "PATH") || "Path";
-  };
-  pathKey.exports = pathKey$12;
-  pathKey.exports.default = pathKey$12;
-  return pathKey.exports;
-}
 npmRunPath.exports;
 var hasRequiredNpmRunPath;
 function requireNpmRunPath() {
@@ -27801,9 +27784,8 @@ const settings$1 = ({ strapi: strapi2 }) => {
         return;
       }
       const sockets = await io.server.fetchSockets();
-      const rooms = [...io.server.adapter.rooms.keys()].filter(
-        (r) => !sockets.find((s) => s.id === r)
-      );
+      const roomMap = io.server.adapter?.rooms;
+      const rooms = roomMap ? [...roomMap.keys()].filter((r) => !sockets.find((s) => s.id === r)) : [];
       ctx.body = {
         data: {
           connections: {

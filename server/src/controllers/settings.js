@@ -143,9 +143,10 @@ export default ({ strapi }) => {
       }
 
       const sockets = await io.server.fetchSockets();
-      const rooms = [...io.server.adapter.rooms.keys()].filter(
-        (r) => !sockets.find((s) => s.id === r)
-      );
+      const roomMap = io.server.adapter?.rooms;
+      const rooms = roomMap
+        ? [...roomMap.keys()].filter((r) => !sockets.find((s) => s.id === r))
+        : [];
 
       ctx.body = {
         data: {
