@@ -56,7 +56,7 @@ export default ({ strapi }) => {
 	 * @returns {string[]} Combined list of default and custom sensitive fields
 	 */
 	function getSensitiveFields() {
-		const customFields = strapi.config.get('plugin.io.sensitiveFields', []);
+		const customFields = strapi.config.get('plugin::io.sensitiveFields', []);
 		return [...DEFAULT_SENSITIVE_FIELDS, ...customFields];
 	}
 

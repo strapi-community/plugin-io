@@ -93,7 +93,7 @@ async function fetchWithPopulate(strapi, uid, documentId, populateConfig) {
  * @param {object} params.strapi - Strapi instance
  */
 async function bootstrapLifecycles({ strapi }) {
-	strapi.config.get('plugin.io.contentTypes', []).forEach((ct) => {
+	strapi.config.get('plugin::io.contentTypes', []).forEach((ct) => {
 		const uid = ct.uid ? ct.uid : ct;
 		const populateConfig = ct.populate;
 		const hasPopulate = populateConfig !== undefined;

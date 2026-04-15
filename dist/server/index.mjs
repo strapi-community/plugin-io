@@ -72,7 +72,7 @@ const API_TOKEN_TYPE = {
 class SocketIO {
   constructor(options) {
     this._socket = new Server(strapi.server.httpServer, options);
-    const { hooks } = strapi.config.get(`plugin.${pluginId}`);
+    const { hooks } = strapi.config.get(`plugin::${pluginId}`);
     hooks.init?.({ strapi, $io: this });
     this._socket.use(handshake);
   }
@@ -194,7 +194,7 @@ const sanitizeSensitiveFields = ({ strapi: strapi2 }) => {
   strapi2.log.info("socket.io: Sensitive fields sanitization middleware active");
 };
 async function bootstrapIO({ strapi: strapi2 }) {
-  const settings2 = strapi2.config.get(`plugin.${pluginId}`);
+  const settings2 = strapi2.config.get(`plugin::${pluginId}`);
   const io = new SocketIO(settings2.socket.serverOptions);
   strapi2.$io = io;
   sanitizeSensitiveFields({ strapi: strapi2 });
@@ -266,7 +266,7 @@ async function fetchWithPopulate(strapi2, uid, documentId, populateConfig) {
   }
 }
 async function bootstrapLifecycles({ strapi: strapi2 }) {
-  strapi2.config.get("plugin.io.contentTypes", []).forEach((ct) => {
+  strapi2.config.get("plugin::io.contentTypes", []).forEach((ct) => {
     const uid = ct.uid ? ct.uid : ct;
     const populateConfig = ct.populate;
     const hasPopulate = populateConfig !== void 0;
@@ -32121,7 +32121,7 @@ function removeSensitiveFields(data, sensitiveFields) {
 }
 const sanitize = ({ strapi: strapi2 }) => {
   function getSensitiveFields() {
-    const customFields = strapi2.config.get("plugin.io.sensitiveFields", []);
+    const customFields = strapi2.config.get("plugin::io.sensitiveFields", []);
     return [...DEFAULT_SENSITIVE_FIELDS, ...customFields];
   }
   async function output({ schema: schema2, data, options }) {
