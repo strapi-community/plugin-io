@@ -1,3 +1,10 @@
+## [5.3.7](https://github.com/strapi-community/plugin-io/compare/5.3.6...5.3.7) (2026-04-15)
+
+
+### Bug Fixes
+
+* **transform:** resolve full content-type schema to prevent crash ([#110](https://github.com/strapi-community/plugin-io/issues/110)) ([cd5deff](https://github.com/strapi-community/plugin-io/commit/cd5deff0ada6ac6d607d5b46abb8db9b6ecc97c5))
+
 ## [5.3.6](https://github.com/strapi-community/plugin-io/compare/5.3.5...5.3.6) (2026-03-03)
 
 
