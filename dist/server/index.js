@@ -28112,6 +28112,7 @@ const settings$1 = ({ strapi: strapi2 }) => {
         return;
       }
       const sockets = await io.server.fetchSockets();
+      const now = Date.now();
       const users = [];
       const seen = /* @__PURE__ */ new Set();
       for (const s of sockets) {
@@ -28119,20 +28120,28 @@ const settings$1 = ({ strapi: strapi2 }) => {
         const key = user?.id ? `${user.id}` : s.id;
         if (seen.has(key)) continue;
         seen.add(key);
+        const connectedAt = s.handshake?.time ? new Date(s.handshake.time).getTime() : now;
+        const isAdmin = !!(user?.role === "Super Admin" || user?.role?.name === "Super Admin");
         users.push({
-          id: user?.id || null,
           socketId: s.id,
-          username: user?.username || user?.firstname || "Anonymous",
-          email: user?.email || null,
-          role: user?.role?.name || user?.role || null,
-          connectedAt: s.handshake?.time || null
+          user: {
+            id: user?.id || null,
+            firstname: user?.firstname || null,
+            lastname: user?.lastname || null,
+            username: user?.username || user?.firstname || "Anonymous",
+            email: user?.email || null,
+            isAdmin
+          },
+          onlineFor: now - connectedAt,
+          isEditing: !!s.data?.editing?.length,
+          editingEntities: s.data?.editing || []
         });
       }
       const counts = {
         total: users.length,
-        admin: users.filter((u) => u.role === "admin" || u.role === "Super Admin").length,
-        authenticated: users.filter((u) => u.id !== null).length,
-        anonymous: users.filter((u) => u.id === null).length
+        admin: users.filter((u) => u.user.isAdmin).length,
+        authenticated: users.filter((u) => u.user.id !== null).length,
+        anonymous: users.filter((u) => u.user.id === null).length
       };
       ctx.body = { data: { users, counts } };
     }

@@ -213,6 +213,7 @@ const FooterLink = styled.a`
  * Gets initials from user object
  */
 const getInitials = (user) => {
+  if (!user) return '?';
   const first = (user.firstname?.[0] || user.username?.[0] || user.email?.[0] || '?').toUpperCase();
   const last = (user.lastname?.[0] || '').toUpperCase();
   return `${first}${last}`.trim() || '?';
@@ -222,6 +223,7 @@ const getInitials = (user) => {
  * Gets display name from user object
  */
 const getDisplayName = (user) => {
+  if (!user) return 'Unknown';
   if (user.firstname) {
     return `${user.firstname} ${user.lastname || ''}`.trim();
   }
