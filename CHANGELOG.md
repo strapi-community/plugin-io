@@ -1,3 +1,15 @@
+# [5.4.0](https://github.com/strapi-community/plugin-io/compare/5.3.7...5.4.0) (2026-04-15)
+
+
+### Bug Fixes
+
+* **sanitize:** use runtime strapi.contentAPI instead of static import ([3c9bb6e](https://github.com/strapi-community/plugin-io/commit/3c9bb6e3ef5d6f70713365715790003d76d31bf3))
+
+
+### Features
+
+* **build:** migrate server to ESM for sdk-plugin v6 / Vite 6 ([d1d97bd](https://github.com/strapi-community/plugin-io/commit/d1d97bd77138df26080b0f1085ced2f1fbe5b114))
+
 ## [5.3.7](https://github.com/strapi-community/plugin-io/compare/5.3.6...5.3.7) (2026-04-15)
 
 
