@@ -407,41 +407,45 @@ export const OnlineEditorsWidget = () => {
         </EmptyState>
       ) : (
         <UserList>
-          {users.map((userData, index) => (
-            <UserCard key={userData.socketId}>
-              <UserAvatar $colorIndex={index}>
-                {getInitials(userData.user)}
-              </UserAvatar>
-              <UserInfo>
-                <UserName>
-                  {getDisplayName(userData.user)}
-                  {userData.user.isAdmin && (
-                    <Badge size="S" style={{ marginLeft: 8 }}>Admin</Badge>
+          {users.map((userData, index) => {
+            const user = userData?.user;
+            const onlineSecs = Math.floor((userData?.onlineFor || 0) / 1000);
+            return (
+              <UserCard key={userData?.socketId || index}>
+                <UserAvatar $colorIndex={index}>
+                  {getInitials(user)}
+                </UserAvatar>
+                <UserInfo>
+                  <UserName>
+                    {getDisplayName(user)}
+                    {user?.isAdmin && (
+                      <Badge size="S" style={{ marginLeft: 8 }}>Admin</Badge>
+                    )}
+                  </UserName>
+                  <UserMeta>
+                    <Clock width="12" height="12" />
+                    Online {formatDuration(onlineSecs)}
+                  </UserMeta>
+                  {userData?.isEditing && userData.editingEntities?.length > 0 ? (
+                    userData.editingEntities.map((entity, idx) => (
+                      <EditingBadge 
+                        key={idx}
+                        href={`/admin/content-manager/collection-types/${entity.uid}/${entity.documentId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open in new tab"
+                      >
+                        <Pencil width="10" height="10" />
+                        {entity.contentTypeName} - {entity.documentId}
+                      </EditingBadge>
+                    ))
+                  ) : (
+                    <IdleBadge>Idle</IdleBadge>
                   )}
-                </UserName>
-                <UserMeta>
-                  <Clock width="12" height="12" />
-                  Online {formatDuration(userData.onlineFor)}
-                </UserMeta>
-                {userData.isEditing ? (
-                  userData.editingEntities.map((entity, idx) => (
-                    <EditingBadge 
-                      key={idx}
-                      href={`/admin/content-manager/collection-types/${entity.uid}/${entity.documentId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Open in new tab"
-                    >
-                      <Pencil width="10" height="10" />
-                      {entity.contentTypeName} - {entity.documentId}
-                    </EditingBadge>
-                  ))
-                ) : (
-                  <IdleBadge>Idle</IdleBadge>
-                )}
-              </UserInfo>
-            </UserCard>
-          ))}
+                </UserInfo>
+              </UserCard>
+            );
+          })}
         </UserList>
       )}
 
