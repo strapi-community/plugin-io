@@ -1,3 +1,10 @@
+## [5.4.1](https://github.com/strapi-community/plugin-io/compare/5.4.0...5.4.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **stats:** guard adapter.rooms access when no clients connected ([2209635](https://github.com/strapi-community/plugin-io/commit/22096359fb3987d28925423f96429c8718644215))
+
 # [5.4.0](https://github.com/strapi-community/plugin-io/compare/5.3.7...5.4.0) (2026-04-15)
 
 
