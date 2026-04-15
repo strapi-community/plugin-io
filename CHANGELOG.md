@@ -1,3 +1,10 @@
+## [5.4.2](https://github.com/strapi-community/plugin-io/compare/5.4.1...5.4.2) (2026-04-15)
+
+
+### Bug Fixes
+
+* multiple crash bugs and resource leaks ([6da602a](https://github.com/strapi-community/plugin-io/commit/6da602a4ef3558b23626188596166725fe3db963))
+
 ## [5.4.1](https://github.com/strapi-community/plugin-io/compare/5.4.0...5.4.1) (2026-04-15)
 
 
