@@ -1,3 +1,4 @@
 "use strict";
-const index = require("../_chunks/index-DkN2yHWs.js");
-module.exports = index.index;
+Object.defineProperties(exports, { __esModule: { value: true }, [Symbol.toStringTag]: { value: "Module" } });
+const index = require("./index-BJVZkGP5.js");
+exports.default = index.index;
