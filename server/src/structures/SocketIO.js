@@ -25,16 +25,26 @@ class SocketIO {
 		const eventName = `${schema.singularName}:${event}`;
 
 		for (const strategyType in strategyService) {
-			if (Object.hasOwnProperty.call(strategyService, strategyType)) {
-				const strategy = strategyService[strategyType];
+			if (!Object.hasOwnProperty.call(strategyService, strategyType)) continue;
 
-				const rooms = await strategy.getRooms();
+			const strategy = strategyService[strategyType];
 
-				for (const room of rooms) {
-					const permissions = room.permissions.map(({ action }) => ({ action }));
-					const ability = await strapi.contentAPI.permissions.engine.generateAbility(permissions);
+			if (typeof strategy.getRooms !== 'function') continue;
 
-					if (room.type === API_TOKEN_TYPE.FULL_ACCESS || ability.can(schema.uid + '.' + event)) {
+			let rooms;
+			try {
+				rooms = await strategy.getRooms();
+			} catch (err) {
+				strapi.log.debug(`[socket.io] getRooms failed for ${strategyType}: ${err.message}`);
+				continue;
+			}
+
+			for (const room of rooms) {
+				const permissions = (room.permissions || []).map(({ action }) => ({ action }));
+				const ability = await strapi.contentAPI.permissions.engine.generateAbility(permissions);
+
+				if (room.type === API_TOKEN_TYPE.FULL_ACCESS || ability.can(schema.uid + '.' + event)) {
+					try {
 						const sanitizedData = await sanitizeService.output({
 							data: rawData,
 							schema,
@@ -51,9 +61,10 @@ class SocketIO {
 						});
 
 						const roomName = strategy.getRoomName(room);
-
 						const data = transformService.response({ data: sanitizedData, schema });
 						this._socket.to(roomName.replace(' ', '-')).emit(eventName, { ...data });
+					} catch (err) {
+						strapi.log.debug(`[socket.io] emit failed for room ${room.name || room.id}: ${err.message}`);
 					}
 				}
 			}

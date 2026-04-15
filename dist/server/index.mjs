@@ -86,13 +86,21 @@ class SocketIO {
     }
     const eventName = `${schema2.singularName}:${event}`;
     for (const strategyType in strategyService) {
-      if (Object.hasOwnProperty.call(strategyService, strategyType)) {
-        const strategy2 = strategyService[strategyType];
-        const rooms = await strategy2.getRooms();
-        for (const room of rooms) {
-          const permissions = room.permissions.map(({ action }) => ({ action }));
-          const ability = await strapi.contentAPI.permissions.engine.generateAbility(permissions);
-          if (room.type === API_TOKEN_TYPE.FULL_ACCESS || ability.can(schema2.uid + "." + event)) {
+      if (!Object.hasOwnProperty.call(strategyService, strategyType)) continue;
+      const strategy2 = strategyService[strategyType];
+      if (typeof strategy2.getRooms !== "function") continue;
+      let rooms;
+      try {
+        rooms = await strategy2.getRooms();
+      } catch (err) {
+        strapi.log.debug(`[socket.io] getRooms failed for ${strategyType}: ${err.message}`);
+        continue;
+      }
+      for (const room of rooms) {
+        const permissions = (room.permissions || []).map(({ action }) => ({ action }));
+        const ability = await strapi.contentAPI.permissions.engine.generateAbility(permissions);
+        if (room.type === API_TOKEN_TYPE.FULL_ACCESS || ability.can(schema2.uid + "." + event)) {
+          try {
             const sanitizedData = await sanitizeService.output({
               data: rawData,
               schema: schema2,
@@ -110,6 +118,8 @@ class SocketIO {
             const roomName = strategy2.getRoomName(room);
             const data = transformService.response({ data: sanitizedData, schema: schema2 });
             this._socket.to(roomName.replace(" ", "-")).emit(eventName, { ...data });
+          } catch (err) {
+            strapi.log.debug(`[socket.io] emit failed for room ${room.name || room.id}: ${err.message}`);
           }
         }
       }
@@ -485,7 +495,7 @@ const controller = ({ strapi: strapi2 }) => ({
   }
 });
 const sessionTokens = /* @__PURE__ */ new Map();
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   const now = Date.now();
   for (const [token, session] of sessionTokens.entries()) {
     if (session.expiresAt < now) {
@@ -495,8 +505,11 @@ setInterval(() => {
 }, 5 * 60 * 1e3);
 const presenceController = ({ strapi: strapi2 }) => ({
   /**
-   * Creates a session token for admin users to connect to Socket.IO
+   * Creates a session token for admin users to connect to Socket.IO.
+   * @route POST /io/presence/session
    * @param {object} ctx - Koa context
+   * @returns {{ token: string, user: object, wsPath: string, wsUrl: string }}
+   * @throws {UnauthorizedError} If no admin user in context
    */
   async createSession(ctx) {
     const adminUser = ctx.state.user;
@@ -535,23 +548,28 @@ const presenceController = ({ strapi: strapi2 }) => ({
     }
   },
   /**
-   * Validates and consumes a session token (one-time use)
+   * Validates and consumes a session token (one-time use).
+   * The token is deleted after successful consumption.
    * @param {string} token - Session token to validate
    * @returns {object|null} Session data or null if invalid/expired
    */
   consumeSessionToken(token) {
-    if (!token) {
-      return null;
-    }
+    if (!token) return null;
     const session = sessionTokens.get(token);
-    if (!session) {
-      return null;
-    }
+    if (!session) return null;
     if (session.expiresAt < Date.now()) {
       sessionTokens.delete(token);
       return null;
     }
+    sessionTokens.delete(token);
     return session;
+  },
+  /**
+   * Stops the background token cleanup interval.
+   * Called by the plugin destroy lifecycle.
+   */
+  stopTokenCleanup() {
+    clearInterval(cleanupInterval);
   }
 });
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
@@ -32339,11 +32357,148 @@ const settings = ({ strapi: strapi2 }) => {
     }
   };
 };
+const security = ({ strapi: strapi2 }) => {
+  const rateLimitStore = /* @__PURE__ */ new Map();
+  const connectionLimitStore = /* @__PURE__ */ new Map();
+  const cleanupInterval2 = setInterval(() => {
+    const now = Date.now();
+    const maxAge = 60 * 1e3;
+    for (const [key, value] of rateLimitStore.entries()) {
+      if (now - value.resetTime > maxAge) {
+        rateLimitStore.delete(key);
+      }
+    }
+    for (const [key, value] of connectionLimitStore.entries()) {
+      if (now - value.lastSeen > maxAge) {
+        connectionLimitStore.delete(key);
+      }
+    }
+  }, 60 * 1e3);
+  return {
+    /**
+     * Stops the background cleanup interval (called on plugin destroy)
+     */
+    stopCleanupInterval() {
+      clearInterval(cleanupInterval2);
+    },
+    /**
+     * Check if request should be rate limited
+     * @param {string} identifier - Unique identifier (IP, user ID, etc.)
+     * @param {Object} options - Rate limit options
+     * @param {number} options.maxRequests - Maximum requests allowed
+     * @param {number} options.windowMs - Time window in milliseconds
+     * @returns {Object} - { allowed: boolean, remaining: number, resetTime: number }
+     */
+    checkRateLimit(identifier, options = {}) {
+      const { maxRequests = 100, windowMs = 60 * 1e3 } = options;
+      const now = Date.now();
+      const key = `ratelimit_${identifier}`;
+      let record = rateLimitStore.get(key);
+      if (!record || now - record.resetTime > windowMs) {
+        record = {
+          count: 1,
+          resetTime: now,
+          windowMs
+        };
+        rateLimitStore.set(key, record);
+        return {
+          allowed: true,
+          remaining: maxRequests - 1,
+          resetTime: now + windowMs
+        };
+      }
+      if (record.count >= maxRequests) {
+        return {
+          allowed: false,
+          remaining: 0,
+          resetTime: record.resetTime + windowMs,
+          retryAfter: record.resetTime + windowMs - now
+        };
+      }
+      record.count++;
+      rateLimitStore.set(key, record);
+      return {
+        allowed: true,
+        remaining: maxRequests - record.count,
+        resetTime: record.resetTime + windowMs
+      };
+    },
+    /**
+     * Check connection limits per IP/user
+     * @param {string} identifier - Unique identifier
+     * @param {number} maxConnections - Maximum allowed connections
+     * @returns {boolean} - Whether connection is allowed
+     */
+    checkConnectionLimit(identifier, maxConnections = 5) {
+      const key = `connlimit_${identifier}`;
+      const record = connectionLimitStore.get(key);
+      const now = Date.now();
+      if (!record) {
+        connectionLimitStore.set(key, {
+          count: 1,
+          lastSeen: now
+        });
+        return true;
+      }
+      if (record.count >= maxConnections) {
+        strapi2.log.warn(`[Socket.IO Security] Connection limit exceeded for ${identifier}`);
+        return false;
+      }
+      record.count++;
+      record.lastSeen = now;
+      connectionLimitStore.set(key, record);
+      return true;
+    },
+    /**
+     * Release a connection slot
+     * @param {string} identifier - Unique identifier
+     */
+    releaseConnection(identifier) {
+      const key = `connlimit_${identifier}`;
+      const record = connectionLimitStore.get(key);
+      if (record) {
+        record.count = Math.max(0, record.count - 1);
+        if (record.count === 0) {
+          connectionLimitStore.delete(key);
+        } else {
+          connectionLimitStore.set(key, record);
+        }
+      }
+    },
+    /**
+     * Validate event name to prevent injection
+     * @param {string} eventName - Event name to validate
+     * @returns {boolean} - Whether event name is valid
+     */
+    validateEventName(eventName) {
+      const validPattern = /^[a-zA-Z0-9:._-]+$/;
+      return validPattern.test(eventName) && eventName.length < 100;
+    },
+    /**
+     * Get current statistics
+     * @returns {Object} - Statistics object
+     */
+    getStats() {
+      return {
+        rateLimitEntries: rateLimitStore.size,
+        connectionLimitEntries: connectionLimitStore.size
+      };
+    },
+    /**
+     * Clear all rate limit data
+     */
+    clear() {
+      rateLimitStore.clear();
+      connectionLimitStore.clear();
+    }
+  };
+};
 const services = {
   sanitize,
   strategy,
   transform,
-  settings
+  settings,
+  security
 };
 const register = async () => {
 };
