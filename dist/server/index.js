@@ -79,7 +79,9 @@ async function handshake(socket, next) {
       const ctx = await strategyService[strategyType].authenticate(auth);
       room = strategyService[strategyType].getRoomName(ctx);
       if (strategyType === "admin") {
-        socket.adminUser = ctx;
+        socket.data.user = ctx;
+      } else if (strategyType === "role" && ctx) {
+        socket.data.user = { role: ctx };
       }
     } else if (strapi.plugin("users-permissions")) {
       const role = await strapi.documents("plugin::users-permissions.role").findFirst({
