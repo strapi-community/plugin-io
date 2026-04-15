@@ -1,3 +1,10 @@
+## [5.4.3](https://github.com/strapi-community/plugin-io/compare/5.4.2...5.4.3) (2026-04-15)
+
+
+### Bug Fixes
+
+* **config:** use double-colon namespace notation for plugin config ([755d25c](https://github.com/strapi-community/plugin-io/commit/755d25cb46b56ef2cf091451ae16c90da2ec432e))
+
 ## [5.4.2](https://github.com/strapi-community/plugin-io/compare/5.4.1...5.4.2) (2026-04-15)
 
 
