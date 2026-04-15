@@ -20521,6 +20521,7 @@ function requireConstants() {
   const path = require$$0$4;
   const WIN_SLASH = "\\\\/";
   const WIN_NO_SLASH = `[^${WIN_SLASH}]`;
+  const DEFAULT_MAX_EXTGLOB_RECURSION = 0;
   const DOT_LITERAL = "\\.";
   const PLUS_LITERAL = "\\+";
   const QMARK_LITERAL = "\\?";
@@ -20568,6 +20569,7 @@ function requireConstants() {
     END_ANCHOR: `(?:[${WIN_SLASH}]|$)`
   };
   const POSIX_REGEX_SOURCE = {
+    __proto__: null,
     alnum: "a-zA-Z0-9",
     alpha: "a-zA-Z",
     ascii: "\\x00-\\x7F",
@@ -20584,6 +20586,7 @@ function requireConstants() {
     xdigit: "A-Fa-f0-9"
   };
   constants = {
+    DEFAULT_MAX_EXTGLOB_RECURSION,
     MAX_LENGTH: 1024 * 64,
     POSIX_REGEX_SOURCE,
     // regular expressions
@@ -20595,6 +20598,7 @@ function requireConstants() {
     REGEX_REMOVE_BACKSLASH: /(?:\[.*?[^\\]\]|\\(?=.))/g,
     // Replace globs with equivalent patterns to reduce parsing time.
     REPLACEMENTS: {
+      __proto__: null,
       "***": "*",
       "**/**": "**",
       "**/**/**": "**"
@@ -21132,6 +21136,213 @@ function requireParse() {
   const syntaxError = (type2, char) => {
     return `Missing ${type2}: "${char}" - use "\\\\${char}" to match literal characters`;
   };
+  const splitTopLevel = (input) => {
+    const parts = [];
+    let bracket = 0;
+    let paren = 0;
+    let quote = 0;
+    let value = "";
+    let escaped = false;
+    for (const ch of input) {
+      if (escaped === true) {
+        value += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        value += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        quote = quote === 1 ? 0 : 1;
+        value += ch;
+        continue;
+      }
+      if (quote === 0) {
+        if (ch === "[") {
+          bracket++;
+        } else if (ch === "]" && bracket > 0) {
+          bracket--;
+        } else if (bracket === 0) {
+          if (ch === "(") {
+            paren++;
+          } else if (ch === ")" && paren > 0) {
+            paren--;
+          } else if (ch === "|" && paren === 0) {
+            parts.push(value);
+            value = "";
+            continue;
+          }
+        }
+      }
+      value += ch;
+    }
+    parts.push(value);
+    return parts;
+  };
+  const isPlainBranch = (branch) => {
+    let escaped = false;
+    for (const ch of branch) {
+      if (escaped === true) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (/[?*+@!()[\]{}]/.test(ch)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  const normalizeSimpleBranch = (branch) => {
+    let value = branch.trim();
+    let changed = true;
+    while (changed === true) {
+      changed = false;
+      if (/^@\([^\\()[\]{}|]+\)$/.test(value)) {
+        value = value.slice(2, -1);
+        changed = true;
+      }
+    }
+    if (!isPlainBranch(value)) {
+      return;
+    }
+    return value.replace(/\\(.)/g, "$1");
+  };
+  const hasRepeatedCharPrefixOverlap = (branches) => {
+    const values = branches.map(normalizeSimpleBranch).filter(Boolean);
+    for (let i = 0; i < values.length; i++) {
+      for (let j = i + 1; j < values.length; j++) {
+        const a = values[i];
+        const b = values[j];
+        const char = a[0];
+        if (!char || a !== char.repeat(a.length) || b !== char.repeat(b.length)) {
+          continue;
+        }
+        if (a === b || a.startsWith(b) || b.startsWith(a)) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+  const parseRepeatedExtglob = (pattern, requireEnd = true) => {
+    if (pattern[0] !== "+" && pattern[0] !== "*" || pattern[1] !== "(") {
+      return;
+    }
+    let bracket = 0;
+    let paren = 0;
+    let quote = 0;
+    let escaped = false;
+    for (let i = 1; i < pattern.length; i++) {
+      const ch = pattern[i];
+      if (escaped === true) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        quote = quote === 1 ? 0 : 1;
+        continue;
+      }
+      if (quote === 1) {
+        continue;
+      }
+      if (ch === "[") {
+        bracket++;
+        continue;
+      }
+      if (ch === "]" && bracket > 0) {
+        bracket--;
+        continue;
+      }
+      if (bracket > 0) {
+        continue;
+      }
+      if (ch === "(") {
+        paren++;
+        continue;
+      }
+      if (ch === ")") {
+        paren--;
+        if (paren === 0) {
+          if (requireEnd === true && i !== pattern.length - 1) {
+            return;
+          }
+          return {
+            type: pattern[0],
+            body: pattern.slice(2, i),
+            end: i
+          };
+        }
+      }
+    }
+  };
+  const getStarExtglobSequenceOutput = (pattern) => {
+    let index2 = 0;
+    const chars = [];
+    while (index2 < pattern.length) {
+      const match = parseRepeatedExtglob(pattern.slice(index2), false);
+      if (!match || match.type !== "*") {
+        return;
+      }
+      const branches = splitTopLevel(match.body).map((branch2) => branch2.trim());
+      if (branches.length !== 1) {
+        return;
+      }
+      const branch = normalizeSimpleBranch(branches[0]);
+      if (!branch || branch.length !== 1) {
+        return;
+      }
+      chars.push(branch);
+      index2 += match.end + 1;
+    }
+    if (chars.length < 1) {
+      return;
+    }
+    const source = chars.length === 1 ? utils2.escapeRegex(chars[0]) : `[${chars.map((ch) => utils2.escapeRegex(ch)).join("")}]`;
+    return `${source}*`;
+  };
+  const repeatedExtglobRecursion = (pattern) => {
+    let depth = 0;
+    let value = pattern.trim();
+    let match = parseRepeatedExtglob(value);
+    while (match) {
+      depth++;
+      value = match.body.trim();
+      match = parseRepeatedExtglob(value);
+    }
+    return depth;
+  };
+  const analyzeRepeatedExtglob = (body, options) => {
+    if (options.maxExtglobRecursion === false) {
+      return { risky: false };
+    }
+    const max = typeof options.maxExtglobRecursion === "number" ? options.maxExtglobRecursion : constants2.DEFAULT_MAX_EXTGLOB_RECURSION;
+    const branches = splitTopLevel(body).map((branch) => branch.trim());
+    if (branches.length > 1) {
+      if (branches.some((branch) => branch === "") || branches.some((branch) => /^[*?]+$/.test(branch)) || hasRepeatedCharPrefixOverlap(branches)) {
+        return { risky: true };
+      }
+    }
+    for (const branch of branches) {
+      const safeOutput = getStarExtglobSequenceOutput(branch);
+      if (safeOutput) {
+        return { risky: true, safeOutput };
+      }
+      if (repeatedExtglobRecursion(branch) > max) {
+        return { risky: true };
+      }
+    }
+    return { risky: false };
+  };
   const parse = (input, options) => {
     if (typeof input !== "string") {
       throw new TypeError("Expected a string");
@@ -21263,6 +21474,8 @@ function requireParse() {
       token.prev = prev;
       token.parens = state.parens;
       token.output = state.output;
+      token.startIndex = state.index;
+      token.tokensIndex = tokens.length;
       const output = (opts.capture ? "(" : "") + token.open;
       increment("parens");
       push({ type: type2, value: value2, output: state.output ? "" : ONE_CHAR });
@@ -21270,6 +21483,26 @@ function requireParse() {
       extglobs.push(token);
     };
     const extglobClose = (token) => {
+      const literal = input.slice(token.startIndex, state.index + 1);
+      const body = input.slice(token.startIndex + 2, state.index);
+      const analysis = analyzeRepeatedExtglob(body, opts);
+      if ((token.type === "plus" || token.type === "star") && analysis.risky) {
+        const safeOutput = analysis.safeOutput ? (token.output ? "" : ONE_CHAR) + (opts.capture ? `(${analysis.safeOutput})` : analysis.safeOutput) : void 0;
+        const open = tokens[token.tokensIndex];
+        open.type = "text";
+        open.value = literal;
+        open.output = safeOutput || utils2.escapeRegex(literal);
+        for (let i = token.tokensIndex + 1; i < tokens.length; i++) {
+          tokens[i].value = "";
+          tokens[i].output = "";
+          delete tokens[i].suffix;
+        }
+        state.output = token.output + open.output;
+        state.backtrack = true;
+        push({ type: "paren", extglob: true, value, output: "" });
+        decrement("parens");
+        return;
+      }
       let output = token.close + (opts.capture ? ")" : "");
       let rest;
       if (token.type === "negate") {
@@ -27833,6 +28066,41 @@ const settings$1 = ({ strapi: strapi2 }) => {
       const limit = parseInt(ctx.query.limit, 10) || 50;
       const log = strapi2.$io?._eventLog || [];
       ctx.body = { data: log.slice(-limit) };
+    },
+    /**
+     * @route GET /io/online-users
+     * @returns {{ data: { users: Array, counts: object } }}
+     */
+    async getOnlineUsers(ctx) {
+      const io = strapi2.$io;
+      if (!io?.server) {
+        ctx.body = { data: { users: [], counts: { total: 0, admin: 0, authenticated: 0, anonymous: 0 } } };
+        return;
+      }
+      const sockets = await io.server.fetchSockets();
+      const users = [];
+      const seen = /* @__PURE__ */ new Set();
+      for (const s of sockets) {
+        const user = s.data?.user;
+        const key = user?.id ? `${user.id}` : s.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        users.push({
+          id: user?.id || null,
+          socketId: s.id,
+          username: user?.username || user?.firstname || "Anonymous",
+          email: user?.email || null,
+          role: user?.role?.name || user?.role || null,
+          connectedAt: s.handshake?.time || null
+        });
+      }
+      const counts = {
+        total: users.length,
+        admin: users.filter((u) => u.role === "admin" || u.role === "Super Admin").length,
+        authenticated: users.filter((u) => u.id !== null).length,
+        anonymous: users.filter((u) => u.id === null).length
+      };
+      ctx.body = { data: { users, counts } };
     }
   };
 };
@@ -27899,6 +28167,12 @@ const adminRoutes = [
     method: "POST",
     path: "/reset-stats",
     handler: "settings.resetStats",
+    config: { policies: ["admin::isAuthenticatedAdmin"] }
+  },
+  {
+    method: "GET",
+    path: "/online-users",
+    handler: "settings.getOnlineUsers",
     config: { policies: ["admin::isAuthenticatedAdmin"] }
   },
   {

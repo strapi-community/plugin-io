@@ -3,6 +3,7 @@ import { Box, Flex, Typography } from '@strapi/design-system';
 import { User, Message, Lightning, Check } from '@strapi/icons';
 import { useFetchClient } from '@strapi/strapi/admin';
 import styled from 'styled-components';
+import { PLUGIN_ID } from '../pluginId';
 
 // Styled Components
 const WidgetContainer = styled(Box)`
@@ -167,7 +168,7 @@ export const SocketStatsWidget = () => {
 
   const fetchStats = useCallback(async () => {
     try {
-      const { data } = await get('/io/monitoring/stats');
+      const { data } = await get(`/${PLUGIN_ID}/stats`);
       setStats(data);
       setIsLive(true);
       setError(null);

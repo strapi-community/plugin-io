@@ -55,6 +55,13 @@ export default [
   },
 
   {
+    method: 'GET',
+    path: '/online-users',
+    handler: 'settings.getOnlineUsers',
+    config: { policies: ['admin::isAuthenticatedAdmin'] },
+  },
+
+  {
     method: 'POST',
     path: '/presence/session',
     handler: 'presence.createSession',

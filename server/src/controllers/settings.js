@@ -217,5 +217,46 @@ export default ({ strapi }) => {
       const log = strapi.$io?._eventLog || [];
       ctx.body = { data: log.slice(-limit) };
     },
+
+    /**
+     * @route GET /io/online-users
+     * @returns {{ data: { users: Array, counts: object } }}
+     */
+    async getOnlineUsers(ctx) {
+      const io = strapi.$io;
+      if (!io?.server) {
+        ctx.body = { data: { users: [], counts: { total: 0, admin: 0, authenticated: 0, anonymous: 0 } } };
+        return;
+      }
+
+      const sockets = await io.server.fetchSockets();
+      const users = [];
+      const seen = new Set();
+
+      for (const s of sockets) {
+        const user = s.data?.user;
+        const key = user?.id ? `${user.id}` : s.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        users.push({
+          id: user?.id || null,
+          socketId: s.id,
+          username: user?.username || user?.firstname || 'Anonymous',
+          email: user?.email || null,
+          role: user?.role?.name || user?.role || null,
+          connectedAt: s.handshake?.time || null,
+        });
+      }
+
+      const counts = {
+        total: users.length,
+        admin: users.filter((u) => u.role === 'admin' || u.role === 'Super Admin').length,
+        authenticated: users.filter((u) => u.id !== null).length,
+        anonymous: users.filter((u) => u.id === null).length,
+      };
+
+      ctx.body = { data: { users, counts } };
+    },
   };
 };
