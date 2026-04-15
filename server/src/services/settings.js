@@ -1,5 +1,3 @@
-'use strict';
-
 const STORE_KEY = 'plugin_io_settings';
 
 /**
@@ -87,7 +85,7 @@ const DEFAULT_SETTINGS = {
  * @param {{ strapi: import('@strapi/strapi').Strapi }} deps
  * @returns {object} Settings service API
  */
-module.exports = ({ strapi }) => {
+export default ({ strapi }) => {
   /** @returns {import('@strapi/strapi').Strapi['store']} */
   const getStore = () =>
     strapi.store({ type: 'plugin', name: 'io' });

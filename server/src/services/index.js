@@ -1,11 +1,9 @@
-'use strict';
+import strategy from './strategies.js';
+import sanitize from './sanitize.js';
+import transform from './transform.js';
+import settings from './settings.js';
 
-const strategy = require('./strategies');
-const sanitize = require('./sanitize');
-const transform = require('./transform');
-const settings = require('./settings');
-
-module.exports = {
+export default {
 	sanitize,
 	strategy,
 	transform,

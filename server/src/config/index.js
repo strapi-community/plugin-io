@@ -1,8 +1,6 @@
-'use strict';
+import { plugin } from './schema.js';
 
-const { plugin } = require('./schema');
-
-module.exports = {
+export default {
 	default() {
 		return {
 			events: [],

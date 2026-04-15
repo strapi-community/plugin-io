@@ -1,10 +1,7 @@
-'use strict';
-
 /**
  * Rate limiting service to prevent abuse
  */
-module.exports = ({ strapi }) => {
-	// Store rate limit data in memory (consider Redis for production)
+export default ({ strapi }) => {
 	const rateLimitStore = new Map();
 	const connectionLimitStore = new Map();
 
@@ -13,7 +10,7 @@ module.exports = ({ strapi }) => {
 	 */
 	const cleanupInterval = setInterval(() => {
 		const now = Date.now();
-		const maxAge = 60 * 1000; // 1 minute
+		const maxAge = 60 * 1000;
 
 		for (const [key, value] of rateLimitStore.entries()) {
 			if (now - value.resetTime > maxAge) {
@@ -52,7 +49,6 @@ module.exports = ({ strapi }) => {
 			let record = rateLimitStore.get(key);
 
 			if (!record || now - record.resetTime > windowMs) {
-				// Create new record or reset expired one
 				record = {
 					count: 1,
 					resetTime: now,
@@ -67,7 +63,6 @@ module.exports = ({ strapi }) => {
 				};
 			}
 
-			// Check if limit exceeded
 			if (record.count >= maxRequests) {
 				return {
 					allowed: false,
@@ -77,7 +72,6 @@ module.exports = ({ strapi }) => {
 				};
 			}
 
-			// Increment counter
 			record.count++;
 			rateLimitStore.set(key, record);
 
@@ -142,7 +136,6 @@ module.exports = ({ strapi }) => {
 		 * @returns {boolean} - Whether event name is valid
 		 */
 		validateEventName(eventName) {
-			// Allow alphanumeric, hyphens, underscores, colons, dots
 			const validPattern = /^[a-zA-Z0-9:._-]+$/;
 			return validPattern.test(eventName) && eventName.length < 100;
 		},
@@ -167,4 +160,3 @@ module.exports = ({ strapi }) => {
 		},
 	};
 };
-

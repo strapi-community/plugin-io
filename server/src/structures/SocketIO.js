@@ -1,10 +1,8 @@
-'use strict';
-
-const { Server } = require('socket.io');
-const { handshake } = require('../middleware');
-const { getService } = require('../utils/getService');
-const { pluginId } = require('../utils/pluginId');
-const { API_TOKEN_TYPE } = require('../utils/constants');
+import { Server } from 'socket.io';
+import { handshake } from '../middleware/index.js';
+import { getService } from '../utils/getService.js';
+import { pluginId } from '../utils/pluginId.js';
+import { API_TOKEN_TYPE } from '../utils/constants.js';
 
 class SocketIO {
 	constructor(options) {
@@ -20,7 +18,6 @@ class SocketIO {
 		const strategyService = getService({ name: 'strategy' });
 		const transformService = getService({ name: 'transform' });
 
-		// account for unsaved single content type being null
 		if (!rawData) {
 			return;
 		}
@@ -38,7 +35,6 @@ class SocketIO {
 					const ability = await strapi.contentAPI.permissions.engine.generateAbility(permissions);
 
 					if (room.type === API_TOKEN_TYPE.FULL_ACCESS || ability.can(schema.uid + '.' + event)) {
-						// sanitize
 						const sanitizedData = await sanitizeService.output({
 							data: rawData,
 							schema,
@@ -56,9 +52,7 @@ class SocketIO {
 
 						const roomName = strategy.getRoomName(room);
 
-						// transform
 						const data = transformService.response({ data: sanitizedData, schema });
-						// emit
 						this._socket.to(roomName.replace(' ', '-')).emit(eventName, { ...data });
 					}
 				}
@@ -79,14 +73,12 @@ class SocketIO {
 		
 		let emitter = this._socket;
 
-		// send to all specified rooms
 		if (rooms && rooms.length) {
 			rooms.forEach((r) => {
 				emitter = emitter.to(r);
 			});
 		}
 
-		// Sanitize data to remove sensitive fields
 		const sanitizedData = sanitizeService.sanitizeRaw(data);
 		emitter.emit(event, { data: sanitizedData });
 	}
@@ -96,6 +88,4 @@ class SocketIO {
 	}
 }
 
-module.exports = {
-	SocketIO,
-};
+export { SocketIO };

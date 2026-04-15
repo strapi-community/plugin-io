@@ -1,7 +1,7 @@
-'use strict';
+import { z } from 'zod';
+import { errors } from '@strapi/utils';
 
-const { z } = require('zod');
-const { ValidationError } = require('@strapi/utils').errors;
+const { ValidationError } = errors;
 
 /**
  * Zod schema for validating incoming settings updates.
@@ -82,7 +82,7 @@ const settingsSchema = z
  * @route POST /io/reset-stats     - Reset monitoring counters
  * @route GET  /io/event-log       - Retrieve recent event log
  */
-module.exports = ({ strapi }) => {
+export default ({ strapi }) => {
   const getSettingsService = () =>
     strapi.plugin('io').service('settings');
 

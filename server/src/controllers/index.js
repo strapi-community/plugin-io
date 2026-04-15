@@ -1,6 +1,6 @@
-import controller from './controller';
-import presence from './presence';
-import settings from './settings';
+import controller from './controller.js';
+import presence from './presence.js';
+import settings from './settings.js';
 
 export default {
   controller,

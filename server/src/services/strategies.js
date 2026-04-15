@@ -1,12 +1,12 @@
-'use strict';
+import { castArray, isNil, pipe, every } from 'lodash/fp';
+import { differenceInHours, parseISO } from 'date-fns';
+import { getService } from '../utils/getService.js';
+import { API_TOKEN_TYPE } from '../utils/constants.js';
+import { errors } from '@strapi/utils';
 
-const { castArray, isNil, pipe, every } = require('lodash/fp');
-const { differenceInHours, parseISO } = require('date-fns');
-const { getService } = require('../utils/getService');
-const { API_TOKEN_TYPE } = require('../utils/constants');
-const { UnauthorizedError, ForbiddenError } = require('@strapi/utils').errors;
+const { UnauthorizedError, ForbiddenError } = errors;
 
-module.exports = ({ strapi }) => {
+export default ({ strapi }) => {
 	const apiTokenService = getService({ type: 'admin', plugin: 'api-token' });
 	const jwtService = getService({ name: 'jwt', plugin: 'users-permissions' });
 	const userService = getService({ name: 'user', plugin: 'users-permissions' });
@@ -28,7 +28,6 @@ module.exports = ({ strapi }) => {
 			}
 
 			try {
-				// Get presence controller to validate session token
 				const presenceController = strapi.plugin('io').controller('presence');
 				const session = presenceController.consumeSessionToken(token);
 
@@ -53,7 +52,6 @@ module.exports = ({ strapi }) => {
 			return `${this.name}-${role.id}`;
 		},
 		authenticate: async function (auth) {
-			// adapted from https://github.com/strapi/strapi/blob/main/packages/plugins/users-permissions/server/strategies/users-permissions.js#L12
 			const token = await jwtService.verify(auth.token);
 
 			if (!token) {
@@ -62,14 +60,12 @@ module.exports = ({ strapi }) => {
 
 			const { id } = token;
 
-			// Invalid token
 			if (id === undefined) {
 				throw new UnauthorizedError('Invalid credentials');
 			}
 
 			const user = await userService.fetchAuthenticatedUser(id);
 
-			// No user associated to the token
 			if (!user) {
 				throw new UnauthorizedError('Invalid credentials');
 			}
@@ -78,17 +74,14 @@ module.exports = ({ strapi }) => {
 				.store({ type: 'plugin', name: 'users-permissions' })
 				.get({ key: 'advanced' });
 
-			// User not confirmed
 			if (advancedSettings.email_confirmation && !user.confirmed) {
 				throw new UnauthorizedError('Invalid credentials');
 			}
 
-			// User blocked
 			if (user.blocked) {
 				throw new UnauthorizedError('Invalid credentials');
 			}
 
-			// Find role using Document Service API (Strapi v5)
 			const roles = await strapi.documents('plugin::users-permissions.role').findMany({
 				filters: { id: user.role.id },
 				fields: ['id', 'name'],
@@ -97,7 +90,6 @@ module.exports = ({ strapi }) => {
 			return roles.length > 0 ? roles[0] : null;
 		},
 		verify: function (auth, config) {
-			// adapted from https://github.com/strapi/strapi/blob/main/packages/plugins/users-permissions/server/strategies/users-permissions.js#L80
 			const { ability } = auth;
 
 			if (!ability) {
@@ -117,7 +109,6 @@ module.exports = ({ strapi }) => {
 			return `${this.name}-${role.name.toLowerCase()}`;
 		},
 		getRooms: function () {
-			// fetch all role types using Document Service API (Strapi v5)
 			return strapi.documents('plugin::users-permissions.role').findMany({
 				fields: ['id', 'name'],
 				populate: { permissions: true },
@@ -131,7 +122,6 @@ module.exports = ({ strapi }) => {
 			return token;
 		},
 		authenticate: async function (auth) {
-			// adapted from https://github.com/strapi/strapi/blob/main/packages/core/admin/server/strategies/api-token.js#L30
 			const token = auth.token;
 
 			if (!token) {
@@ -140,15 +130,12 @@ module.exports = ({ strapi }) => {
 
 			// [EXCEPTION] admin::api-token is a Strapi Core Admin entity
 			// Official Strapi implementation uses strapi.db.query() for admin::api-token
-			// Source: https://github.com/strapi/strapi/blob/main/packages/core/admin/server/strategies/api-token.js
-			// This is NOT a mistake - Strapi Core itself uses Query Engine for admin entities
 			const apiToken = await strapi.db.query('admin::api-token').findOne({
 				where: { accessKey: apiTokenService.hash(token) },
 				select: ['id', 'name', 'type', 'lastUsedAt', 'expiresAt'],
 				populate: ['permissions'],
 			});
 
-			// token not found
 			if (!apiToken) {
 				throw new UnauthorizedError('Invalid credentials');
 			}
@@ -156,13 +143,11 @@ module.exports = ({ strapi }) => {
 			const currentDate = new Date();
 			if (!isNil(apiToken.expiresAt)) {
 				const expirationDate = new Date(apiToken.expiresAt);
-				// token has expired
 				if (expirationDate < currentDate) {
 					throw new UnauthorizedError('Token expired');
 				}
 			}
 
-			// Update lastUsedAt if the token has not been used in the last hour
 			// [EXCEPTION] Using Query Engine as per Strapi Core implementation
 			if (!apiToken.lastUsedAt || differenceInHours(currentDate, parseISO(apiToken.lastUsedAt)) >= 1) {
 				await strapi.db.query('admin::api-token').update({
@@ -174,7 +159,6 @@ module.exports = ({ strapi }) => {
 			return apiToken;
 		},
 		verify: function (auth, config) {
-			// adapted from https://github.com/strapi/strapi/blob/main/packages/core/admin/server/strategies/api-token.js#L82
 			const { credentials: apiToken, ability } = auth;
 			if (!apiToken) {
 				throw new UnauthorizedError('Token not found');
@@ -183,7 +167,6 @@ module.exports = ({ strapi }) => {
 			if (!isNil(apiToken.expiresAt)) {
 				const currentDate = new Date();
 				const expirationDate = new Date(apiToken.expiresAt);
-				// token has expired
 				if (expirationDate < currentDate) {
 					throw new UnauthorizedError('Token expired');
 				}
@@ -217,7 +200,6 @@ module.exports = ({ strapi }) => {
 			return `${this.name}-${token.name.toLowerCase()}`;
 		},
 		getRooms: function () {
-			// Fetch active token types
 			// [EXCEPTION] Using Query Engine as per Strapi Core implementation
 			return strapi.db.query('admin::api-token').findMany({
 				select: ['id', 'type', 'name'],

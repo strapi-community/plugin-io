@@ -1,6 +1,4 @@
-'use strict';
-
-const { sanitize } = require('@strapi/utils');
+import { sanitize } from '@strapi/utils';
 
 /**
  * Default sensitive field names that should NEVER be emitted via Socket.IO.
@@ -39,13 +37,11 @@ function removeSensitiveFields(data, sensitiveFields) {
 	
 	const result = {};
 	for (const [key, value] of Object.entries(data)) {
-		// Skip sensitive fields (case-insensitive check)
 		const lowerKey = key.toLowerCase();
 		if (sensitiveFields.some(sf => lowerKey === sf.toLowerCase() || lowerKey.includes(sf.toLowerCase()))) {
 			continue;
 		}
 		
-		// Recursively sanitize nested objects
 		if (value && typeof value === 'object') {
 			result[key] = removeSensitiveFields(value, sensitiveFields);
 		} else {
@@ -56,7 +52,7 @@ function removeSensitiveFields(data, sensitiveFields) {
 	return result;
 }
 
-module.exports = ({ strapi }) => {
+export default ({ strapi }) => {
 	/**
 	 * Get list of sensitive fields from plugin settings
 	 * @returns {string[]} Combined list of default and custom sensitive fields
@@ -80,18 +76,14 @@ module.exports = ({ strapi }) => {
 	async function output({ schema, data, options }) {
 		let sanitizedData = data;
 		
-		// First: Apply Strapi's built-in content API sanitization
-		// This handles private: true fields and permission-based filtering
 		if (sanitize?.contentAPI?.output) {
 			try {
 				sanitizedData = await sanitize.contentAPI.output(data, schema, options);
 			} catch (error) {
 				strapi.log.debug(`[socket.io] Content API sanitization failed: ${error.message}`);
-				// Continue with manual sanitization
 			}
 		}
 		
-		// Second: Remove any remaining sensitive fields as extra safety layer
 		const sensitiveFields = getSensitiveFields();
 		sanitizedData = removeSensitiveFields(sanitizedData, sensitiveFields);
 		

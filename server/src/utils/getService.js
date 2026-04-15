@@ -1,7 +1,12 @@
-'use strict';
+import { pluginId } from './pluginId.js';
 
-const { pluginId } = require('./pluginId');
-
+/**
+ * @param {object} options
+ * @param {string} [options.name]
+ * @param {string} [options.plugin]
+ * @param {string} [options.type]
+ * @returns {object} Strapi service instance
+ */
 function getService({ name, plugin = pluginId, type = 'plugin' }) {
 	let serviceUID = `${type}::${plugin}`;
 
@@ -12,6 +17,4 @@ function getService({ name, plugin = pluginId, type = 'plugin' }) {
 	return strapi.service(serviceUID);
 }
 
-module.exports = {
-	getService,
-};
+export { getService };

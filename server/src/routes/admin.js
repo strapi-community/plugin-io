@@ -1,11 +1,8 @@
-'use strict';
-
 /**
  * Admin routes for Socket.IO plugin.
  * All routes require admin authentication.
  */
-module.exports = [
-  // ─── Settings ──────────────────────────────────────
+export default [
   {
     method: 'GET',
     path: '/settings',
@@ -19,7 +16,6 @@ module.exports = [
     config: { policies: ['admin::isAuthenticatedAdmin'] },
   },
 
-  // ─── Content Types & Roles ─────────────────────────
   {
     method: 'GET',
     path: '/content-types',
@@ -33,7 +29,6 @@ module.exports = [
     config: { policies: ['admin::isAuthenticatedAdmin'] },
   },
 
-  // ─── Monitoring ────────────────────────────────────
   {
     method: 'GET',
     path: '/stats',
@@ -59,7 +54,6 @@ module.exports = [
     config: { policies: ['admin::isAuthenticatedAdmin'] },
   },
 
-  // ─── Presence ──────────────────────────────────────
   {
     method: 'POST',
     path: '/presence/session',

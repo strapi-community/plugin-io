@@ -1,7 +1,3 @@
-'use strict';
+import { SocketIO } from './SocketIO.js';
 
-const { SocketIO } = require('./SocketIO');
-
-module.exports = {
-	SocketIO,
-};
+export { SocketIO };

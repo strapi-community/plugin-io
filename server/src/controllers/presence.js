@@ -1,11 +1,7 @@
-'use strict';
+import { randomUUID } from 'crypto';
 
-const { randomUUID } = require('crypto');
-
-// Session tokens storage (in-memory, short-lived)
 const sessionTokens = new Map();
 
-// Cleanup expired tokens every 5 minutes
 setInterval(() => {
   const now = Date.now();
   for (const [token, session] of sessionTokens.entries()) {
@@ -33,11 +29,9 @@ const presenceController = ({ strapi }) => ({
     }
 
     try {
-      // Generate a random session token (like magic-editor-x does)
       const token = randomUUID();
-      const expiresAt = Date.now() + (2 * 60 * 1000); // 2 minutes TTL
+      const expiresAt = Date.now() + (2 * 60 * 1000);
 
-      // Store session data
       sessionTokens.set(token, {
         token,
         user: {
@@ -88,9 +82,8 @@ const presenceController = ({ strapi }) => ({
       return null;
     }
 
-    // Don't delete - allow reconnects with same token
     return session;
   },
 });
 
-module.exports = presenceController;
+export default presenceController;

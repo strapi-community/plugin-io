@@ -1,6 +1,7 @@
-'use strict';
+import { createRequire } from 'node:module';
 
-// Lazy-load transaction context to avoid bundling issues
+const require = createRequire(import.meta.url);
+
 let transactionCtx = null;
 
 /**
@@ -13,7 +14,7 @@ function getTransactionCtx() {
 			transactionCtx = require('@strapi/database/dist/transaction-context').transactionCtx;
 		} catch (error) {
 			console.warn('[@strapi-community/plugin-io] Unable to access transaction context:', error.message);
-			transactionCtx = { get: () => null, onCommit: () => {} }; // Fallback noop
+			transactionCtx = { get: () => null, onCommit: () => {} };
 		}
 	}
 	return transactionCtx;
@@ -46,7 +47,6 @@ function normalizePopulate(config) {
 	}
 	
 	if (Array.isArray(config)) {
-		// Convert array to object format: ['author', 'category'] -> { author: true, category: true }
 		return config.reduce((acc, field) => {
 			acc[field] = true;
 			return acc;
@@ -105,7 +105,6 @@ async function bootstrapLifecycles({ strapi }) {
 		if (!ct.actions || ct.actions.includes('create')) {
 			const eventType = 'create';
 			subscriber.afterCreate = async (event) => {
-				// Skip if no result data
 				if (!event.result) {
 					strapi.log.debug(`[socket.io] No result data in afterCreate for ${uid}`);
 					return;
@@ -114,20 +113,16 @@ async function bootstrapLifecycles({ strapi }) {
 				const documentId = event.result?.documentId;
 				const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
 				
-				// Ensure emission runs after transaction commit
 				scheduleAfterTransaction(async () => {
 					try {
 						let data;
 						
-						// If populate is configured, refetch with relations
 						if (hasPopulate && documentId) {
 							data = await fetchWithPopulate(strapi, uid, documentId, populateConfig);
 							if (!data) {
-								// Fallback to original result if refetch fails
 								data = JSON.parse(JSON.stringify(event.result));
 							}
 						} else {
-							// Clone data to avoid transaction context issues
 							data = JSON.parse(JSON.stringify(event.result));
 						}
 						
@@ -139,25 +134,21 @@ async function bootstrapLifecycles({ strapi }) {
 					} catch (error) {
 						strapi.log.error(`[socket.io] Could not emit create event for ${uid}:`, error.message);
 					}
-				}, hasPopulate ? 50 : 0); // Small delay when refetching to ensure data is committed
+				}, hasPopulate ? 50 : 0);
 			};
 			
 			subscriber.afterCreateMany = async (event) => {
 				const query = buildEventQuery({ event });
 				if (query.filters) {
-					// Clone query to avoid transaction context issues
 					const clonedQuery = JSON.parse(JSON.stringify(query));
 					const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
 					
-					// Add populate if configured
 					if (hasPopulate) {
 						clonedQuery.populate = normalizePopulate(populateConfig);
 					}
 					
-					// Ensure query executes after commit
 					scheduleAfterTransaction(async () => {
 						try {
-							// Use Document Service API (Strapi v5)
 							const records = await strapi.documents(uid).findMany(clonedQuery);
 							records.forEach((r) => {
 								strapi.$io.emit({
@@ -177,7 +168,6 @@ async function bootstrapLifecycles({ strapi }) {
 		if (!ct.actions || ct.actions.includes('update')) {
 			const eventType = 'update';
 			subscriber.afterUpdate = async (event) => {
-				// Skip if no result data
 				if (!event.result) {
 					strapi.log.debug(`[socket.io] No result data in afterUpdate for ${uid}`);
 					return;
@@ -186,20 +176,16 @@ async function bootstrapLifecycles({ strapi }) {
 				const documentId = event.result?.documentId;
 				const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
 				
-				// Ensure emission runs after commit
 				scheduleAfterTransaction(async () => {
 					try {
 						let data;
 						
-						// If populate is configured, refetch with relations
 						if (hasPopulate && documentId) {
 							data = await fetchWithPopulate(strapi, uid, documentId, populateConfig);
 							if (!data) {
-								// Fallback to original result if refetch fails
 								data = JSON.parse(JSON.stringify(event.result));
 							}
 						} else {
-							// Clone data to avoid transaction context issues
 							data = JSON.parse(JSON.stringify(event.result));
 						}
 						
@@ -215,8 +201,6 @@ async function bootstrapLifecycles({ strapi }) {
 			};
 			
 			subscriber.beforeUpdateMany = async (event) => {
-				// Don't do any queries in before* hooks to avoid transaction conflicts
-				// Just store the params for use in afterUpdateMany
 				if (!event.state.io) {
 					event.state.io = {};
 				}
@@ -227,11 +211,9 @@ async function bootstrapLifecycles({ strapi }) {
 				const params = event.state.io?.params;
 				if (!params || !params.where) return;
 				
-				// Clone params to avoid transaction context issues
 				const clonedWhere = JSON.parse(JSON.stringify(params.where));
 				const modelInfo = { singularName: event.model.singularName, uid: event.model.uid };
 				
-				// Build query with optional populate
 				const query = {
 					filters: clonedWhere,
 				};
@@ -239,10 +221,8 @@ async function bootstrapLifecycles({ strapi }) {
 					query.populate = normalizePopulate(populateConfig);
 				}
 				
-				// Ensure query executes after commit
 				scheduleAfterTransaction(async () => {
 					try {
-						// Use Document Service API (Strapi v5)
 						const records = await strapi.documents(uid).findMany(query);
 						records.forEach((r) => {
 							strapi.$io.emit({
@@ -261,13 +241,10 @@ async function bootstrapLifecycles({ strapi }) {
 		if (!ct.actions || ct.actions.includes('delete')) {
 			const eventType = 'delete';
 			subscriber.afterDelete = async (event) => {
-				// Skip if no result data
 				if (!event.result) {
 					strapi.log.debug(`[socket.io] No result data in afterDelete for ${uid}`);
 					return;
 				}
-				// Extract minimal data to avoid transaction context issues
-				// Note: populate is not applicable for delete events as the entity no longer exists
 				const deleteData = {
 					id: event.result?.id || event.result?.documentId,
 					documentId: event.result?.documentId || event.result?.id,
@@ -277,7 +254,6 @@ async function bootstrapLifecycles({ strapi }) {
 					uid: event.model.uid,
 				};
 				
-				// Use raw emit to avoid sanitization queries within transaction
 				scheduleAfterTransaction(() => {
 					try {
 						const eventName = `${modelInfo.singularName}:${eventType}`;
@@ -288,12 +264,10 @@ async function bootstrapLifecycles({ strapi }) {
 					} catch (error) {
 						strapi.log.error(`[socket.io] Could not emit delete event for ${uid}:`, error.message);
 					}
-				}, 100); // Delay to ensure transaction is fully closed
+				}, 100);
 			};
-			// Bulk delete events intentionally disabled to avoid transaction issues
 		}
 
-		// setup lifecycles
 		strapi.db.lifecycles.subscribe(subscriber);
 	});
 }
@@ -326,4 +300,4 @@ function buildEventQuery({ event }) {
 	return query;
 }
 
-module.exports = { bootstrapLifecycles, normalizePopulate };
+export { bootstrapLifecycles, normalizePopulate };

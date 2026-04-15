@@ -1,6 +1,4 @@
-'use strict';
-
-const z = require('zod');
+import z from 'zod';
 
 const Event = z.object({
 	name: z.string(),
@@ -53,7 +51,4 @@ const plugin = z.object({
 	sensitiveFields: z.array(z.string()).optional(),
 });
 
-module.exports = {
-	plugin,
-	PopulateConfig,
-};
+export { plugin, PopulateConfig };

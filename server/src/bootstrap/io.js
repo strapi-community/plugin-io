@@ -1,7 +1,6 @@
-'use strict';
-
-const { SocketIO } = require('../structures');
-const { pluginId } = require('../utils/pluginId');
+import { SocketIO } from '../structures/index.js';
+import { pluginId } from '../utils/pluginId.js';
+import sanitizeSensitiveFields from '../middlewares/sanitize-sensitive-fields.js';
 
 /**
  * Bootstrap IO instance and related "services"
@@ -19,7 +18,6 @@ async function bootstrapIO({ strapi }) {
 	strapi.$io = io;
 
 	// Apply sensitive fields sanitization middleware
-	const sanitizeSensitiveFields = require('../middlewares/sanitize-sensitive-fields');
 	sanitizeSensitiveFields({ strapi });
 
 	// add any io server events
@@ -38,4 +36,4 @@ async function bootstrapIO({ strapi }) {
 	}
 }
 
-module.exports = { bootstrapIO };
+export { bootstrapIO };

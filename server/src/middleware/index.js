@@ -1,7 +1,3 @@
-'use strict';
+import { handshake } from './handshake.js';
 
-const { handshake } = require('./handshake');
-
-module.exports = {
-	handshake,
-};
+export { handshake };

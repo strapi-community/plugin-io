@@ -1,5 +1,3 @@
-'use strict';
-
 /**
  * Middleware to deeply sanitize sensitive fields from Socket.IO events
  * Removes password hashes, tokens, secrets from all nested objects
@@ -53,20 +51,16 @@ function deepSanitize(obj, depth = 0) {
 	return sanitized;
 }
 
-module.exports = ({ strapi }) => {
-	// Override the emit method to add sanitization
+export default ({ strapi }) => {
 	const originalEmit = strapi.$io.emit.bind(strapi.$io);
 
 	strapi.$io.emit = async function(params) {
-		// Deep sanitize data before emitting
 		if (params.data) {
 			params.data = deepSanitize(params.data);
 		}
 
-		// Call original emit
 		return originalEmit(params);
 	};
 
 	strapi.log.info('socket.io: Sensitive fields sanitization middleware active');
 };
-

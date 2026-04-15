@@ -1,12 +1,10 @@
-'use strict';
-
-const { getService } = require('../utils/getService');
+import { getService } from '../utils/getService.js';
 
 /**
  * Auto assign sockets to appropriate rooms based on tokens associated name.
  * Defaults to default role if no token provided.
  *
- * @param {require('socket.io').Socket} socket The socket attempting to connect
+ * @param {import('socket.io').Socket} socket The socket attempting to connect
  * @param {Function} next Function to call the next middleware in the stack
  */
 async function handshake(socket, next) {
@@ -15,7 +13,6 @@ async function handshake(socket, next) {
 	let strategy = auth.strategy || 'jwt';
 	const token = auth.token || '';
 
-	// remove strategy if no token provided
 	if (!token.length) {
 		strategy = '';
 	}
@@ -23,7 +20,6 @@ async function handshake(socket, next) {
 	try {
 		let room;
 		if (strategy && strategy.length) {
-			// Map strategy names to service keys
 			let strategyType;
 			if (strategy === 'jwt') {
 				strategyType = 'role';
@@ -36,13 +32,10 @@ async function handshake(socket, next) {
 			const ctx = await strategyService[strategyType].authenticate(auth);
 			room = strategyService[strategyType].getRoomName(ctx);
 
-			// Store user info on socket for admin strategy
 			if (strategyType === 'admin') {
 				socket.adminUser = ctx;
 			}
 		} else if (strapi.plugin('users-permissions')) {
-			// default to public users-permissions role if no supported auth provided
-			// Use Document Service API (Strapi v5)
 			const role = await strapi.documents('plugin::users-permissions.role').findFirst({
 				filters: { type: 'public' },
 				fields: ['id', 'name'],
@@ -63,6 +56,4 @@ async function handshake(socket, next) {
 	}
 }
 
-module.exports = {
-	handshake,
-};
+export { handshake };

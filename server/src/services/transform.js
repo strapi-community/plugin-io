@@ -1,8 +1,6 @@
-'use strict';
+import { isNil, isPlainObject } from 'lodash/fp';
 
-const { isNil, isPlainObject } = require('lodash/fp');
-
-module.exports = ({ strapi }) => {
+export default ({ strapi }) => {
 	/**
 	 * Transform query response data to API format.
 	 *
@@ -29,10 +27,8 @@ module.exports = ({ strapi }) => {
 	function resolveContentType(schema) {
 		if (!schema) return undefined;
 
-		// Already a full content-type (has attributes)
 		if (schema.attributes) return schema;
 
-		// Resolve by UID from Strapi's content-type registry
 		if (schema.uid) {
 			return strapi.contentTypes[schema.uid] || undefined;
 		}
@@ -45,7 +41,6 @@ module.exports = ({ strapi }) => {
 	};
 };
 
-// adapted from https://github.com/strapi/strapi/blob/main/packages/core/strapi/src/core-api/controller/transform.ts
 function isEntry(property) {
 	return property === null || isPlainObject(property) || Array.isArray(property);
 }

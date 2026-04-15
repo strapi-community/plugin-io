@@ -1,5 +1,5 @@
-import contentAPIRoutes from './content-api';
-import adminRoutes from './admin';
+import contentAPIRoutes from './content-api.js';
+import adminRoutes from './admin.js';
 
 const routes = {
   'content-api': {

@@ -1,7 +1,5 @@
-'use strict';
-
-const { bootstrapIO } = require('./io');
-const { bootstrapLifecycles } = require('./lifecycle');
+import { bootstrapIO } from './io.js';
+import { bootstrapLifecycles } from './lifecycle.js';
 
 /**
  * Runs on bootstrap phase
@@ -14,4 +12,4 @@ async function bootstrap({ strapi }) {
 	bootstrapLifecycles({ strapi });
 }
 
-module.exports = bootstrap;
+export default bootstrap;
