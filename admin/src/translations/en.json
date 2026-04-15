@@ -116,6 +116,30 @@
   "monitoring.statsReset": "Statistics reset successfully!",
   "monitoring.resetError": "Error resetting statistics",
   
+  "entitySubscriptions.title": "Entity Subscriptions",
+  "entitySubscriptions.description": "Allow clients to subscribe to specific entities",
+  "entitySubscriptions.maxPerSocket": "Max Per Socket",
+  "entitySubscriptions.verify": "Verify Entity Exists",
+  "entitySubscriptions.metrics": "Track Metrics",
+  "entitySubscriptions.allow": "ENTITIES",
+
+  "presence.title": "Presence System",
+  "presence.description": "Real-time collaboration awareness - see who is editing what",
+  "presence.heartbeat": "Heartbeat Interval (ms)",
+  "presence.staleTimeout": "Stale Timeout (ms)",
+  "presence.typing": "Show Typing Indicators",
+
+  "livePreview.title": "Live Preview",
+  "livePreview.description": "Real-time preview of draft changes for frontends",
+  "livePreview.debounce": "Debounce (ms)",
+  "livePreview.draftEvents": "Emit Draft Events",
+  "livePreview.maxSubs": "Max Subscriptions/Socket",
+
+  "fieldChanges.title": "Field-level Changes",
+  "fieldChanges.description": "Send only changed fields instead of full entities (bandwidth optimization)",
+  "fieldChanges.includeFullData": "Include Full Data",
+  "fieldChanges.maxDepth": "Max Diff Depth",
+
   "validation.errors": "Validation errors",
   "validation.invalidOrigin": "Invalid origin",
   "validation.pingTimeoutPositive": "Ping timeout must be positive",

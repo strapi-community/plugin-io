@@ -4,14 +4,40 @@ const { isNil, isPlainObject } = require('lodash/fp');
 
 module.exports = ({ strapi }) => {
 	/**
-	 * Transform query response data to API format
+	 * Transform query response data to API format.
 	 *
-	 * @param {Object} param
-	 * @param {String} param.resource
-	 * @param {Object} param.contentType
+	 * Resolves the full content-type definition from Strapi's registry
+	 * so `transformEntry` has access to `attributes` for each field.
+	 *
+	 * @param {object} param
+	 * @param {object} param.data - The raw entity data
+	 * @param {object} param.schema - Minimal schema with at least `uid`
+	 * @returns {{ data: object, meta: object }}
 	 */
 	function response({ data, schema }) {
-		return transformResponse(data, {}, { contentType: schema });
+		const contentType = resolveContentType(schema);
+		return transformResponse(data, {}, { contentType });
+	}
+
+	/**
+	 * Resolves a full Strapi content-type definition from a minimal schema
+	 * that may only contain `{ singularName, uid }`.
+	 *
+	 * @param {object} schema - At minimum `{ uid }` or a full content-type
+	 * @returns {object|undefined} Full content-type with `attributes`, or undefined
+	 */
+	function resolveContentType(schema) {
+		if (!schema) return undefined;
+
+		// Already a full content-type (has attributes)
+		if (schema.attributes) return schema;
+
+		// Resolve by UID from Strapi's content-type registry
+		if (schema.uid) {
+			return strapi.contentTypes[schema.uid] || undefined;
+		}
+
+		return undefined;
 	}
 
 	return {
@@ -73,7 +99,7 @@ function transformEntry(entry, type) {
 
 	for (const key of Object.keys(properties)) {
 		const property = properties[key];
-		const attribute = type && type.attributes[key];
+		const attribute = type?.attributes?.[key];
 
 		if (attribute && attribute.type === 'relation' && isEntry(property) && 'target' in attribute) {
 			const data = transformEntry(property, strapi.contentType(attribute.target));
@@ -101,7 +127,5 @@ function transformEntry(entry, type) {
 	return {
 		id,
 		attributes: attributeValues,
-		// NOTE: not necessary for now
-		// meta: {},
 	};
 }

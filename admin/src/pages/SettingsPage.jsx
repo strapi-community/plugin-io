@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Button,
@@ -14,453 +14,166 @@ import {
   NumberInput,
   Toggle,
   Accordion,
+  Loader,
+  Tag,
 } from '@strapi/design-system';
-import { Check, Download, Upload } from '@strapi/icons';
-import { useFetchClient, useNotification } from '@strapi/strapi/admin';
+import { Check, Download, Upload, Cross, Plus } from '@strapi/icons';
+import { Layouts, useFetchClient, useNotification } from '@strapi/strapi/admin';
 import { useIntl } from 'react-intl';
 import styled from 'styled-components';
 
 import { PLUGIN_ID } from '../pluginId';
 
-// Mobile-optimized styled components
-const ResponsiveMain = styled(Main)`
-  & > div {
-    padding: 16px !important;
-    
-    @media (min-width: 768px) {
-      padding: 32px !important;
-    }
-  }
-`;
+// ─── Minimal styled overrides (only where DS props are insufficient) ─────────
 
-const ResponsiveHeader = styled(Box)`
-  padding-bottom: 16px !important;
-  
-  @media (min-width: 768px) {
-    padding-bottom: 32px !important;
-  }
-`;
-
-const ResponsiveTitle = styled(Typography)`
-  font-size: 1.25rem !important;
-  
-  @media (min-width: 768px) {
-    font-size: 2rem !important;
-  }
-`;
-
-const ResponsiveSubtitle = styled(Typography)`
-  font-size: 0.875rem !important;
-  
-  @media (min-width: 768px) {
-    font-size: 1rem !important;
-  }
-`;
-
-const ResponsiveCard = styled(Box)`
-  padding: 16px !important;
-  
-  @media (min-width: 768px) {
-    padding: 24px !important;
-  }
-`;
-
-const ResponsiveSection = styled(Box)`
-  padding-bottom: 16px !important;
-  
-  @media (min-width: 768px) {
-    padding-bottom: 24px !important;
-  }
-`;
-
-const ResponsiveSectionTitle = styled(Typography)`
-  font-size: 1.125rem !important;
-  margin-bottom: 8px !important;
-  
-  @media (min-width: 768px) {
-    font-size: 1.5rem !important;
-    margin-bottom: 12px !important;
-  }
-`;
-
-const ResponsiveButtonGroup = styled(Flex)`
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  
-  @media (min-width: 640px) {
-    flex-direction: row;
-    width: auto;
-  }
-  
-  button {
-    width: 100%;
-    justify-content: center;
-    
-    @media (min-width: 640px) {
-      width: auto;
-    }
-  }
-`;
-
-// Toggle Card for consistent styling
 const ToggleCard = styled(Box)`
-  padding: 16px;
-  background: ${({ $active, $color }) => $active ? `${$color}15` : '#ffffff'};
-  border-radius: 8px;
   cursor: pointer;
-  border: 2px solid ${({ $active, $color }) => $active ? $color : '#dcdce4'};
-  transition: all 0.2s ease;
-  height: 100%;
-  min-height: 80px;
-  display: flex;
-  align-items: center;
+  transition: border-color 0.2s, background 0.2s;
+  border: 2px solid ${({ $borderColor, theme }) => theme.colors[$borderColor] || theme.colors.neutral200};
+  background: ${({ $bg, theme }) => theme.colors[$bg] || theme.colors.neutral0};
 
   &:hover {
-    border-color: ${({ $color }) => $color};
-    background: ${({ $color }) => `${$color}08`};
+    border-color: ${({ theme }) => theme.colors.primary500};
   }
 `;
 
-// Styled Input wrappers for better mobile UX
-const InputWrapper = styled.div`
+const HiddenInput = styled.input`
+  display: none;
+`;
+
+const NumberInputClean = styled.div`
   width: 100%;
-  
-  input, textarea, select {
-    width: 100% !important;
-    min-height: 48px !important;
-    font-size: 16px !important;
-    padding: 14px 16px !important;
-    box-sizing: border-box !important;
-    
-    @media (min-width: 768px) {
-      min-height: 44px !important;
-      font-size: 15px !important;
-      padding: 12px 16px !important;
-    }
-  }
-  
-  /* Number Input specific - remove ALL spinners */
-  input[type="number"] {
-    width: 100% !important;
-    min-height: 48px !important;
-    font-size: 16px !important;
-    
-    /* Remove native browser spinner arrows */
+
+  /* Hide native spinners */
+  input[type='number'] {
     -moz-appearance: textfield;
-    
     &::-webkit-outer-spin-button,
     &::-webkit-inner-spin-button {
       -webkit-appearance: none;
       margin: 0;
     }
-    
-    @media (min-width: 768px) {
-      min-height: 44px !important;
-      font-size: 15px !important;
-    }
   }
-  
-  /* Strapi Input Component Override */
-  > div {
-    width: 100% !important;
-    
-    > div {
-      width: 100% !important;
-      
-      input {
-        width: 100% !important;
-      }
-    }
-  }
-  
-  /* Strapi NumberInput Component - ALWAYS hide increment/decrement buttons */
-  button[aria-label="Increment"],
-  button[aria-label="Decrement"],
-  div button[aria-label="Increment"],
-  div button[aria-label="Decrement"],
-  & button[aria-label="Increment"],
-  & button[aria-label="Decrement"] {
+  /* Hide Strapi NumberInput inc/dec buttons */
+  button[aria-label='Increment'],
+  button[aria-label='Decrement'] {
     display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    width: 0 !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    pointer-events: none !important;
-  }
-  
-  /* NumberInput Container - proper alignment */
-  > div {
-    display: flex !important;
-    align-items: center !important;
-    width: 100% !important;
-    
-    /* Input field container */
-    > div:first-child {
-      flex: 1 !important;
-      min-width: 0 !important;
-      margin-right: 0 !important;
-      
-      input {
-        width: 100% !important;
-        padding-right: 12px !important;
-      }
-    }
-    
-    /* Spinner Buttons Container - ALWAYS HIDDEN */
-    > div:last-child {
-      display: none !important;
-      visibility: hidden !important;
-      width: 0 !important;
-      height: 0 !important;
-      overflow: hidden !important;
-    }
   }
 `;
 
-const ResponsiveField = styled(Field.Root)`
-  width: 100%;
-  
-  label {
-    font-size: 15px !important;
-    margin-bottom: 10px !important;
-    font-weight: 600 !important;
-    display: block !important;
-    
-    @media (min-width: 768px) {
-      font-size: 14px !important;
-      margin-bottom: 8px !important;
-    }
-  }
-  
-  /* Field hint */
-  > span:last-child {
-    font-size: 14px !important;
-    margin-top: 8px !important;
-    
-    @media (min-width: 768px) {
-      font-size: 13px !important;
-      margin-top: 6px !important;
-    }
-  }
-`;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-// Available actions for each content type
 const AVAILABLE_ACTIONS = ['create', 'update', 'delete'];
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+
+/**
+ * Validates settings before save.
+ * @param {object} s - Settings object
+ * @returns {string[]} Array of human-readable error messages
+ */
+function validateSettings(s) {
+  const errors = [];
+
+  s.cors?.origins?.forEach((o) => {
+    try {
+      new URL(o);
+    } catch {
+      errors.push(`Invalid origin: ${o}`);
+    }
+  });
+
+  if (s.connection?.pingTimeout <= 0) errors.push('Ping timeout must be positive');
+  if (s.connection?.pingInterval <= 0) errors.push('Ping interval must be positive');
+  if (s.connection?.connectionTimeout <= 0) errors.push('Connection timeout must be positive');
+  if (s.connection?.maxConnections <= 0) errors.push('Max connections must be positive');
+  if (s.redis?.enabled && !s.redis?.url) errors.push('Redis URL is required when Redis is enabled');
+
+  return errors;
+}
+
+// ─── Section heading helper ──────────────────────────────────────────────────
+
+function SectionHeading({ title, description, children }) {
+  return (
+    <Flex justifyContent="space-between" alignItems="center" paddingBottom={4}>
+      <Box>
+        <Typography variant="delta" tag="h2">
+          {title}
+        </Typography>
+        {description && (
+          <Typography variant="pi" textColor="neutral600">
+            {description}
+          </Typography>
+        )}
+      </Box>
+      {children}
+    </Flex>
+  );
+}
+
+// ─── Feature toggle card ─────────────────────────────────────────────────────
+
+function FeatureToggle({ label, hint, checked, onChange, color = 'primary' }) {
+  const bg = checked ? `${color}100` : 'neutral0';
+  const border = checked ? `${color}500` : 'neutral200';
+
+  return (
+    <ToggleCard
+      padding={4}
+      hasRadius
+      $bg={bg}
+      $borderColor={border}
+      onClick={() => onChange(!checked)}
+    >
+      <Flex gap={3} alignItems="center">
+        <Toggle checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <Flex direction="column" alignItems="flex-start" gap={1}>
+          <Typography variant="omega" fontWeight="semiBold" textColor="neutral800">
+            {label}
+          </Typography>
+          <Typography variant="pi" textColor="neutral600">
+            {hint || (checked ? 'Active' : 'Inactive')}
+          </Typography>
+        </Flex>
+      </Flex>
+    </ToggleCard>
+  );
+}
+
+// ─── Main component ──────────────────────────────────────────────────────────
 
 const SettingsPage = () => {
   const { get, put } = useFetchClient();
   const { toggleNotification } = useNotification();
   const { formatMessage } = useIntl();
 
-  // Helper for translations
-  const t = (id, defaultMessage) => formatMessage({ id: `${PLUGIN_ID}.${id}`, defaultMessage });
+  const t = (id, defaultMessage) =>
+    formatMessage({ id: `${PLUGIN_ID}.${id}`, defaultMessage });
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const [settings, setSettings] = useState({
-    enabled: true,
-    cors: {
-      origins: ['http://localhost:3000'],
-    },
-    connection: {
-      maxConnections: 1000,
-      pingTimeout: 20000,
-      pingInterval: 25000,
-      connectionTimeout: 45000,
-    },
-    security: {
-      requireAuthentication: false,
-      rateLimiting: {
-        enabled: false,
-        maxEventsPerSecond: 10,
-      },
-      ipWhitelist: [],
-      ipBlacklist: [],
-    },
-    events: {
-      customEventNames: false,
-      includeRelations: false,
-      excludeFields: [],
-      onlyPublished: false,
-    },
-    rooms: {
-      autoJoinByRole: {},
-      enablePrivateRooms: false,
-    },
-    redis: {
-      enabled: false,
-      url: 'redis://localhost:6379',
-    },
-    namespaces: {
-      enabled: false,
-      list: {},
-    },
-    middleware: {
-      enabled: false,
-      handlers: [],
-    },
-    monitoring: {
-      enableConnectionLogging: true,
-      enableEventLogging: false,
-      maxEventLogSize: 100,
-    },
-    entitySubscriptions: {
-      enabled: true,
-      maxSubscriptionsPerSocket: 100,
-      requireVerification: true,
-      allowedContentTypes: [],
-      enableMetrics: true,
-    },
-  });
+  const [settings, setSettings] = useState(null);
   const [availableContentTypes, setAvailableContentTypes] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
+  const [newOrigin, setNewOrigin] = useState('');
+  const [newNamespace, setNewNamespace] = useState('');
   const fileInputRef = useRef(null);
 
-  // Validation function
-  const validateSettings = (settingsToValidate) => {
-    const errors = [];
+  // ── Data fetching ──────────────────────────────────────────────────────────
 
-    // Validate CORS Origins
-    settingsToValidate.cors?.origins?.forEach((origin) => {
-      try {
-        new URL(origin);
-      } catch {
-        errors.push(t('validation.invalidOrigin', `Invalid origin: ${origin}`));
-      }
-    });
-
-    // Validate connection timeouts
-    if (settingsToValidate.connection?.pingTimeout <= 0) {
-      errors.push(t('validation.pingTimeoutPositive', 'Ping timeout must be positive'));
-    }
-    if (settingsToValidate.connection?.pingInterval <= 0) {
-      errors.push(t('validation.pingIntervalPositive', 'Ping interval must be positive'));
-    }
-    if (settingsToValidate.connection?.connectionTimeout <= 0) {
-      errors.push(t('validation.connectionTimeoutPositive', 'Connection timeout must be positive'));
-    }
-    if (settingsToValidate.connection?.maxConnections <= 0) {
-      errors.push(t('validation.maxConnectionsPositive', 'Max connections must be positive'));
-    }
-
-    // Validate Redis URL if enabled
-    if (settingsToValidate.redis?.enabled && !settingsToValidate.redis?.url) {
-      errors.push(t('validation.redisUrlRequired', 'Redis URL is required when Redis is enabled'));
-    }
-
-    return errors;
-  };
-
-  // Export settings
-  const exportSettings = () => {
-    const dataStr = JSON.stringify(settings, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-    const exportFileDefaultName = `socket-io-settings-${Date.now()}.json`;
-
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-
-    toggleNotification({
-      type: 'success',
-      message: t('settings.exported', 'Settings exported successfully!'),
-    });
-  };
-
-  // Import settings
-  const importSettings = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const imported = JSON.parse(e.target.result);
-        const errors = validateSettings(imported);
-
-        if (errors.length > 0) {
-          toggleNotification({
-            type: 'danger',
-            message: `${t('settings.importError', 'Import failed')}: ${errors.join(', ')}`,
-          });
-          return;
-        }
-
-        updateSettings(imported);
-        toggleNotification({
-          type: 'success',
-          message: t('settings.imported', 'Settings imported successfully!'),
-        });
-      } catch {
-        toggleNotification({
-          type: 'danger',
-          message: t('settings.invalidJson', 'Invalid settings file!'),
-        });
-      }
-    };
-    reader.readAsText(file);
-    event.target.value = null; // Reset file input
-  };
-
-  // Bulk actions for content type permissions
-  const enableAllContentTypes = (roleType) => {
-    updateSettings((prev) => {
-      const contentTypes = {};
-      availableContentTypes.forEach((ct) => {
-        contentTypes[ct.uid] = { create: true, update: true, delete: true };
-      });
-
-      return {
-        ...prev,
-        rolePermissions: {
-          ...prev.rolePermissions,
-          [roleType]: {
-            ...prev.rolePermissions?.[roleType],
-            contentTypes,
-          },
-        },
-      };
-    });
-  };
-
-  const disableAllContentTypes = (roleType) => {
-    updateSettings((prev) => ({
-      ...prev,
-      rolePermissions: {
-        ...prev.rolePermissions,
-        [roleType]: {
-          ...prev.rolePermissions?.[roleType],
-          contentTypes: {},
-        },
-      },
-    }));
-  };
-
-  // Load settings and content types on mount
   useEffect(() => {
-    const fetchData = async () => {
+    (async () => {
       try {
-        const [settingsRes, contentTypesRes, rolesRes] = await Promise.all([
+        const [settingsRes, ctRes, rolesRes] = await Promise.all([
           get(`/${PLUGIN_ID}/settings`),
           get(`/${PLUGIN_ID}/content-types`),
           get(`/${PLUGIN_ID}/roles`),
         ]);
-
-        if (settingsRes.data?.data) {
-          setSettings(settingsRes.data.data);
-        }
-        if (contentTypesRes.data?.data) {
-          setAvailableContentTypes(contentTypesRes.data.data);
-        }
-        if (rolesRes.data?.data) {
-          setAvailableRoles(rolesRes.data.data);
-        }
+        if (settingsRes.data?.data) setSettings(settingsRes.data.data);
+        if (ctRes.data?.data) setAvailableContentTypes(ctRes.data.data);
+        if (rolesRes.data?.data) setAvailableRoles(rolesRes.data.data);
       } catch (err) {
-        console.error('Error loading settings:', err);
+        strapi?.log?.error?.('Error loading IO settings:', err);
         toggleNotification({
           type: 'danger',
           message: t('settings.loadError', 'Error loading settings'),
@@ -468,19 +181,34 @@ const SettingsPage = () => {
       } finally {
         setIsLoading(false);
       }
-    };
+    })();
+  }, []);
 
-    fetchData();
-  }, [get, toggleNotification]);
+  // ── Generic updaters ───────────────────────────────────────────────────────
 
-  // Save settings and reload Socket.IO
+  const update = useCallback((updater) => {
+    setSettings(updater);
+    setHasChanges(true);
+  }, []);
+
+  const updateNested = useCallback(
+    (section, key, value) => {
+      update((prev) => ({
+        ...prev,
+        [section]: { ...prev[section], [key]: value },
+      }));
+    },
+    [update]
+  );
+
+  // ── Save ───────────────────────────────────────────────────────────────────
+
   const handleSave = async () => {
-    // Validate before saving
     const errors = validateSettings(settings);
     if (errors.length > 0) {
       toggleNotification({
         type: 'danger',
-        message: `${t('validation.errors', 'Validation errors')}: ${errors.join(', ')}`,
+        message: `Validation: ${errors.join(', ')}`,
       });
       return;
     }
@@ -493,8 +221,7 @@ const SettingsPage = () => {
         type: 'success',
         message: t('settings.success', 'Settings saved successfully!'),
       });
-    } catch (err) {
-      console.error('Error saving settings:', err);
+    } catch {
       toggleNotification({
         type: 'danger',
         message: t('settings.error', 'Error saving settings'),
@@ -504,522 +231,348 @@ const SettingsPage = () => {
     }
   };
 
-  // Update settings and mark as changed
-  const updateSettings = (updater) => {
-    setSettings(updater);
-    setHasChanges(true);
+  // ── Export / Import ────────────────────────────────────────────────────────
+
+  const exportSettings = () => {
+    const blob = new Blob([JSON.stringify(settings, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `socket-io-settings-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toggleNotification({ type: 'success', message: t('settings.exported', 'Settings exported!') });
   };
 
-  // Available HTTP methods
-  const httpMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+  const importSettings = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
 
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target.result);
+        const errors = validateSettings(imported);
+        if (errors.length > 0) {
+          toggleNotification({
+            type: 'danger',
+            message: `Import failed: ${errors.join(', ')}`,
+          });
+          return;
+        }
+        update(imported);
+        toggleNotification({ type: 'success', message: t('settings.imported', 'Settings imported!') });
+      } catch {
+        toggleNotification({ type: 'danger', message: t('settings.invalidJson', 'Invalid JSON file') });
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = null;
+  };
 
-  // CORS Origins management
-  const [newOrigin, setNewOrigin] = useState('');
-  const [newNamespace, setNewNamespace] = useState('');
+  // ── CORS helpers ───────────────────────────────────────────────────────────
+
   const addOrigin = () => {
-    if (newOrigin && !settings.cors?.origins?.includes(newOrigin)) {
-      updateSettings((prev) => ({
-        ...prev,
-        cors: {
-          ...prev.cors,
-          origins: [...(prev.cors?.origins || []), newOrigin],
-        },
-      }));
-      setNewOrigin('');
-    }
+    if (!newOrigin || settings.cors?.origins?.includes(newOrigin)) return;
+    update((prev) => ({
+      ...prev,
+      cors: { ...prev.cors, origins: [...(prev.cors?.origins || []), newOrigin] },
+    }));
+    setNewOrigin('');
   };
+
   const removeOrigin = (origin) => {
-    updateSettings((prev) => ({
+    update((prev) => ({
       ...prev,
-      cors: {
-        ...prev.cors,
-        origins: prev.cors?.origins?.filter((o) => o !== origin) || [],
-      },
+      cors: { ...prev.cors, origins: prev.cors?.origins?.filter((o) => o !== origin) || [] },
     }));
   };
 
-  // Connection settings update
-  const updateConnection = (key, value) => {
-    updateSettings((prev) => ({
-      ...prev,
-      connection: {
-        ...prev.connection,
-        [key]: parseInt(value) || 0,
-      },
-    }));
-  };
+  // ── Namespace helpers ──────────────────────────────────────────────────────
 
-  // Security settings update
-  const updateSecurity = (key, value) => {
-    updateSettings((prev) => ({
-      ...prev,
-      security: {
-        ...prev.security,
-        [key]: value,
-      },
-    }));
-  };
-
-  // Events settings update
-  const updateEvents = (key, value) => {
-    updateSettings((prev) => ({
-      ...prev,
-      events: {
-        ...prev.events,
-        [key]: value,
-      },
-    }));
-  };
-
-  // Monitoring settings update
-  const updateMonitoring = (key, value) => {
-    updateSettings((prev) => ({
-      ...prev,
-      monitoring: {
-        ...prev.monitoring,
-        [key]: value,
-      },
-    }));
-  };
-
-  // Entity Subscriptions settings update
-  const updateEntitySubscriptions = (key, value) => {
-    updateSettings((prev) => ({
-      ...prev,
-      entitySubscriptions: {
-        ...prev.entitySubscriptions,
-        [key]: value,
-      },
-    }));
-  };
-
-  // Redis settings update
-  const updateRedis = (key, value) => {
-    updateSettings((prev) => ({
-      ...prev,
-      redis: {
-        ...prev.redis,
-        [key]: value,
-      },
-    }));
-  };
-
-  // Namespaces settings update
-  const updateNamespaces = (key, value) => {
-    updateSettings((prev) => ({
+  const addNamespace = () => {
+    const trimmed = newNamespace.trim();
+    if (!trimmed || settings.namespaces?.list?.[trimmed]) return;
+    update((prev) => ({
       ...prev,
       namespaces: {
         ...prev.namespaces,
-        [key]: value,
-      },
-    }));
-  };
-
-  // Namespace management
-  const addNamespace = () => {
-    const trimmed = newNamespace.trim();
-    console.log('addNamespace called, newNamespace:', trimmed);
-    console.log('current list:', settings.namespaces?.list);
-    
-    if (!trimmed) {
-      console.log('Empty namespace name');
-      return;
-    }
-    
-    const currentList = settings.namespaces?.list || {};
-    if (currentList[trimmed]) {
-      console.log('Namespace already exists');
-      return;
-    }
-    
-    updateSettings((prev) => ({
-      ...prev,
-      namespaces: {
-        enabled: prev.namespaces?.enabled || false,
-        list: {
-          ...currentList,
-          [trimmed]: { requireAuth: false },
-        },
+        list: { ...(prev.namespaces?.list || {}), [trimmed]: { requireAuth: false } },
       },
     }));
     setNewNamespace('');
-    console.log('Namespace added:', trimmed);
   };
 
-  const removeNamespace = (namespace) => {
-    updateSettings((prev) => {
-      const newList = { ...prev.namespaces?.list };
-      delete newList[namespace];
-      return {
-        ...prev,
-        namespaces: {
-          ...prev.namespaces,
-          list: newList,
-        },
-      };
+  const removeNamespace = (ns) => {
+    update((prev) => {
+      const list = { ...prev.namespaces?.list };
+      delete list[ns];
+      return { ...prev, namespaces: { ...prev.namespaces, list } };
     });
   };
 
-  if (isLoading) {
+  // ── Bulk content type perms ────────────────────────────────────────────────
+
+  const enableAllContentTypes = (roleType) => {
+    const ct = {};
+    availableContentTypes.forEach((c) => {
+      ct[c.uid] = { create: true, update: true, delete: true };
+    });
+    update((prev) => ({
+      ...prev,
+      rolePermissions: {
+        ...prev.rolePermissions,
+        [roleType]: { ...prev.rolePermissions?.[roleType], contentTypes: ct },
+      },
+    }));
+  };
+
+  const disableAllContentTypes = (roleType) => {
+    update((prev) => ({
+      ...prev,
+      rolePermissions: {
+        ...prev.rolePermissions,
+        [roleType]: { ...prev.rolePermissions?.[roleType], contentTypes: {} },
+      },
+    }));
+  };
+
+  // ── Loading state ──────────────────────────────────────────────────────────
+
+  if (isLoading || !settings) {
     return (
-      <ResponsiveMain>
+      <Main>
         <Box padding={8}>
-          <Typography>Loading...</Typography>
+          <Flex justifyContent="center">
+            <Loader>{t('loading', 'Loading settings...')}</Loader>
+          </Flex>
         </Box>
-      </ResponsiveMain>
+      </Main>
     );
   }
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
-    <ResponsiveMain>
-      <Box padding={8} background="neutral100">
-        {/* Header */}
-        <ResponsiveHeader>
-          <Flex direction={{ base: 'column', tablet: 'row' }} justifyContent="space-between" alignItems={{ base: 'flex-start', tablet: 'center' }} gap={3}>
-            <Box>
-              <ResponsiveTitle variant="alpha" as="h1">
-                {t('plugin.name', 'Socket.IO')} {t('settings.title', 'Settings')}
-              </ResponsiveTitle>
-              <ResponsiveSubtitle variant="epsilon" textColor="neutral600">
-                {t('settings.description', 'Configure the Socket.IO connection for real-time events')}
-              </ResponsiveSubtitle>
-            </Box>
-            <ResponsiveButtonGroup>
-              <Button
-                variant="secondary"
-                startIcon={<Download />}
-                onClick={exportSettings}
-                size="S"
-              >
-                {t('settings.export', 'Export')}
+    <Main>
+      <Layouts.Header
+        title={`Socket.IO ${t('settings.title', 'Settings')}`}
+        subtitle={t('settings.description', 'Configure the Socket.IO connection for real-time events')}
+        primaryAction={
+          <Button
+            onClick={handleSave}
+            loading={isSaving}
+            startIcon={<Check />}
+            disabled={!hasChanges}
+          >
+            {hasChanges ? t('settings.saveAndApply', 'Save & Apply') : t('settings.saved', 'Saved')}
+          </Button>
+        }
+        secondaryAction={
+          <Flex gap={2}>
+            <Button variant="secondary" startIcon={<Download />} onClick={exportSettings} size="S">
+              {t('settings.export', 'Export')}
+            </Button>
+            <Button
+              variant="secondary"
+              startIcon={<Upload />}
+              onClick={() => fileInputRef.current?.click()}
+              size="S"
+            >
+              {t('settings.import', 'Import')}
+            </Button>
+            <HiddenInput ref={fileInputRef} type="file" accept=".json" onChange={importSettings} />
+          </Flex>
+        }
+      />
+
+      <Layouts.Content>
+        <Box background="neutral0" padding={6} shadow="filterShadow" hasRadius>
+          {/* ── CORS ─────────────────────────────────────────────────── */}
+          <SectionHeading
+            title={t('cors.title', 'CORS Settings')}
+            description={t('cors.description', 'Configure which frontends can connect')}
+          />
+
+          <Field.Root>
+            <Field.Label>{t('cors.origins', 'Allowed Origins')}</Field.Label>
+            <Flex gap={2} paddingBottom={2}>
+              <Box style={{ flex: 1 }}>
+                <TextInput
+                  placeholder="https://example.com"
+                  value={newOrigin}
+                  onChange={(e) => setNewOrigin(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addOrigin()}
+                />
+              </Box>
+              <Button onClick={addOrigin} startIcon={<Plus />}>
+                {t('cors.add', 'Add')}
               </Button>
-              <Button
-                variant="secondary"
-                startIcon={<Upload />}
-                onClick={() => fileInputRef.current?.click()}
-                size="S"
-              >
-                {t('settings.import', 'Import')}
-              </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={importSettings}
-                style={{ display: 'none' }}
-              />
-              <Button
-                onClick={handleSave}
-                loading={isSaving}
-                startIcon={<Check />}
-                disabled={!hasChanges}
-                size="S"
-              >
-                {hasChanges ? t('settings.saveAndApply', 'Save & Apply') : t('settings.saved', 'Saved')}
-              </Button>
-            </ResponsiveButtonGroup>
             </Flex>
-        </ResponsiveHeader>
+            <Flex gap={2} wrap="wrap" paddingTop={1}>
+              {settings.cors?.origins?.map((origin) => (
+                <Tag key={origin} icon={<Cross />} onClick={() => removeOrigin(origin)}>
+                  {origin}
+                </Tag>
+              ))}
+            </Flex>
+            <Field.Hint>{t('cors.originsHint', 'Add frontend URLs that can connect via Socket.IO')}</Field.Hint>
+          </Field.Root>
 
-        <ResponsiveCard background="neutral0" shadow="filterShadow" hasRadius>
-          {/* CORS Origins Section */}
-          <ResponsiveSection>
-            <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('cors.title', 'CORS Origins')}
-            </ResponsiveSectionTitle>
-            <Typography variant="pi" textColor="neutral600">
-              {t('cors.description', 'Configure which frontend URLs are allowed to connect')}
-            </Typography>
-          </ResponsiveSection>
+          <Box paddingTop={6} paddingBottom={4}>
+            <Divider />
+          </Box>
+
+          {/* ── Connection Settings ──────────────────────────────────── */}
+          <SectionHeading
+            title={t('connection.title', 'Connection Settings')}
+            description={t('connection.description', 'Configure connection limits and timeouts')}
+          />
 
           <Grid.Root gap={4}>
-            <Grid.Item col={12}>
-              <ResponsiveField>
-                <Field.Label>{t('cors.origins', 'Allowed Origins')}</Field.Label>
-                <Flex direction={{ base: 'column', tablet: 'row' }} gap={2} paddingBottom={2}>
-                  <InputWrapper style={{ flex: 1, width: '100%' }}>
-                    <TextInput
-                      placeholder="http://localhost:3000"
-                      value={newOrigin}
-                      onChange={(e) => setNewOrigin(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && addOrigin()}
+            {[
+              { key: 'maxConnections', label: t('connection.maxConnections', 'Max Connections'), fallback: 1000 },
+              { key: 'pingTimeout', label: t('connection.pingTimeout', 'Ping Timeout (ms)'), fallback: 20000 },
+              { key: 'pingInterval', label: t('connection.pingInterval', 'Ping Interval (ms)'), fallback: 25000 },
+              { key: 'connectionTimeout', label: t('connection.connectionTimeout', 'Connection Timeout (ms)'), fallback: 45000 },
+            ].map(({ key, label, fallback }) => (
+              <Grid.Item col={6} s={12} key={key}>
+                <Field.Root>
+                  <Field.Label>{label}</Field.Label>
+                  <NumberInputClean>
+                    <NumberInput
+                      value={settings.connection?.[key] || fallback}
+                      onValueChange={(v) => updateNested('connection', key, parseInt(v) || 0)}
                     />
-                  </InputWrapper>
-                  <Button onClick={addOrigin} size="L" style={{ width: '100%', maxWidth: '200px', minHeight: '44px' }}>{t('cors.add', 'Add')}</Button>
-                </Flex>
-                <Flex gap={2} wrap="wrap" paddingTop={2}>
-                  {settings.cors?.origins?.map((origin) => (
-                    <Badge key={origin} onClick={() => removeOrigin(origin)} style={{ cursor: 'pointer', fontSize: '13px', padding: '6px 12px' }}>
-                      {origin} ✕
-                    </Badge>
-                  ))}
-                </Flex>
-                <Field.Hint>
-                  {t('cors.originsHint', 'Add multiple frontend URLs that can connect')}
-                </Field.Hint>
-              </ResponsiveField>
-            </Grid.Item>
-
+                  </NumberInputClean>
+                </Field.Root>
+              </Grid.Item>
+            ))}
           </Grid.Root>
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Connection Settings */}
-          <ResponsiveSection>
-            <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('connection.title', 'Connection Settings')}
-            </ResponsiveSectionTitle>
-            <Typography variant="pi" textColor="neutral600">
-              {t('connection.description', 'Configure connection limits and timeouts')}
-            </Typography>
-          </ResponsiveSection>
-
-          <Grid.Root gap={3}>
-            <Grid.Item col={6} s={12}>
-              <ResponsiveField>
-                <Field.Label>{t('connection.maxConnections', 'Max Connections')}</Field.Label>
-                <InputWrapper>
-                <NumberInput
-                  value={settings.connection?.maxConnections || 1000}
-                  onValueChange={(value) => updateConnection('maxConnections', value)}
-                />
-                </InputWrapper>
-              </ResponsiveField>
-            </Grid.Item>
-            <Grid.Item col={6} s={12}>
-              <ResponsiveField>
-                <Field.Label>{t('connection.pingTimeout', 'Ping Timeout (ms)')}</Field.Label>
-                <InputWrapper>
-                <NumberInput
-                  value={settings.connection?.pingTimeout || 20000}
-                  onValueChange={(value) => updateConnection('pingTimeout', value)}
-                />
-                </InputWrapper>
-              </ResponsiveField>
-            </Grid.Item>
-            <Grid.Item col={6} s={12}>
-              <ResponsiveField>
-                <Field.Label>{t('connection.pingInterval', 'Ping Interval (ms)')}</Field.Label>
-                <InputWrapper>
-                <NumberInput
-                  value={settings.connection?.pingInterval || 25000}
-                  onValueChange={(value) => updateConnection('pingInterval', value)}
-                />
-                </InputWrapper>
-              </ResponsiveField>
-            </Grid.Item>
-            <Grid.Item col={6} s={12}>
-              <ResponsiveField>
-                <Field.Label>{t('connection.connectionTimeout', 'Connection Timeout (ms)')}</Field.Label>
-                <InputWrapper>
-                <NumberInput
-                  value={settings.connection?.connectionTimeout || 45000}
-                  onValueChange={(value) => updateConnection('connectionTimeout', value)}
-                />
-                </InputWrapper>
-              </ResponsiveField>
-            </Grid.Item>
-          </Grid.Root>
-
-          <Box paddingTop={4} paddingBottom={2}>
-            <Divider />
-          </Box>
-
-          {/* Security Settings */}
-          <ResponsiveSection>
-            <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('security.title', 'Security Settings')}
-            </ResponsiveSectionTitle>
-            <Typography variant="pi" textColor="neutral600">
-              {t('security.description', 'Configure authentication and rate limiting')}
-            </Typography>
-          </ResponsiveSection>
+          {/* ── Security ─────────────────────────────────────────────── */}
+          <SectionHeading
+            title={t('security.title', 'Security Settings')}
+            description={t('security.description', 'Configure authentication and rate limiting')}
+          />
 
           <Grid.Root gap={4}>
             <Grid.Item col={6} s={12}>
-              <ToggleCard
-                $active={settings.security?.requireAuthentication}
-                $color="#5cb176"
-                onClick={() => updateSecurity('requireAuthentication', !settings.security?.requireAuthentication)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.security?.requireAuthentication || false}
-                    onChange={(e) => updateSecurity('requireAuthentication', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="semiBold">
-                      {t('security.requireAuth', 'Require Authentication')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600">
-                      {settings.security?.requireAuthentication ? 'Active' : 'Inactive'}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </ToggleCard>
+              <FeatureToggle
+                label={t('security.requireAuth', 'Require Authentication')}
+                checked={settings.security?.requireAuthentication || false}
+                onChange={(v) => updateNested('security', 'requireAuthentication', v)}
+                color="success"
+              />
             </Grid.Item>
             <Grid.Item col={6} s={12}>
-              <ToggleCard
-                $active={settings.security?.rateLimiting?.enabled}
-                $color="#f59e0b"
-                onClick={() => updateSecurity('rateLimiting', { ...settings.security?.rateLimiting, enabled: !settings.security?.rateLimiting?.enabled })}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.security?.rateLimiting?.enabled || false}
-                    onChange={(e) => updateSecurity('rateLimiting', { ...settings.security?.rateLimiting, enabled: e.target.checked })}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="semiBold">
-                      {t('security.rateLimiting', 'Enable Rate Limiting')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600">
-                      {settings.security?.rateLimiting?.enabled ? 'Active' : 'Inactive'}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </ToggleCard>
+              <FeatureToggle
+                label={t('security.rateLimiting', 'Rate Limiting')}
+                checked={settings.security?.rateLimiting?.enabled || false}
+                onChange={(v) =>
+                  updateNested('security', 'rateLimiting', {
+                    ...settings.security?.rateLimiting,
+                    enabled: v,
+                  })
+                }
+                color="warning"
+              />
             </Grid.Item>
           </Grid.Root>
-          
+
           {settings.security?.rateLimiting?.enabled && (
-            <Box paddingTop={3}>
+            <Box paddingTop={4}>
               <Grid.Root gap={4}>
                 <Grid.Item col={6} s={12}>
-                  <ResponsiveField>
+                  <Field.Root>
                     <Field.Label>{t('security.maxEventsPerSecond', 'Max Events/Second')}</Field.Label>
-                    <InputWrapper>
+                    <NumberInputClean>
                       <NumberInput
                         value={settings.security?.rateLimiting?.maxEventsPerSecond || 10}
-                        onValueChange={(value) => updateSecurity('rateLimiting', { ...settings.security?.rateLimiting, maxEventsPerSecond: value })}
+                        onValueChange={(v) =>
+                          updateNested('security', 'rateLimiting', {
+                            ...settings.security?.rateLimiting,
+                            maxEventsPerSecond: parseInt(v) || 10,
+                          })
+                        }
                       />
-                    </InputWrapper>
-                  </ResponsiveField>
+                    </NumberInputClean>
+                  </Field.Root>
                 </Grid.Item>
               </Grid.Root>
             </Box>
           )}
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Events Settings */}
-          <ResponsiveSection>
-            <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('events.title', 'Real-time Events')}
-            </ResponsiveSectionTitle>
-            <Typography variant="pi" textColor="neutral600">
-              {t('events.description', 'Configure which events are sent for which content types')}
-            </Typography>
-          </ResponsiveSection>
+          {/* ── Real-time Events ──────────────────────────────────────── */}
+          <SectionHeading
+            title={t('events.title', 'Real-time Events')}
+            description={t('events.description', 'Configure which events are sent for content types')}
+          />
 
           <Grid.Root gap={4}>
             <Grid.Item col={4} s={12}>
-              <ToggleCard
-                $active={settings.events?.customEventNames}
-                $color="#4945ff"
-                onClick={() => updateEvents('customEventNames', !settings.events?.customEventNames)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.events?.customEventNames || false}
-                    onChange={(e) => updateEvents('customEventNames', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="semiBold">
-                      {t('events.customNames', 'Use Custom Event Names')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600">
-                      {settings.events?.customEventNames ? 'Active' : 'Inactive'}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </ToggleCard>
+              <FeatureToggle
+                label={t('events.customNames', 'Custom Event Names')}
+                checked={settings.events?.customEventNames || false}
+                onChange={(v) => updateNested('events', 'customEventNames', v)}
+              />
             </Grid.Item>
             <Grid.Item col={4} s={12}>
-              <ToggleCard
-                $active={settings.events?.includeRelations}
-                $color="#4945ff"
-                onClick={() => updateEvents('includeRelations', !settings.events?.includeRelations)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.events?.includeRelations || false}
-                    onChange={(e) => updateEvents('includeRelations', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="semiBold">
-                      {t('events.includeRelations', 'Include Relations')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600">
-                      {settings.events?.includeRelations ? 'Active' : 'Inactive'}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </ToggleCard>
+              <FeatureToggle
+                label={t('events.includeRelations', 'Include Relations')}
+                checked={settings.events?.includeRelations || false}
+                onChange={(v) => updateNested('events', 'includeRelations', v)}
+              />
             </Grid.Item>
             <Grid.Item col={4} s={12}>
-              <ToggleCard
-                $active={settings.events?.onlyPublished}
-                $color="#4945ff"
-                onClick={() => updateEvents('onlyPublished', !settings.events?.onlyPublished)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.events?.onlyPublished || false}
-                    onChange={(e) => updateEvents('onlyPublished', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="semiBold">
-                      {t('events.onlyPublished', 'Only Published Content')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600">
-                      {settings.events?.onlyPublished ? 'Active' : 'Inactive'}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </ToggleCard>
+              <FeatureToggle
+                label={t('events.onlyPublished', 'Only Published Content')}
+                checked={settings.events?.onlyPublished || false}
+                onChange={(v) => updateNested('events', 'onlyPublished', v)}
+              />
             </Grid.Item>
           </Grid.Root>
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Role Permissions Section */}
-          <ResponsiveSection>
-            <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('permissions.title', 'Role Permissions')}
-            </ResponsiveSectionTitle>
-            <Typography variant="pi" textColor="neutral600">
-              {t('permissions.description', 'Configure Socket.IO permissions per user role')}
-            </Typography>
-          </ResponsiveSection>
+          {/* ── Role Permissions ──────────────────────────────────────── */}
+          <SectionHeading
+            title={t('permissions.title', 'Role Permissions')}
+            description={t('permissions.description', 'Configure Socket.IO permissions per user role')}
+          />
 
           {availableRoles.length > 0 ? (
             <Accordion.Root>
               {availableRoles.map((role) => {
                 const rolePerms = settings.rolePermissions?.[role.type] || {};
                 const canConnect = rolePerms.canConnect ?? true;
-                const enabledContentTypes = Object.entries(rolePerms.contentTypes || {}).filter(
-                  ([uid, actions]) => actions.create || actions.update || actions.delete
+                const enabledCT = Object.entries(rolePerms.contentTypes || {}).filter(
+                  ([, acts]) => acts.create || acts.update || acts.delete
                 ).length;
 
                 return (
                   <Accordion.Item key={role.id} value={role.type}>
                     <Accordion.Header>
                       <Accordion.Trigger>
-                        <Flex justifyContent="space-between" width="100%" paddingRight={4} alignItems="flex-start">
+                        <Flex justifyContent="space-between" width="100%" paddingRight={4}>
                           <Flex direction="column" alignItems="flex-start" gap={1}>
                             <Typography variant="omega" fontWeight="bold">
                               {role.name}
                             </Typography>
                             <Typography variant="pi" textColor="neutral600">
-                              ({enabledContentTypes} {t('permissions.contentTypesEnabled', 'content types enabled')})
+                              {enabledCT} {t('permissions.contentTypesEnabled', 'content types enabled')}
                             </Typography>
                           </Flex>
                           <Badge active={canConnect}>
@@ -1030,20 +583,17 @@ const SettingsPage = () => {
                     </Accordion.Header>
                     <Accordion.Content>
                       <Box padding={4} background="neutral100">
-                        {/* Can Connect Toggle */}
+                        {/* Can Connect */}
                         <Box paddingBottom={4}>
                           <Flex gap={3} alignItems="center">
                             <Checkbox
                               checked={canConnect}
                               onCheckedChange={(checked) =>
-                                updateSettings((prev) => ({
+                                update((prev) => ({
                                   ...prev,
                                   rolePermissions: {
                                     ...prev.rolePermissions,
-                                    [role.type]: {
-                                      ...prev.rolePermissions?.[role.type],
-                                      canConnect: checked,
-                                    },
+                                    [role.type]: { ...prev.rolePermissions?.[role.type], canConnect: checked },
                                   },
                                 }))
                               }
@@ -1059,20 +609,17 @@ const SettingsPage = () => {
                           </Flex>
                         </Box>
 
-                        {/* Credentials */}
+                        {/* Allow Credentials */}
                         <Box paddingBottom={4}>
                           <Flex gap={3} alignItems="center">
                             <Checkbox
                               checked={rolePerms.allowCredentials ?? true}
                               onCheckedChange={(checked) =>
-                                updateSettings((prev) => ({
+                                update((prev) => ({
                                   ...prev,
                                   rolePermissions: {
                                     ...prev.rolePermissions,
-                                    [role.type]: {
-                                      ...prev.rolePermissions?.[role.type],
-                                      allowCredentials: checked,
-                                    },
+                                    [role.type]: { ...prev.rolePermissions?.[role.type], allowCredentials: checked },
                                   },
                                 }))
                               }
@@ -1093,258 +640,161 @@ const SettingsPage = () => {
                           <Typography variant="omega" fontWeight="bold" paddingBottom={2}>
                             {t('permissions.allowedMethods', 'Allowed HTTP Methods')}
                           </Typography>
-                          <Flex gap={2} wrap="wrap">
-                            {httpMethods.map((method) => (
-                              <Box
-                                key={method}
-                                padding={2}
-                                paddingLeft={3}
-                                paddingRight={3}
-                                background={rolePerms.allowedMethods?.includes(method) ? 'primary100' : 'neutral100'}
-                                hasRadius
-                                style={{
-                                  cursor: 'pointer',
-                                  border: `1px solid ${rolePerms.allowedMethods?.includes(method) ? '#4945ff' : '#dcdce4'}`,
-                                }}
-                                onClick={() => {
-                                  const current = rolePerms.allowedMethods || [];
-                                  const updated = current.includes(method)
-                                    ? current.filter((m) => m !== method)
-                                    : [...current, method];
-                                  updateSettings((prev) => ({
-                                    ...prev,
-                                    rolePermissions: {
-                                      ...prev.rolePermissions,
-                                      [role.type]: {
-                                        ...prev.rolePermissions?.[role.type],
-                                        allowedMethods: updated,
+                          <Flex gap={2} wrap="wrap" paddingTop={2}>
+                            {HTTP_METHODS.map((method) => {
+                              const isActive = rolePerms.allowedMethods?.includes(method) || false;
+                              return (
+                                <Box
+                                  key={method}
+                                  padding={2}
+                                  paddingLeft={3}
+                                  paddingRight={3}
+                                  background={isActive ? 'primary100' : 'neutral100'}
+                                  hasRadius
+                                  borderColor={isActive ? 'primary600' : 'neutral200'}
+                                  style={{ cursor: 'pointer', border: '1px solid' }}
+                                  onClick={() => {
+                                    const current = rolePerms.allowedMethods || [];
+                                    const updated = isActive
+                                      ? current.filter((m) => m !== method)
+                                      : [...current, method];
+                                    update((prev) => ({
+                                      ...prev,
+                                      rolePermissions: {
+                                        ...prev.rolePermissions,
+                                        [role.type]: { ...prev.rolePermissions?.[role.type], allowedMethods: updated },
                                       },
-                                    },
-                                  }));
-                                }}
-                              >
-                                <Flex gap={2} alignItems="center">
-                                  <Checkbox
-                                    checked={rolePerms.allowedMethods?.includes(method) || false}
-                                    onCheckedChange={() => {}}
-                                  />
-                                  <Typography variant="omega" fontWeight="bold">
-                                    {method}
-                                  </Typography>
-                                </Flex>
-                              </Box>
-                            ))}
+                                    }));
+                                  }}
+                                >
+                                  <Flex gap={2} alignItems="center">
+                                    <Checkbox checked={isActive} onCheckedChange={() => {}} />
+                                    <Typography variant="omega" fontWeight="bold">
+                                      {method}
+                                    </Typography>
+                                  </Flex>
+                                </Box>
+                              );
+                            })}
                           </Flex>
                         </Box>
 
                         <Divider />
 
-                        {/* Content Type Permissions */}
+                        {/* Content Type Permissions Table */}
                         <Box paddingTop={4}>
                           <Flex justifyContent="space-between" alignItems="center" paddingBottom={3}>
                             <Typography variant="omega" fontWeight="bold">
                               {t('permissions.contentTypePermissions', 'Content Type Permissions')}
                             </Typography>
                             <Flex gap={2}>
-                              <Button
-                                size="S"
-                                variant="secondary"
-                                onClick={() => enableAllContentTypes(role.type)}
-                              >
+                              <Button size="S" variant="secondary" onClick={() => enableAllContentTypes(role.type)}>
                                 {t('permissions.enableAll', 'Enable All')}
                               </Button>
-                              <Button
-                                size="S"
-                                variant="tertiary"
-                                onClick={() => disableAllContentTypes(role.type)}
-                              >
+                              <Button size="S" variant="tertiary" onClick={() => disableAllContentTypes(role.type)}>
                                 {t('permissions.disableAll', 'Disable All')}
                               </Button>
                             </Flex>
                           </Flex>
 
                           {availableContentTypes.length > 0 ? (
-                            <Box background="neutral0" hasRadius style={{ border: '1px solid #dcdce4' }}>
-                              {/* Header */}
-                              <Box padding={2} background="neutral100" style={{ borderBottom: '1px solid #dcdce4' }}>
+                            <Box background="neutral0" hasRadius borderColor="neutral200" style={{ border: '1px solid' }}>
+                              {/* Table header */}
+                              <Box padding={2} background="neutral100" borderColor="neutral200" style={{ borderBottom: '1px solid' }}>
                                 <Grid.Root>
                                   <Grid.Item col={4}>
-                                    <Typography variant="sigma" textColor="neutral600">
-                                      {t('events.contentType', 'CONTENT TYPE')}
-                                    </Typography>
+                                    <Typography variant="sigma" textColor="neutral600">CONTENT TYPE</Typography>
                                   </Grid.Item>
-                                  <Grid.Item col={2}>
-                                    <Flex justifyContent="center">
-                                      <Typography variant="sigma" textColor="neutral600">
-                                        {t('events.create', 'CREATE')}
-                                      </Typography>
-                                    </Flex>
-                                  </Grid.Item>
-                                  <Grid.Item col={2}>
-                                    <Flex justifyContent="center">
-                                      <Typography variant="sigma" textColor="neutral600">
-                                        {t('events.update', 'UPDATE')}
-                                      </Typography>
-                                    </Flex>
-                                  </Grid.Item>
-                                  <Grid.Item col={2}>
-                                    <Flex justifyContent="center">
-                                      <Typography variant="sigma" textColor="neutral600">
-                                        {t('events.delete', 'DELETE')}
-                                      </Typography>
-                                    </Flex>
-                                  </Grid.Item>
-                                  <Grid.Item col={2}>
-                                    <Flex justifyContent="center">
+                                  {AVAILABLE_ACTIONS.map((action) => (
+                                    <Grid.Item col={2} key={action}>
+                                      <Flex justifyContent="center">
                                         <Typography variant="sigma" textColor="neutral600">
-                                        {t('entitySubscriptions.allow', 'ENTITIES')} [NEW]
-                                      </Typography>
+                                          {action.toUpperCase()}
+                                        </Typography>
+                                      </Flex>
+                                    </Grid.Item>
+                                  ))}
+                                  <Grid.Item col={2}>
+                                    <Flex justifyContent="center">
+                                      <Typography variant="sigma" textColor="neutral600">ENTITIES</Typography>
                                     </Flex>
                                   </Grid.Item>
                                 </Grid.Root>
                               </Box>
 
-                              {/* Content Type Rows */}
+                              {/* Table rows */}
                               {availableContentTypes.map((ct, idx) => {
-                                const hasAnyPermission = rolePerms.contentTypes?.[ct.uid]?.create || 
-                                                        rolePerms.contentTypes?.[ct.uid]?.update || 
-                                                        rolePerms.contentTypes?.[ct.uid]?.delete;
-                                const allowEntitySubs = settings.entitySubscriptions?.allowedContentTypes?.includes(ct.uid) || 
-                                                       settings.entitySubscriptions?.allowedContentTypes?.length === 0;
-                                
+                                const ctPerms = rolePerms.contentTypes?.[ct.uid] || {};
+                                const hasAny = ctPerms.create || ctPerms.update || ctPerms.delete;
+                                const entitySubsAllowed =
+                                  settings.entitySubscriptions?.allowedContentTypes?.length === 0 ||
+                                  settings.entitySubscriptions?.allowedContentTypes?.includes(ct.uid);
+
                                 return (
                                   <Box
                                     key={ct.uid}
                                     padding={2}
+                                    borderColor="neutral200"
                                     style={{
-                                      borderBottom: idx < availableContentTypes.length - 1 ? '1px solid #dcdce4' : 'none',
-                                      opacity: hasAnyPermission ? 1 : 0.5,
+                                      borderBottom: idx < availableContentTypes.length - 1 ? '1px solid' : 'none',
+                                      opacity: hasAny ? 1 : 0.5,
                                     }}
                                   >
                                     <Grid.Root>
                                       <Grid.Item col={4}>
-                                        <Typography variant="omega">
-                                          {ct.displayName}
-                                        </Typography>
+                                        <Typography variant="omega">{ct.displayName}</Typography>
                                       </Grid.Item>
-                                      <Grid.Item col={2}>
-                                        <Flex justifyContent="center">
-                                          <Checkbox
-                                            checked={rolePerms.contentTypes?.[ct.uid]?.create || false}
-                                            onCheckedChange={(checked) =>
-                                              updateSettings((prev) => ({
-                                                ...prev,
-                                                rolePermissions: {
-                                                  ...prev.rolePermissions,
-                                                  [role.type]: {
-                                                    ...prev.rolePermissions?.[role.type],
-                                                    contentTypes: {
-                                                      ...prev.rolePermissions?.[role.type]?.contentTypes,
-                                                      [ct.uid]: {
-                                                        ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
-                                                        create: checked,
+                                      {AVAILABLE_ACTIONS.map((action) => (
+                                        <Grid.Item col={2} key={action}>
+                                          <Flex justifyContent="center">
+                                            <Checkbox
+                                              checked={ctPerms[action] || false}
+                                              onCheckedChange={(checked) =>
+                                                update((prev) => ({
+                                                  ...prev,
+                                                  rolePermissions: {
+                                                    ...prev.rolePermissions,
+                                                    [role.type]: {
+                                                      ...prev.rolePermissions?.[role.type],
+                                                      contentTypes: {
+                                                        ...prev.rolePermissions?.[role.type]?.contentTypes,
+                                                        [ct.uid]: {
+                                                          ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
+                                                          [action]: checked,
+                                                        },
                                                       },
                                                     },
                                                   },
-                                                },
-                                              }))
-                                            }
-                                          />
-                                        </Flex>
-                                      </Grid.Item>
-                                      <Grid.Item col={2}>
-                                        <Flex justifyContent="center">
-                                          <Checkbox
-                                            checked={rolePerms.contentTypes?.[ct.uid]?.update || false}
-                                            onCheckedChange={(checked) =>
-                                              updateSettings((prev) => ({
-                                                ...prev,
-                                                rolePermissions: {
-                                                  ...prev.rolePermissions,
-                                                  [role.type]: {
-                                                    ...prev.rolePermissions?.[role.type],
-                                                    contentTypes: {
-                                                      ...prev.rolePermissions?.[role.type]?.contentTypes,
-                                                      [ct.uid]: {
-                                                        ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
-                                                        update: checked,
-                                                      },
-                                                    },
-                                                  },
-                                                },
-                                              }))
-                                            }
-                                          />
-                                        </Flex>
-                                      </Grid.Item>
-                                      <Grid.Item col={2}>
-                                        <Flex justifyContent="center">
-                                          <Checkbox
-                                            checked={rolePerms.contentTypes?.[ct.uid]?.delete || false}
-                                            onCheckedChange={(checked) =>
-                                              updateSettings((prev) => ({
-                                                ...prev,
-                                                rolePermissions: {
-                                                  ...prev.rolePermissions,
-                                                  [role.type]: {
-                                                    ...prev.rolePermissions?.[role.type],
-                                                    contentTypes: {
-                                                      ...prev.rolePermissions?.[role.type]?.contentTypes,
-                                                      [ct.uid]: {
-                                                        ...prev.rolePermissions?.[role.type]?.contentTypes?.[ct.uid],
-                                                        delete: checked,
-                                                      },
-                                                    },
-                                                  },
-                                                },
-                                              }))
-                                            }
-                                          />
-                                        </Flex>
-                                      </Grid.Item>
+                                                }))
+                                              }
+                                            />
+                                          </Flex>
+                                        </Grid.Item>
+                                      ))}
                                       <Grid.Item col={2}>
                                         <Flex justifyContent="center">
                                           {settings.entitySubscriptions?.enabled ? (
                                             <Checkbox
-                                              checked={
-                                                hasAnyPermission && (
-                                                  settings.entitySubscriptions?.allowedContentTypes?.length === 0 ||
-                                                  settings.entitySubscriptions?.allowedContentTypes?.includes(ct.uid)
-                                                )
-                                              }
-                                              disabled={!hasAnyPermission}
+                                              checked={hasAny && entitySubsAllowed}
+                                              disabled={!hasAny}
                                               onCheckedChange={(checked) => {
-                                                if (!hasAnyPermission) return;
-                                                
+                                                if (!hasAny) return;
                                                 const current = settings.entitySubscriptions?.allowedContentTypes || [];
                                                 let updated;
-                                                
                                                 if (current.length === 0) {
-                                                  // Currently all allowed - create whitelist with ALL EXCEPT this one
-                                                  if (!checked) {
-                                                    updated = availableContentTypes
-                                                      .filter(t => t.uid !== ct.uid)
-                                                      .map(t => t.uid);
-                                                  } else {
-                                                    // Keep all allowed
-                                                    updated = [];
-                                                  }
+                                                  updated = checked
+                                                    ? []
+                                                    : availableContentTypes.filter((x) => x.uid !== ct.uid).map((x) => x.uid);
                                                 } else {
-                                                  // Whitelist exists
-                                                  if (checked) {
-                                                    // Add to whitelist
-                                                    updated = [...current, ct.uid];
-                                                  } else {
-                                                    // Remove from whitelist
-                                                    updated = current.filter(uid => uid !== ct.uid);
-                                                  }
+                                                  updated = checked
+                                                    ? [...current, ct.uid]
+                                                    : current.filter((uid) => uid !== ct.uid);
                                                 }
-                                                
-                                                updateEntitySubscriptions('allowedContentTypes', updated);
+                                                updateNested('entitySubscriptions', 'allowedContentTypes', updated);
                                               }}
                                             />
                                           ) : (
-                                            <Checkbox checked={false} disabled={true} />
+                                            <Checkbox checked={false} disabled />
                                           )}
                                         </Flex>
                                       </Grid.Item>
@@ -1379,516 +829,328 @@ const SettingsPage = () => {
             <Divider />
           </Box>
 
-          {/* Redis Adapter */}
-          <Box paddingBottom={4}>
-            <Typography variant="delta" as="h2">
-              {t('redis.title', 'Redis Adapter')}
-            </Typography>
-            <Typography variant="pi" textColor="neutral600">
-              {t('redis.description', 'Enable Redis for multi-server scaling')}
-            </Typography>
-          </Box>
+          {/* ── Redis Adapter ────────────────────────────────────────── */}
+          <SectionHeading
+            title={t('redis.title', 'Redis Adapter')}
+            description={t('redis.description', 'Enable Redis for multi-server scaling')}
+          />
+
           <Grid.Root gap={4}>
             <Grid.Item col={4} s={12}>
-              <Box
-                padding={4}
-                background={settings.redis?.enabled ? 'danger100' : 'neutral0'}
-                hasRadius
-                style={{
-                  cursor: 'pointer',
-                  border: `2px solid ${settings.redis?.enabled ? '#dc2626' : '#dcdce4'}`,
-                  transition: 'all 0.2s ease',
-                  minHeight: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-                onClick={() => updateRedis('enabled', !settings.redis?.enabled)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.redis?.enabled || false}
-                    onChange={(e) => updateRedis('enabled', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography
-                      variant="omega"
-                      fontWeight={settings.redis?.enabled ? 'bold' : 'normal'}
-                      textColor={settings.redis?.enabled ? 'danger700' : 'neutral800'}
-                    >
-                      {t('redis.enable', 'Enable Redis Adapter')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                      {settings.redis?.enabled ? '✓ Active' : 'Inactive'}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </Box>
+              <FeatureToggle
+                label={t('redis.enable', 'Enable Redis Adapter')}
+                checked={settings.redis?.enabled || false}
+                onChange={(v) => updateNested('redis', 'enabled', v)}
+                color="danger"
+              />
             </Grid.Item>
             {settings.redis?.enabled && (
-              <Grid.Item col={6} s={12}>
-                <ResponsiveField>
+              <Grid.Item col={8} s={12}>
+                <Field.Root>
                   <Field.Label>{t('redis.url', 'Redis URL')}</Field.Label>
-                  <InputWrapper>
                   <TextInput
                     value={settings.redis?.url || 'redis://localhost:6379'}
-                    onChange={(e) => updateRedis('url', e.target.value)}
+                    onChange={(e) => updateNested('redis', 'url', e.target.value)}
                     placeholder="redis://localhost:6379"
                   />
-                  </InputWrapper>
-                </ResponsiveField>
+                </Field.Root>
               </Grid.Item>
             )}
           </Grid.Root>
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Namespaces */}
-          <ResponsiveSection>
-            <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('namespaces.title', 'Namespaces')}
-            </ResponsiveSectionTitle>
-            <Typography variant="pi" textColor="neutral600">
-              {t('namespaces.description', 'Create separate Socket.IO endpoints')}
-            </Typography>
-          </ResponsiveSection>
+          {/* ── Namespaces ───────────────────────────────────────────── */}
+          <SectionHeading
+            title={t('namespaces.title', 'Namespaces')}
+            description={t('namespaces.description', 'Create separate Socket.IO endpoints')}
+          >
+            <Toggle
+              checked={settings.namespaces?.enabled || false}
+              onChange={(e) => updateNested('namespaces', 'enabled', e.target.checked)}
+            />
+          </SectionHeading>
 
-          <Grid.Root gap={3}>
-            <Grid.Item col={6} s={12}>
-              <Box
-                padding={4}
-                background={settings.namespaces?.enabled ? 'secondary100' : 'neutral0'}
-                hasRadius
-                style={{
-                  cursor: 'pointer',
-                  border: `2px solid ${settings.namespaces?.enabled ? '#a855f7' : '#dcdce4'}`,
-                  transition: 'all 0.2s ease',
-                  minHeight: '110px',
-                  display: 'flex',
-                  alignItems: 'center',
-                }}
-                onClick={() => updateNamespaces('enabled', !settings.namespaces?.enabled)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.namespaces?.enabled || false}
-                    onChange={(e) => updateNamespaces('enabled', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography
-                      variant="omega"
-                      fontWeight={settings.namespaces?.enabled ? 'bold' : 'normal'}
-                      textColor={settings.namespaces?.enabled ? 'secondary700' : 'neutral800'}
-                    >
-                      {t('namespaces.enable', 'Enable Namespaces')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600" style={{ fontSize: '12px' }}>
-                      {settings.namespaces?.enabled ? '✓ Active' : 'Inactive'}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </Box>
-            </Grid.Item>
-
-            {settings.namespaces?.enabled && (
-              <Grid.Item col={12}>
-                <ResponsiveField>
-                  <Field.Label>{t('namespaces.list', 'Namespaces')}</Field.Label>
-                  <Flex direction={{ base: 'column', tablet: 'row' }} gap={2} paddingBottom={2}>
-                    <InputWrapper style={{ flex: 1, width: '100%' }}>
-                      <TextInput
-                        placeholder="admin"
-                        value={newNamespace}
-                        onChange={(e) => setNewNamespace(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && addNamespace()}
-                      />
-                    </InputWrapper>
-                    <Button onClick={addNamespace} size="L" style={{ width: '100%', maxWidth: '200px', minHeight: '44px' }}>{t('namespaces.add', 'Add')}</Button>
-                  </Flex>
-                  <Flex gap={2} wrap="wrap" paddingTop={2}>
-                    {Object.entries(settings.namespaces?.list || {}).map(([ns, config]) => (
-                      <Flex key={ns} gap={1} alignItems="center">
-                        <Badge>
-                          /{ns}
-                          {config.requireAuth && (
-                            <span style={{ marginLeft: '4px' }}>[AUTH]</span>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="S"
-                            onClick={() => removeNamespace(ns)}
-                            style={{ marginLeft: '8px', padding: '0 4px' }}
-                          >
-                            ×
-                          </Button>
-                        </Badge>
-                        {config.requireAuth && (
-                          <Typography variant="pi" textColor="neutral500" style={{ fontSize: '11px' }}>
-                            {t('namespaces.authRequired', 'Auth required')}
-                          </Typography>
-                        )}
-                      </Flex>
-                    ))}
-                  </Flex>
-                  <Box paddingTop={2}>
-                    <Typography variant="pi" textColor="neutral500">
-                      {t('namespaces.hint', 'Examples: admin, chat, notifications')}
-                    </Typography>
+          {settings.namespaces?.enabled && (
+            <Box>
+              <Field.Root>
+                <Field.Label>{t('namespaces.list', 'Namespaces')}</Field.Label>
+                <Flex gap={2} paddingBottom={2}>
+                  <Box style={{ flex: 1 }}>
+                    <TextInput
+                      placeholder="admin"
+                      value={newNamespace}
+                      onChange={(e) => setNewNamespace(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addNamespace()}
+                    />
                   </Box>
-                </ResponsiveField>
-              </Grid.Item>
-            )}
-          </Grid.Root>
+                  <Button onClick={addNamespace} startIcon={<Plus />}>
+                    {t('namespaces.add', 'Add')}
+                  </Button>
+                </Flex>
+                <Flex gap={2} wrap="wrap" paddingTop={1}>
+                  {Object.entries(settings.namespaces?.list || {}).map(([ns, config]) => (
+                    <Tag key={ns} icon={<Cross />} onClick={() => removeNamespace(ns)}>
+                      /{ns} {config.requireAuth ? '[AUTH]' : ''}
+                    </Tag>
+                  ))}
+                </Flex>
+                <Field.Hint>{t('namespaces.hint', 'Examples: admin, chat, notifications')}</Field.Hint>
+              </Field.Root>
+            </Box>
+          )}
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Entity Subscriptions - Compact Global Settings */}
-          <ResponsiveSection>
-            <Flex justifyContent="space-between" alignItems="center">
-              <Box>
-                <ResponsiveSectionTitle variant="delta" as="h2">
-                  {t('entitySubscriptions.title', 'Entity Subscriptions')} [NEW]
-                </ResponsiveSectionTitle>
-                <Typography variant="pi" textColor="neutral600">
-                  {t('entitySubscriptions.description', 'Allow clients to subscribe to specific entities')}
-                </Typography>
-              </Box>
-              <Toggle
-                checked={settings.entitySubscriptions?.enabled ?? true}
-                onChange={(e) => updateEntitySubscriptions('enabled', e.target.checked)}
-              />
-            </Flex>
-          </ResponsiveSection>
+          {/* ── Entity Subscriptions ─────────────────────────────────── */}
+          <SectionHeading
+            title={t('entitySubscriptions.title', 'Entity Subscriptions')}
+            description={t('entitySubscriptions.description', 'Allow clients to subscribe to specific entities')}
+          >
+            <Toggle
+              checked={settings.entitySubscriptions?.enabled ?? true}
+              onChange={(e) => updateNested('entitySubscriptions', 'enabled', e.target.checked)}
+            />
+          </SectionHeading>
 
           {settings.entitySubscriptions?.enabled && (
-            <Box paddingTop={3}>
-              <Grid.Root gap={3}>
-                <Grid.Item col={4} s={12}>
-                  <ResponsiveField>
-                    <Field.Label>{t('entitySubscriptions.maxPerSocket', 'Max Per Socket')}</Field.Label>
-                    <InputWrapper>
-                      <NumberInput
-                        value={settings.entitySubscriptions?.maxSubscriptionsPerSocket ?? 100}
-                        onValueChange={(value) => updateEntitySubscriptions('maxSubscriptionsPerSocket', value)}
-                      />
-                    </InputWrapper>
-                  </ResponsiveField>
-                </Grid.Item>
-                <Grid.Item col={4} s={12}>
-                  <Flex gap={2} alignItems="center" paddingTop={6}>
-                    <Checkbox
-                      checked={settings.entitySubscriptions?.requireVerification ?? true}
-                      onCheckedChange={(checked) => updateEntitySubscriptions('requireVerification', checked)}
+            <Grid.Root gap={4}>
+              <Grid.Item col={4} s={12}>
+                <Field.Root>
+                  <Field.Label>{t('entitySubscriptions.maxPerSocket', 'Max Per Socket')}</Field.Label>
+                  <NumberInputClean>
+                    <NumberInput
+                      value={settings.entitySubscriptions?.maxSubscriptionsPerSocket ?? 100}
+                      onValueChange={(v) => updateNested('entitySubscriptions', 'maxSubscriptionsPerSocket', v)}
                     />
-                    <Typography variant="omega">{t('entitySubscriptions.verify', 'Verify Entity Exists')}</Typography>
-                  </Flex>
-                </Grid.Item>
-                <Grid.Item col={4} s={12}>
-                  <Flex gap={2} alignItems="center" paddingTop={6}>
-                    <Checkbox
-                      checked={settings.entitySubscriptions?.enableMetrics ?? true}
-                      onCheckedChange={(checked) => updateEntitySubscriptions('enableMetrics', checked)}
-                    />
-                    <Typography variant="omega">{t('entitySubscriptions.metrics', 'Track Metrics')}</Typography>
-                  </Flex>
-                </Grid.Item>
-              </Grid.Root>
-            </Box>
+                  </NumberInputClean>
+                </Field.Root>
+              </Grid.Item>
+              <Grid.Item col={4} s={12}>
+                <Flex gap={2} alignItems="center" paddingTop={6}>
+                  <Checkbox
+                    checked={settings.entitySubscriptions?.requireVerification ?? true}
+                    onCheckedChange={(v) => updateNested('entitySubscriptions', 'requireVerification', v)}
+                  />
+                  <Typography variant="omega">{t('entitySubscriptions.verify', 'Verify Entity Exists')}</Typography>
+                </Flex>
+              </Grid.Item>
+              <Grid.Item col={4} s={12}>
+                <Flex gap={2} alignItems="center" paddingTop={6}>
+                  <Checkbox
+                    checked={settings.entitySubscriptions?.enableMetrics ?? true}
+                    onCheckedChange={(v) => updateNested('entitySubscriptions', 'enableMetrics', v)}
+                  />
+                  <Typography variant="omega">{t('entitySubscriptions.metrics', 'Track Metrics')}</Typography>
+                </Flex>
+              </Grid.Item>
+            </Grid.Root>
           )}
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Presence System (Collaboration) */}
-          <ResponsiveSection>
-            <Flex justifyContent="space-between" alignItems="center">
-              <Box>
-                <ResponsiveSectionTitle variant="delta" as="h2">
-                  {t('presence.title', 'Presence System')} [NEW]
-                </ResponsiveSectionTitle>
-                <Typography variant="pi" textColor="neutral600">
-                  {t('presence.description', 'Real-time collaboration awareness - see who is editing what')}
-                </Typography>
-              </Box>
-              <Toggle
-                checked={settings.presence?.enabled ?? true}
-                onChange={(e) => updateSettings((prev) => ({
-                  ...prev,
-                  presence: { ...prev.presence, enabled: e.target.checked }
-                }))}
-              />
-            </Flex>
-          </ResponsiveSection>
+          {/* ── Presence System ───────────────────────────────────────── */}
+          <SectionHeading
+            title={t('presence.title', 'Presence System')}
+            description={t('presence.description', 'Real-time collaboration awareness - see who is editing what')}
+          >
+            <Toggle
+              checked={settings.presence?.enabled ?? true}
+              onChange={(e) => updateNested('presence', 'enabled', e.target.checked)}
+            />
+          </SectionHeading>
 
           {settings.presence?.enabled !== false && (
-            <Box paddingTop={3}>
-              <Grid.Root gap={3}>
-                <Grid.Item col={4} s={12}>
-                  <ResponsiveField>
-                    <Field.Label>{t('presence.heartbeat', 'Heartbeat Interval (ms)')}</Field.Label>
-                    <InputWrapper>
-                      <NumberInput
-                        value={settings.presence?.heartbeatInterval ?? 30000}
-                        onValueChange={(value) => updateSettings((prev) => ({
-                          ...prev,
-                          presence: { ...prev.presence, heartbeatInterval: value }
-                        }))}
-                      />
-                    </InputWrapper>
-                  </ResponsiveField>
-                </Grid.Item>
-                <Grid.Item col={4} s={12}>
-                  <ResponsiveField>
-                    <Field.Label>{t('presence.staleTimeout', 'Stale Timeout (ms)')}</Field.Label>
-                    <InputWrapper>
-                      <NumberInput
-                        value={settings.presence?.staleTimeout ?? 60000}
-                        onValueChange={(value) => updateSettings((prev) => ({
-                          ...prev,
-                          presence: { ...prev.presence, staleTimeout: value }
-                        }))}
-                      />
-                    </InputWrapper>
-                  </ResponsiveField>
-                </Grid.Item>
-                <Grid.Item col={4} s={12}>
-                  <Flex gap={2} alignItems="center" paddingTop={6}>
-                    <Checkbox
-                      checked={settings.presence?.showTypingIndicator ?? true}
-                      onCheckedChange={(checked) => updateSettings((prev) => ({
-                        ...prev,
-                        presence: { ...prev.presence, showTypingIndicator: checked }
-                      }))}
+            <Grid.Root gap={4}>
+              <Grid.Item col={4} s={12}>
+                <Field.Root>
+                  <Field.Label>{t('presence.heartbeat', 'Heartbeat Interval (ms)')}</Field.Label>
+                  <NumberInputClean>
+                    <NumberInput
+                      value={settings.presence?.heartbeatInterval ?? 30000}
+                      onValueChange={(v) => updateNested('presence', 'heartbeatInterval', v)}
                     />
-                    <Typography variant="omega">{t('presence.typing', 'Show Typing Indicators')}</Typography>
-                  </Flex>
-                </Grid.Item>
-              </Grid.Root>
-            </Box>
+                  </NumberInputClean>
+                </Field.Root>
+              </Grid.Item>
+              <Grid.Item col={4} s={12}>
+                <Field.Root>
+                  <Field.Label>{t('presence.staleTimeout', 'Stale Timeout (ms)')}</Field.Label>
+                  <NumberInputClean>
+                    <NumberInput
+                      value={settings.presence?.staleTimeout ?? 60000}
+                      onValueChange={(v) => updateNested('presence', 'staleTimeout', v)}
+                    />
+                  </NumberInputClean>
+                </Field.Root>
+              </Grid.Item>
+              <Grid.Item col={4} s={12}>
+                <Flex gap={2} alignItems="center" paddingTop={6}>
+                  <Checkbox
+                    checked={settings.presence?.showTypingIndicator ?? true}
+                    onCheckedChange={(v) => updateNested('presence', 'showTypingIndicator', v)}
+                  />
+                  <Typography variant="omega">{t('presence.typing', 'Show Typing Indicators')}</Typography>
+                </Flex>
+              </Grid.Item>
+            </Grid.Root>
           )}
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Live Preview */}
-          <ResponsiveSection>
-            <Flex justifyContent="space-between" alignItems="center">
-              <Box>
-                <ResponsiveSectionTitle variant="delta" as="h2">
-                  {t('livePreview.title', 'Live Preview')} [NEW]
-                </ResponsiveSectionTitle>
-                <Typography variant="pi" textColor="neutral600">
-                  {t('livePreview.description', 'Real-time preview of draft changes for frontends')}
-                </Typography>
-              </Box>
-              <Toggle
-                checked={settings.livePreview?.enabled ?? true}
-                onChange={(e) => updateSettings((prev) => ({
-                  ...prev,
-                  livePreview: { ...prev.livePreview, enabled: e.target.checked }
-                }))}
-              />
-            </Flex>
-          </ResponsiveSection>
+          {/* ── Live Preview ──────────────────────────────────────────── */}
+          <SectionHeading
+            title={t('livePreview.title', 'Live Preview')}
+            description={t('livePreview.description', 'Real-time preview of draft changes for frontends')}
+          >
+            <Toggle
+              checked={settings.livePreview?.enabled ?? true}
+              onChange={(e) => updateNested('livePreview', 'enabled', e.target.checked)}
+            />
+          </SectionHeading>
 
           {settings.livePreview?.enabled !== false && (
-            <Box paddingTop={3}>
-              <Grid.Root gap={3}>
-                <Grid.Item col={4} s={12}>
-                  <ResponsiveField>
-                    <Field.Label>{t('livePreview.debounce', 'Debounce (ms)')}</Field.Label>
-                    <InputWrapper>
-                      <NumberInput
-                        value={settings.livePreview?.debounceMs ?? 300}
-                        onValueChange={(value) => updateSettings((prev) => ({
-                          ...prev,
-                          livePreview: { ...prev.livePreview, debounceMs: value }
-                        }))}
-                      />
-                    </InputWrapper>
-                  </ResponsiveField>
-                </Grid.Item>
-                <Grid.Item col={4} s={12}>
-                  <Flex gap={2} alignItems="center" paddingTop={6}>
-                    <Checkbox
-                      checked={settings.livePreview?.draftEvents ?? true}
-                      onCheckedChange={(checked) => updateSettings((prev) => ({
-                        ...prev,
-                        livePreview: { ...prev.livePreview, draftEvents: checked }
-                      }))}
+            <Grid.Root gap={4}>
+              <Grid.Item col={4} s={12}>
+                <Field.Root>
+                  <Field.Label>{t('livePreview.debounce', 'Debounce (ms)')}</Field.Label>
+                  <NumberInputClean>
+                    <NumberInput
+                      value={settings.livePreview?.debounceMs ?? 300}
+                      onValueChange={(v) => updateNested('livePreview', 'debounceMs', v)}
                     />
-                    <Typography variant="omega">{t('livePreview.draftEvents', 'Emit Draft Events')}</Typography>
-                  </Flex>
-                </Grid.Item>
-                <Grid.Item col={4} s={12}>
-                  <ResponsiveField>
-                    <Field.Label>{t('livePreview.maxSubs', 'Max Subscriptions/Socket')}</Field.Label>
-                    <InputWrapper>
-                      <NumberInput
-                        value={settings.livePreview?.maxSubscriptionsPerSocket ?? 50}
-                        onValueChange={(value) => updateSettings((prev) => ({
-                          ...prev,
-                          livePreview: { ...prev.livePreview, maxSubscriptionsPerSocket: value }
-                        }))}
-                      />
-                    </InputWrapper>
-                  </ResponsiveField>
-                </Grid.Item>
-              </Grid.Root>
-            </Box>
+                  </NumberInputClean>
+                </Field.Root>
+              </Grid.Item>
+              <Grid.Item col={4} s={12}>
+                <Flex gap={2} alignItems="center" paddingTop={6}>
+                  <Checkbox
+                    checked={settings.livePreview?.draftEvents ?? true}
+                    onCheckedChange={(v) => updateNested('livePreview', 'draftEvents', v)}
+                  />
+                  <Typography variant="omega">{t('livePreview.draftEvents', 'Emit Draft Events')}</Typography>
+                </Flex>
+              </Grid.Item>
+              <Grid.Item col={4} s={12}>
+                <Field.Root>
+                  <Field.Label>{t('livePreview.maxSubs', 'Max Subscriptions/Socket')}</Field.Label>
+                  <NumberInputClean>
+                    <NumberInput
+                      value={settings.livePreview?.maxSubscriptionsPerSocket ?? 50}
+                      onValueChange={(v) => updateNested('livePreview', 'maxSubscriptionsPerSocket', v)}
+                    />
+                  </NumberInputClean>
+                </Field.Root>
+              </Grid.Item>
+            </Grid.Root>
           )}
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Field-level Changes */}
-          <ResponsiveSection>
-            <Flex justifyContent="space-between" alignItems="center">
-              <Box>
-                <ResponsiveSectionTitle variant="delta" as="h2">
-                  {t('fieldChanges.title', 'Field-level Changes')} [NEW]
-                </ResponsiveSectionTitle>
-                <Typography variant="pi" textColor="neutral600">
-                  {t('fieldChanges.description', 'Send only changed fields instead of full entities (bandwidth optimization)')}
-                </Typography>
-              </Box>
-              <Toggle
-                checked={settings.fieldLevelChanges?.enabled ?? true}
-                onChange={(e) => updateSettings((prev) => ({
-                  ...prev,
-                  fieldLevelChanges: { ...prev.fieldLevelChanges, enabled: e.target.checked }
-                }))}
-              />
-            </Flex>
-          </ResponsiveSection>
+          {/* ── Field-level Changes ───────────────────────────────────── */}
+          <SectionHeading
+            title={t('fieldChanges.title', 'Field-level Changes')}
+            description={t('fieldChanges.description', 'Send only changed fields instead of full entities (bandwidth optimization)')}
+          >
+            <Toggle
+              checked={settings.fieldLevelChanges?.enabled ?? true}
+              onChange={(e) => updateNested('fieldLevelChanges', 'enabled', e.target.checked)}
+            />
+          </SectionHeading>
 
           {settings.fieldLevelChanges?.enabled !== false && (
-            <Box paddingTop={3}>
-              <Grid.Root gap={3}>
-                <Grid.Item col={4} s={12}>
-                  <Flex gap={2} alignItems="center" paddingTop={2}>
-                    <Checkbox
-                      checked={settings.fieldLevelChanges?.includeFullData ?? false}
-                      onCheckedChange={(checked) => updateSettings((prev) => ({
-                        ...prev,
-                        fieldLevelChanges: { ...prev.fieldLevelChanges, includeFullData: checked }
-                      }))}
+            <Grid.Root gap={4}>
+              <Grid.Item col={4} s={12}>
+                <Flex gap={2} alignItems="center" paddingTop={2}>
+                  <Checkbox
+                    checked={settings.fieldLevelChanges?.includeFullData ?? false}
+                    onCheckedChange={(v) => updateNested('fieldLevelChanges', 'includeFullData', v)}
+                  />
+                  <Typography variant="omega">{t('fieldChanges.includeFullData', 'Include Full Data')}</Typography>
+                </Flex>
+              </Grid.Item>
+              <Grid.Item col={4} s={12}>
+                <Field.Root>
+                  <Field.Label>{t('fieldChanges.maxDepth', 'Max Diff Depth')}</Field.Label>
+                  <NumberInputClean>
+                    <NumberInput
+                      value={settings.fieldLevelChanges?.maxDiffDepth ?? 3}
+                      onValueChange={(v) => updateNested('fieldLevelChanges', 'maxDiffDepth', v)}
                     />
-                    <Typography variant="omega">{t('fieldChanges.includeFullData', 'Include Full Data')}</Typography>
-                  </Flex>
-                </Grid.Item>
-                <Grid.Item col={4} s={12}>
-                  <ResponsiveField>
-                    <Field.Label>{t('fieldChanges.maxDepth', 'Max Diff Depth')}</Field.Label>
-                    <InputWrapper>
-                      <NumberInput
-                        value={settings.fieldLevelChanges?.maxDiffDepth ?? 3}
-                        onValueChange={(value) => updateSettings((prev) => ({
-                          ...prev,
-                          fieldLevelChanges: { ...prev.fieldLevelChanges, maxDiffDepth: value }
-                        }))}
-                      />
-                    </InputWrapper>
-                  </ResponsiveField>
-                </Grid.Item>
-              </Grid.Root>
-            </Box>
+                  </NumberInputClean>
+                </Field.Root>
+              </Grid.Item>
+            </Grid.Root>
           )}
 
-          <Box paddingTop={4} paddingBottom={2}>
+          <Box paddingTop={6} paddingBottom={4}>
             <Divider />
           </Box>
 
-          {/* Monitoring Section */}
-          <ResponsiveSection>
-            <ResponsiveSectionTitle variant="delta" as="h2">
-              {t('monitoring.title', 'Monitoring & Logging')}
-            </ResponsiveSectionTitle>
-          </ResponsiveSection>
+          {/* ── Monitoring ────────────────────────────────────────────── */}
+          <SectionHeading
+            title={t('monitoring.title', 'Monitoring & Logging')}
+          />
 
           <Grid.Root gap={4}>
             <Grid.Item col={6} s={12}>
-              <ToggleCard
-                $active={settings.monitoring?.enableConnectionLogging}
-                $color="#4945ff"
-                onClick={() => updateMonitoring('enableConnectionLogging', !settings.monitoring?.enableConnectionLogging)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.monitoring?.enableConnectionLogging || false}
-                    onChange={(e) => updateMonitoring('enableConnectionLogging', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="semiBold">
-                      {t('monitoring.connectionLogging', 'Connection Logging')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600">
-                      {t('monitoring.connectionLoggingHint', 'Log client connections')}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </ToggleCard>
+              <FeatureToggle
+                label={t('monitoring.connectionLogging', 'Connection Logging')}
+                hint={t('monitoring.connectionLoggingHint', 'Log client connections')}
+                checked={settings.monitoring?.enableConnectionLogging || false}
+                onChange={(v) => updateNested('monitoring', 'enableConnectionLogging', v)}
+              />
             </Grid.Item>
             <Grid.Item col={6} s={12}>
-              <ToggleCard
-                $active={settings.monitoring?.enableEventLogging}
-                $color="#4945ff"
-                onClick={() => updateMonitoring('enableEventLogging', !settings.monitoring?.enableEventLogging)}
-              >
-                <Flex gap={3} alignItems="center" style={{ width: '100%' }}>
-                  <Toggle
-                    checked={settings.monitoring?.enableEventLogging || false}
-                    onChange={(e) => updateMonitoring('enableEventLogging', e.target.checked)}
-                  />
-                  <Flex direction="column" alignItems="flex-start" gap={1}>
-                    <Typography variant="omega" fontWeight="semiBold">
-                      {t('monitoring.eventLogging', 'Event Logging')}
-                    </Typography>
-                    <Typography variant="pi" textColor="neutral600">
-                      {t('monitoring.eventLoggingHint', 'Log all events for debugging')}
-                    </Typography>
-                  </Flex>
-                </Flex>
-              </ToggleCard>
+              <FeatureToggle
+                label={t('monitoring.eventLogging', 'Event Logging')}
+                hint={t('monitoring.eventLoggingHint', 'Log all events for debugging')}
+                checked={settings.monitoring?.enableEventLogging || false}
+                onChange={(v) => updateNested('monitoring', 'enableEventLogging', v)}
+              />
             </Grid.Item>
           </Grid.Root>
-          
+
           {settings.monitoring?.enableEventLogging && (
-            <Box paddingTop={3}>
+            <Box paddingTop={4}>
               <Grid.Root gap={4}>
                 <Grid.Item col={6} s={12}>
-                  <ResponsiveField>
+                  <Field.Root>
                     <Field.Label>{t('monitoring.maxLogSize', 'Max Log Size')}</Field.Label>
-                    <InputWrapper>
+                    <NumberInputClean>
                       <NumberInput
                         value={settings.monitoring?.maxEventLogSize || 100}
-                        onValueChange={(value) => updateMonitoring('maxEventLogSize', value)}
+                        onValueChange={(v) => updateNested('monitoring', 'maxEventLogSize', v)}
                       />
-                    </InputWrapper>
-                  </ResponsiveField>
+                    </NumberInputClean>
+                  </Field.Root>
                 </Grid.Item>
               </Grid.Root>
             </Box>
           )}
-        </ResponsiveCard>
+        </Box>
 
-        {/* Info Box */}
-        <Box marginTop={3} padding={3} background="success100" hasRadius>
+        {/* ── Info banner ──────────────────────────────────────────── */}
+        <Box marginTop={4} padding={4} background="success100" hasRadius>
           <Flex gap={2} alignItems="center">
             <Check />
-            <Typography variant="pi" style={{ fontSize: '13px' }}>
-              {t('settings.noRestart', 'Changes are applied immediately – no restart required!')}
+            <Typography variant="pi">
+              {t('settings.noRestart', 'Changes are applied immediately - no restart required!')}
             </Typography>
           </Flex>
         </Box>
-      </Box>
-    </ResponsiveMain>
+      </Layouts.Content>
+    </Main>
   );
 };
 
