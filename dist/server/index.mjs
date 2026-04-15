@@ -32126,6 +32126,14 @@ const sanitize = ({ strapi: strapi2 }) => {
   }
   async function output({ schema: schema2, data, options }) {
     let sanitizedData = data;
+    const contentAPISanitize = strapi2.contentAPI?.sanitize?.output;
+    if (contentAPISanitize) {
+      try {
+        sanitizedData = await contentAPISanitize(data, schema2, options);
+      } catch (error2) {
+        strapi2.log.debug(`[socket.io] Content API sanitization failed: ${error2.message}`);
+      }
+    }
     const sensitiveFields = getSensitiveFields();
     sanitizedData = removeSensitiveFields(sanitizedData, sensitiveFields);
     return sanitizedData;
