@@ -1,3 +1,13 @@
+## [5.4.4](https://github.com/strapi-community/plugin-io/compare/5.4.3...5.4.4) (2026-04-15)
+
+
+### Bug Fixes
+
+* **handshake:** store user data in socket.data for online-users widget ([044f044](https://github.com/strapi-community/plugin-io/commit/044f044ebb21665bb78165ea6f7d4bef66a30f3c))
+* **widgets:** add missing /online-users route and fix /stats URL ([88a813e](https://github.com/strapi-community/plugin-io/commit/88a813e48c866060fea857c727c681121f20719b))
+* **widgets:** match online-users response to widget expected format ([3fa7203](https://github.com/strapi-community/plugin-io/commit/3fa720369f45ca31ec1d98d63e2bb4e99689a501))
+* **widgets:** null-safe rendering in OnlineEditorsWidget ([bf0e129](https://github.com/strapi-community/plugin-io/commit/bf0e1295f5ca0ce75b17f098a36cd02a7da1546c))
+
 ## [5.4.3](https://github.com/strapi-community/plugin-io/compare/5.4.2...5.4.3) (2026-04-15)
 
 
