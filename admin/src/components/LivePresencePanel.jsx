@@ -282,41 +282,51 @@ function removePresenceStyles() {
 
 /**
  * Finds the field wrapper DOM element that matches a given fieldName.
- * Searches by name attribute, id, label text, or aria-label.
- * @param {string} fieldName
+ * @param {string} fieldName - name attribute, id, or label text
  * @returns {HTMLElement|null} The outermost field wrapper or null
  */
 function findFieldElement(fieldName) {
   if (!fieldName || typeof document === 'undefined') return null;
 
-  const lowerName = fieldName.toLowerCase().trim();
+  const clean = fieldName.trim().replace(/\s*\*\s*$/, '');
+  const lowerClean = clean.toLowerCase();
+  let input = null;
 
-  // 1. Direct match by name or id attribute
-  let input = document.querySelector(
-    `main input[name="${fieldName}"], main textarea[name="${fieldName}"], main [id="${fieldName}"]`
+  // 1. By name attribute (most reliable)
+  input = document.querySelector(
+    `main input[name="${clean}"], main textarea[name="${clean}"]`
   );
 
-  // 2. Search all labels for text match
+  // 2. By id attribute
+  if (!input) {
+    input = document.getElementById(clean);
+    if (input && !input.closest('main')) input = null;
+  }
+
+  // 3. By label text (fuzzy: ignores trailing * and whitespace)
   if (!input) {
     const labels = document.querySelectorAll('main label');
     for (const label of labels) {
-      if (label.textContent?.trim().toLowerCase() === lowerName) {
+      const labelText = label.textContent?.trim().replace(/\s*\*\s*$/, '').toLowerCase();
+      if (labelText === lowerClean) {
         const forId = label.getAttribute('for');
-        if (forId) {
-          input = document.getElementById(forId);
-        }
+        if (forId) input = document.getElementById(forId);
         if (!input) {
           const wrapper = label.closest('[class*="Field"]') || label.parentElement;
-          input = wrapper?.querySelector('input, textarea, [contenteditable]');
+          input = wrapper?.querySelector('input, textarea, [contenteditable="true"]');
         }
         if (input) break;
       }
     }
   }
 
+  // 4. By aria-label
+  if (!input) {
+    input = document.querySelector(`main [aria-label="${clean}"]`);
+  }
+
   if (!input) return null;
 
-  // Return the outer field wrapper for the outline
   return input.closest('[class*="Field"]') || input.parentElement;
 }
 
@@ -561,55 +571,48 @@ const LivePresencePanel = ({ documentId, model, document }) => {
     const TYPING_THROTTLE = 2000; // 2 seconds between typing events
 
     /**
-     * Extracts field name from input element
+     * Extracts a stable field identifier from an input element.
+     * Prefers name attribute, falls back to cleaned label text.
      */
     const getFieldName = (element) => {
-      // Try to find label or name attribute
-      const name = element.name || element.id || '';
-      
-      // Try to find associated label
-      const label = element.closest('label') || 
+      if (element.name) return element.name;
+      if (element.id) return element.id;
+
+      const label = element.closest('label') ||
                     document.querySelector(`label[for="${element.id}"]`);
       if (label) {
-        return label.textContent?.trim() || name;
+        return label.textContent?.trim().replace(/\s*\*\s*$/, '') || '';
       }
-      
-      // Try to find field wrapper with label
+
       const fieldWrapper = element.closest('[class*="Field"]');
       if (fieldWrapper) {
-        const labelEl = fieldWrapper.querySelector('label, [class*="Label"]');
+        const labelEl = fieldWrapper.querySelector('label');
         if (labelEl) {
-          return labelEl.textContent?.trim() || name;
+          return labelEl.textContent?.trim().replace(/\s*\*\s*$/, '') || '';
         }
       }
-      
-      return name || 'unknown field';
+
+      return '';
     };
 
-    /**
-     * Handles input events to detect typing
-     */
     const handleInput = (event) => {
       const target = event.target;
-      
-      // Only handle inputs and textareas
-      if (!['INPUT', 'TEXTAREA'].includes(target.tagName)) return;
-      
-      // Check if inside content manager main area (not our sidebar)
-      const isInContentManager = target.closest('[class*="ContentLayout"]') || 
-                                  target.closest('main');
-      if (!isInContentManager) return;
-      
-      // Throttle typing events
+
+      const isEditable = ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+        || target.getAttribute('contenteditable') === 'true';
+      if (!isEditable) return;
+
+      if (!target.closest('main')) return;
+
       const now = Date.now();
       if (now - lastTypingEmit < TYPING_THROTTLE) return;
       lastTypingEmit = now;
-      
-      // Get field name and emit typing event
+
       const fieldName = getFieldName(target);
+      if (!fieldName) return;
+
       if (socket.connected) {
         socket.emit('presence:typing', { uid, documentId, fieldName });
-        console.log(`[${PLUGIN_ID}] Typing in field: ${fieldName}`);
       }
     };
 
