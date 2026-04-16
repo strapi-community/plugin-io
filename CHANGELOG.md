@@ -1,3 +1,10 @@
+# [5.7.0](https://github.com/strapi-community/plugin-io/compare/5.6.0...5.7.0) (2026-04-16)
+
+
+### Features
+
+* **presence:** show editor name label next to avatar dot on fields ([845b285](https://github.com/strapi-community/plugin-io/commit/845b2850d1642f37decd13f5bf58d0225f252a92))
+
 # [5.6.0](https://github.com/strapi-community/plugin-io/compare/5.5.0...5.6.0) (2026-04-16)
 
 
