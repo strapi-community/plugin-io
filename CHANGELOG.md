@@ -1,3 +1,10 @@
+# [5.8.0](https://github.com/strapi-community/plugin-io/compare/5.7.1...5.8.0) (2026-04-16)
+
+
+### Features
+
+* **settings:** make field-level highlighting opt-in via settings ([4b7f047](https://github.com/strapi-community/plugin-io/commit/4b7f047586cdcb67a2ae11bcf9e05715ea853289))
+
 ## [5.7.1](https://github.com/strapi-community/plugin-io/compare/5.7.0...5.7.1) (2026-04-16)
 
 
