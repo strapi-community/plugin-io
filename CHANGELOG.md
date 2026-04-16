@@ -1,3 +1,10 @@
+# [5.5.0](https://github.com/strapi-community/plugin-io/compare/5.4.4...5.5.0) (2026-04-16)
+
+
+### Features
+
+* **presence:** server-side presence tracking with content context ([9978bfe](https://github.com/strapi-community/plugin-io/commit/9978bfefb67f899d8da944f34f71526fae9dd2fb))
+
 ## [5.4.4](https://github.com/strapi-community/plugin-io/compare/5.4.3...5.4.4) (2026-04-15)
 
 
