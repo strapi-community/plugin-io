@@ -212,8 +212,17 @@ const PRESENCE_CSS = `
 }
 .io-presence-dot {
   position: absolute;
-  top: -8px;
-  right: -8px;
+  top: -12px;
+  right: -4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 10;
+  pointer-events: none;
+  animation: io-dot-in 0.2s ease-out both;
+  direction: rtl;
+}
+.io-presence-dot .io-dot-avatar {
   width: 22px;
   height: 22px;
   border-radius: 50%;
@@ -224,11 +233,23 @@ const PRESENCE_CSS = `
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
-  pointer-events: none;
   box-shadow: 0 1px 4px rgba(0,0,0,0.25);
-  animation: io-dot-in 0.2s ease-out both;
+  flex-shrink: 0;
   line-height: 1;
+}
+.io-presence-dot .io-dot-label {
+  direction: ltr;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  background: var(--io-presence-color, #4945ff);
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .io-presence-dot.io-dot-leaving {
   animation: io-dot-out 0.3s ease-in both;
@@ -325,15 +346,22 @@ function highlightField(fieldName, user, colorIndex) {
   wrapper.classList.add('io-presence-field');
   wrapper.classList.remove('io-presence-field-fade');
 
-  // Remove any existing dot from this plugin
   wrapper.querySelector('.io-presence-dot')?.remove();
 
-  // Create avatar dot
   const dot = document.createElement('div');
   dot.className = 'io-presence-dot';
   dot.style.setProperty('--io-presence-color', color);
-  dot.textContent = initials;
-  dot.setAttribute('title', getEditorName(user));
+
+  const avatar = document.createElement('span');
+  avatar.className = 'io-dot-avatar';
+  avatar.textContent = initials;
+
+  const label = document.createElement('span');
+  label.className = 'io-dot-label';
+  label.textContent = getEditorName(user);
+
+  dot.appendChild(avatar);
+  dot.appendChild(label);
   wrapper.appendChild(dot);
 
   // Return cleanup
