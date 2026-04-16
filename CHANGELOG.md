@@ -1,3 +1,10 @@
+## [5.7.1](https://github.com/strapi-community/plugin-io/compare/5.7.0...5.7.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* **presence:** field injection not working - fix field name matching ([af4ed2c](https://github.com/strapi-community/plugin-io/commit/af4ed2c5534e0c1387974aa6d590c6bd0513114d))
+
 # [5.7.0](https://github.com/strapi-community/plugin-io/compare/5.6.0...5.7.0) (2026-04-16)
 
 
