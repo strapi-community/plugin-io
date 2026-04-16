@@ -246,9 +246,13 @@ async function bootstrapLifecycles({ strapi }) {
 					return;
 				}
 				const deleteData = {
-					id: event.result?.id || event.result?.documentId,
-					documentId: event.result?.documentId || event.result?.id,
+					documentId: event.result?.documentId,
 				};
+
+				if (!deleteData.documentId) {
+					strapi.log.debug(`[socket.io] No documentId in afterDelete for ${uid}`);
+					return;
+				}
 				const modelInfo = {
 					singularName: event.model.singularName,
 					uid: event.model.uid,
@@ -292,7 +296,8 @@ function buildEventQuery({ event }) {
 	}
 
 	if (event.action === 'afterCreateMany') {
-		query.filters = { id: event.result.ids };
+		const ids = event.result?.ids || [];
+		query.filters = { id: { $in: ids } };
 	} else if (event.action === 'beforeUpdate') {
 		query.fields = ['id'];
 	}

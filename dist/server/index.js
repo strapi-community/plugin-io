@@ -91,7 +91,7 @@ async function handshake(socket, next) {
       room = strategyService["role"].getRoomName(role);
     }
     if (room) {
-      socket.join(room.replace(" ", "-"));
+      socket.join(room.replace(/\s+/g, "-"));
     } else {
       throw new Error("No valid room found");
     }
@@ -153,7 +153,7 @@ class SocketIO {
             });
             const roomName = strategy2.getRoomName(room);
             const data = transformService.response({ data: sanitizedData, schema: schema2 });
-            this._socket.to(roomName.replace(" ", "-")).emit(eventName, { ...data });
+            this._socket.to(roomName.replace(/\s+/g, "-")).emit(eventName, { ...data });
           } catch (err) {
             strapi.log.debug(`[socket.io] emit failed for room ${room.name || room.id}: ${err.message}`);
           }
@@ -515,9 +515,12 @@ async function bootstrapLifecycles({ strapi: strapi2 }) {
           return;
         }
         const deleteData = {
-          id: event.result?.id || event.result?.documentId,
-          documentId: event.result?.documentId || event.result?.id
+          documentId: event.result?.documentId
         };
+        if (!deleteData.documentId) {
+          strapi2.log.debug(`[socket.io] No documentId in afterDelete for ${uid}`);
+          return;
+        }
         const modelInfo = {
           singularName: event.model.singularName,
           uid: event.model.uid
@@ -549,7 +552,8 @@ function buildEventQuery({ event }) {
     query.limit = event.params.limit;
   }
   if (event.action === "afterCreateMany") {
-    query.filters = { id: event.result.ids };
+    const ids = event.result?.ids || [];
+    query.filters = { id: { $in: ids } };
   } else if (event.action === "beforeUpdate") {
     query.fields = ["id"];
   }

@@ -62,7 +62,7 @@ class SocketIO {
 
 						const roomName = strategy.getRoomName(room);
 						const data = transformService.response({ data: sanitizedData, schema });
-						this._socket.to(roomName.replace(' ', '-')).emit(eventName, { ...data });
+						this._socket.to(roomName.replace(/\s+/g, '-')).emit(eventName, { ...data });
 					} catch (err) {
 						strapi.log.debug(`[socket.io] emit failed for room ${room.name || room.id}: ${err.message}`);
 					}

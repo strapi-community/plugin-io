@@ -337,6 +337,7 @@ export const OnlineEditorsWidget = () => {
     return () => {
       cancelled = true;
       if (socket) {
+        socket.removeAllListeners();
         socket.disconnect();
         socketRef.current = null;
       }

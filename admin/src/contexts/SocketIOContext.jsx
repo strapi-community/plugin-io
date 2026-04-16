@@ -59,7 +59,10 @@ export const SocketIOProvider = ({ children }) => {
 			reconnectionDelayMax: 5000,
 		});
 
+		let mounted = true;
+
 		socketInstance.on('connect', () => {
+			if (!mounted) return;
 			setConnected(true);
 			setError(null);
 			reconnectAttempts.current = 0;
@@ -67,11 +70,13 @@ export const SocketIOProvider = ({ children }) => {
 		});
 
 		socketInstance.on('disconnect', (reason) => {
+			if (!mounted) return;
 			setConnected(false);
 			console.info(`[${PLUGIN_ID}] Socket disconnected:`, reason);
 		});
 
 		socketInstance.on('connect_error', (err) => {
+			if (!mounted) return;
 			setError(err.message);
 			reconnectAttempts.current++;
 			console.warn(`[${PLUGIN_ID}] Socket connection error:`, err.message);
@@ -79,8 +84,9 @@ export const SocketIOProvider = ({ children }) => {
 
 		setSocket(socketInstance);
 
-		// Cleanup on unmount
 		return () => {
+			mounted = false;
+			socketInstance.removeAllListeners();
 			socketInstance.disconnect();
 		};
 	}, [auth?.token]);
@@ -152,7 +158,10 @@ export const PresenceProvider = ({ children }) => {
 	useEffect(() => {
 		if (!socket) return;
 
+		let mounted = true;
+
 		const handlePresenceUpdate = (data) => {
+			if (!mounted) return;
 			if (currentEntity && 
 					data.uid === currentEntity.uid && 
 					data.documentId === currentEntity.documentId) {
@@ -161,7 +170,10 @@ export const PresenceProvider = ({ children }) => {
 		};
 
 		const unsubscribe = on('presence:update', handlePresenceUpdate);
-		return () => unsubscribe();
+		return () => {
+			mounted = false;
+			unsubscribe();
+		};
 	}, [socket, on, currentEntity]);
 
 	// Heartbeat to keep presence alive

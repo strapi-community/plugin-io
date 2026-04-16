@@ -374,11 +374,10 @@ function highlightField(fieldName, user, colorIndex) {
   dot.appendChild(label);
   wrapper.appendChild(dot);
 
-  // Return cleanup
-  return () => {
-    wrapper.classList.add('io-presence-field-fade');
-    dot.classList.add('io-dot-leaving');
-    setTimeout(() => {
+  let fadeTimeoutId = null;
+
+  const cleanup = (immediate = false) => {
+    if (immediate) {
       wrapper.classList.remove('io-presence-field', 'io-presence-field-fade');
       wrapper.style.removeProperty('--io-presence-color');
       if (prevPosition) {
@@ -387,8 +386,29 @@ function highlightField(fieldName, user, colorIndex) {
         wrapper.style.removeProperty('position');
       }
       dot.remove();
+      if (fadeTimeoutId) clearTimeout(fadeTimeoutId);
+      return;
+    }
+
+    wrapper.classList.add('io-presence-field-fade');
+    dot.classList.add('io-dot-leaving');
+    fadeTimeoutId = setTimeout(() => {
+      if (document.body.contains(wrapper)) {
+        wrapper.classList.remove('io-presence-field', 'io-presence-field-fade');
+        wrapper.style.removeProperty('--io-presence-color');
+        if (prevPosition) {
+          wrapper.style.position = prevPosition;
+        } else {
+          wrapper.style.removeProperty('position');
+        }
+      }
+      if (document.body.contains(dot)) {
+        dot.remove();
+      }
     }, 400);
   };
+
+  return cleanup;
 }
 
 /* ============================================
@@ -466,7 +486,7 @@ const LivePresencePanel = ({ documentId, model, document }) => {
   useEffect(() => {
     injectPresenceStyles();
     return () => {
-      fieldHighlightCleanups.current.forEach((cleanup) => cleanup());
+      fieldHighlightCleanups.current.forEach((cleanup) => cleanup(true));
       fieldHighlightCleanups.current.clear();
       removePresenceStyles();
     };
@@ -735,6 +755,7 @@ const LivePresencePanel = ({ documentId, model, document }) => {
       if (socket.connected) {
         socket.emit('presence:leave', { uid, documentId });
       }
+      socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;
     };

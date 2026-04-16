@@ -47,7 +47,7 @@ async function handshake(socket, next) {
 		}
 
 		if (room) {
-			socket.join(room.replace(' ', '-'));
+			socket.join(room.replace(/\s+/g, '-'));
 		} else {
 			throw new Error('No valid room found');
 		}
