@@ -186,8 +186,184 @@ const EmptyText = styled.span`
 `;
 
 /* ============================================
+   FIELD PRESENCE INJECTION
+   ============================================ */
+
+const PRESENCE_STYLE_ID = 'io-presence-styles';
+
+const PRESENCE_CSS = `
+@keyframes io-dot-in {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes io-dot-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.5); }
+}
+.io-presence-field {
+  outline: 2px solid var(--io-presence-color, #4945ff) !important;
+  outline-offset: -1px;
+  border-radius: 4px;
+  transition: outline-color 0.3s ease;
+}
+.io-presence-field-fade {
+  outline-color: transparent !important;
+  transition: outline-color 0.4s ease;
+}
+.io-presence-dot {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--io-presence-color, #4945ff);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  animation: io-dot-in 0.2s ease-out both;
+  line-height: 1;
+}
+.io-presence-dot.io-dot-leaving {
+  animation: io-dot-out 0.3s ease-in both;
+}
+`;
+
+const PRESENCE_FLAT_COLORS = [
+  '#4945ff', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899',
+];
+
+/**
+ * Injects the presence CSS into document head (idempotent).
+ */
+function injectPresenceStyles() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(PRESENCE_STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = PRESENCE_STYLE_ID;
+  style.textContent = PRESENCE_CSS;
+  document.head.appendChild(style);
+}
+
+/**
+ * Removes injected presence CSS from document head.
+ */
+function removePresenceStyles() {
+  if (typeof document === 'undefined') return;
+  document.getElementById(PRESENCE_STYLE_ID)?.remove();
+}
+
+/**
+ * Finds the field wrapper DOM element that matches a given fieldName.
+ * Searches by name attribute, id, label text, or aria-label.
+ * @param {string} fieldName
+ * @returns {HTMLElement|null} The outermost field wrapper or null
+ */
+function findFieldElement(fieldName) {
+  if (!fieldName || typeof document === 'undefined') return null;
+
+  const lowerName = fieldName.toLowerCase().trim();
+
+  // 1. Direct match by name or id attribute
+  let input = document.querySelector(
+    `main input[name="${fieldName}"], main textarea[name="${fieldName}"], main [id="${fieldName}"]`
+  );
+
+  // 2. Search all labels for text match
+  if (!input) {
+    const labels = document.querySelectorAll('main label');
+    for (const label of labels) {
+      if (label.textContent?.trim().toLowerCase() === lowerName) {
+        const forId = label.getAttribute('for');
+        if (forId) {
+          input = document.getElementById(forId);
+        }
+        if (!input) {
+          const wrapper = label.closest('[class*="Field"]') || label.parentElement;
+          input = wrapper?.querySelector('input, textarea, [contenteditable]');
+        }
+        if (input) break;
+      }
+    }
+  }
+
+  if (!input) return null;
+
+  // Return the outer field wrapper for the outline
+  return input.closest('[class*="Field"]') || input.parentElement;
+}
+
+/**
+ * Highlights a field with a colored border and avatar dot.
+ * Returns a cleanup function.
+ * @param {string} fieldName
+ * @param {object} user - { firstname, lastname, email, id }
+ * @param {number} colorIndex
+ * @returns {Function|null} cleanup or null if field not found
+ */
+function highlightField(fieldName, user, colorIndex) {
+  const wrapper = findFieldElement(fieldName);
+  if (!wrapper) return null;
+
+  const color = PRESENCE_FLAT_COLORS[colorIndex % PRESENCE_FLAT_COLORS.length];
+  const initials = getEditorInitials(user);
+
+  // Ensure wrapper is position:relative for the dot
+  const prevPosition = wrapper.style.position;
+  if (getComputedStyle(wrapper).position === 'static') {
+    wrapper.style.position = 'relative';
+  }
+
+  // Apply outline
+  wrapper.style.setProperty('--io-presence-color', color);
+  wrapper.classList.add('io-presence-field');
+  wrapper.classList.remove('io-presence-field-fade');
+
+  // Remove any existing dot from this plugin
+  wrapper.querySelector('.io-presence-dot')?.remove();
+
+  // Create avatar dot
+  const dot = document.createElement('div');
+  dot.className = 'io-presence-dot';
+  dot.style.setProperty('--io-presence-color', color);
+  dot.textContent = initials;
+  dot.setAttribute('title', getEditorName(user));
+  wrapper.appendChild(dot);
+
+  // Return cleanup
+  return () => {
+    wrapper.classList.add('io-presence-field-fade');
+    dot.classList.add('io-dot-leaving');
+    setTimeout(() => {
+      wrapper.classList.remove('io-presence-field', 'io-presence-field-fade');
+      wrapper.style.removeProperty('--io-presence-color');
+      if (prevPosition) {
+        wrapper.style.position = prevPosition;
+      } else {
+        wrapper.style.removeProperty('position');
+      }
+      dot.remove();
+    }, 400);
+  };
+}
+
+/* ============================================
    HELPER FUNCTIONS
    ============================================ */
+
+function hashCode(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
 
 /**
  * Gets initials from user object
@@ -223,6 +399,7 @@ const LivePresencePanel = ({ documentId, model, document }) => {
     formatMessage({ id: `${PLUGIN_ID}.${id}`, defaultMessage }, values);
   
   const socketRef = useRef(null);
+  const fieldHighlightCleanups = useRef(new Map());
   const [sessionData, setSessionData] = useState(null);
   const [presenceState, setPresenceState] = useState({
     status: 'initializing',
@@ -230,6 +407,16 @@ const LivePresencePanel = ({ documentId, model, document }) => {
     typingUsers: [],
     error: null,
   });
+
+  // Inject presence CSS on mount, remove on unmount
+  useEffect(() => {
+    injectPresenceStyles();
+    return () => {
+      fieldHighlightCleanups.current.forEach((cleanup) => cleanup());
+      fieldHighlightCleanups.current.clear();
+      removePresenceStyles();
+    };
+  }, []);
 
   const uid = model?.uid || model;
   const contentTypeName = model?.info?.displayName || model?.info?.singularName || uid?.split('.')?.pop() || '';
@@ -442,21 +629,43 @@ const LivePresencePanel = ({ documentId, model, document }) => {
       }
     });
 
-    // Handle typing indicators
+    // Handle typing indicators + field highlighting
     socket.on('presence:typing', (data) => {
       if (data.uid === uid && data.documentId === documentId) {
+        const userId = data.user?.id || data.user?.email || 'unknown';
+
         setPresenceState(prev => {
           const newTyping = [...prev.typingUsers.filter(t => t.user?.id !== data.user?.id)];
           newTyping.push({ user: data.user, fieldName: data.fieldName, timestamp: Date.now() });
           return { ...prev, typingUsers: newTyping };
         });
 
-        // Auto-clear typing after 3 seconds
+        // Clear previous highlight for this user
+        const prevCleanup = fieldHighlightCleanups.current.get(userId);
+        if (prevCleanup) prevCleanup();
+
+        // Highlight the field with border + avatar dot
+        const editorIdx = presenceState.editors.findIndex(
+          (e) => e.user?.id === data.user?.id
+        );
+        const colorIdx = editorIdx >= 0 ? editorIdx : Math.abs(hashCode(userId)) % PRESENCE_FLAT_COLORS.length;
+        const cleanup = highlightField(data.fieldName, data.user || {}, colorIdx);
+
+        if (cleanup) {
+          fieldHighlightCleanups.current.set(userId, cleanup);
+        }
+
+        // Auto-clear typing + highlight after 3 seconds
         setTimeout(() => {
           setPresenceState(prev => ({
             ...prev,
             typingUsers: prev.typingUsers.filter(t => t.user?.id !== data.user?.id),
           }));
+          const cl = fieldHighlightCleanups.current.get(userId);
+          if (cl) {
+            cl();
+            fieldHighlightCleanups.current.delete(userId);
+          }
         }, 3000);
       }
     });
@@ -468,12 +677,14 @@ const LivePresencePanel = ({ documentId, model, document }) => {
       }
     }, 30000);
 
-    // Cleanup
     return () => {
       clearInterval(heartbeat);
       if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
         document.removeEventListener('input', handleInput, true);
       }
+      // Clear all field highlights
+      fieldHighlightCleanups.current.forEach((cleanup) => cleanup());
+      fieldHighlightCleanups.current.clear();
       if (socket.connected) {
         socket.emit('presence:leave', { uid, documentId });
       }
