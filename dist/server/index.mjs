@@ -32655,7 +32655,8 @@ const DEFAULT_SETTINGS = {
     enabled: true,
     heartbeatInterval: 3e4,
     staleTimeout: 6e4,
-    showTypingIndicator: true
+    showTypingIndicator: true,
+    fieldHighlighting: false
   },
   livePreview: {
     enabled: true,

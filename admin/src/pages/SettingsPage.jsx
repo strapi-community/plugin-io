@@ -999,6 +999,22 @@ const SettingsPage = () => {
                   <Typography variant="omega">{t('presence.typing', 'Show Typing Indicators')}</Typography>
                 </Flex>
               </Grid.Item>
+              <Grid.Item col={12}>
+                <Flex gap={2} alignItems="center">
+                  <Checkbox
+                    checked={settings.presence?.fieldHighlighting ?? false}
+                    onCheckedChange={(v) => updateNested('presence', 'fieldHighlighting', v)}
+                  />
+                  <Flex direction="column" alignItems="flex-start" gap={1}>
+                    <Typography variant="omega">
+                      {t('presence.fieldHighlighting', 'Field-Level Highlighting')}
+                    </Typography>
+                    <Typography variant="pi" textColor="neutral600">
+                      {t('presence.fieldHighlightingHint', 'Show a colored border and name label on fields where other editors are typing (experimental)')}
+                    </Typography>
+                  </Flex>
+                </Flex>
+              </Grid.Item>
             </Grid.Root>
           )}
 

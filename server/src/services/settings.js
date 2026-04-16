@@ -63,6 +63,7 @@ const DEFAULT_SETTINGS = {
     heartbeatInterval: 30000,
     staleTimeout: 60000,
     showTypingIndicator: true,
+    fieldHighlighting: false,
   },
   livePreview: {
     enabled: true,

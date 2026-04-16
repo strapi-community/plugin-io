@@ -432,12 +432,13 @@ const getEditorName = (user = {}) => {
  */
 const LivePresencePanel = ({ documentId, model, document }) => {
   const { formatMessage } = useIntl();
-  const { post } = useFetchClient();
+  const { get, post } = useFetchClient();
   const t = (id, defaultMessage, values) => 
     formatMessage({ id: `${PLUGIN_ID}.${id}`, defaultMessage }, values);
   
   const socketRef = useRef(null);
   const fieldHighlightCleanups = useRef(new Map());
+  const fieldHighlightEnabledRef = useRef(false);
   const [sessionData, setSessionData] = useState(null);
   const [presenceState, setPresenceState] = useState({
     status: 'initializing',
@@ -445,6 +446,21 @@ const LivePresencePanel = ({ documentId, model, document }) => {
     typingUsers: [],
     error: null,
   });
+
+  // Load plugin settings to check if field highlighting is enabled
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await get(`/${PLUGIN_ID}/settings`);
+        if (cancelled) return;
+        fieldHighlightEnabledRef.current = !!data?.data?.presence?.fieldHighlighting;
+      } catch {
+        fieldHighlightEnabledRef.current = false;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [get]);
 
   // Inject presence CSS on mount, remove on unmount
   useEffect(() => {
@@ -671,19 +687,19 @@ const LivePresencePanel = ({ documentId, model, document }) => {
           return { ...prev, typingUsers: newTyping };
         });
 
-        // Clear previous highlight for this user
-        const prevCleanup = fieldHighlightCleanups.current.get(userId);
-        if (prevCleanup) prevCleanup();
+        if (fieldHighlightEnabledRef.current) {
+          const prevCleanup = fieldHighlightCleanups.current.get(userId);
+          if (prevCleanup) prevCleanup();
 
-        // Highlight the field with border + avatar dot
-        const editorIdx = presenceState.editors.findIndex(
-          (e) => e.user?.id === data.user?.id
-        );
-        const colorIdx = editorIdx >= 0 ? editorIdx : Math.abs(hashCode(userId)) % PRESENCE_FLAT_COLORS.length;
-        const cleanup = highlightField(data.fieldName, data.user || {}, colorIdx);
+          const editorIdx = presenceState.editors.findIndex(
+            (e) => e.user?.id === data.user?.id
+          );
+          const colorIdx = editorIdx >= 0 ? editorIdx : Math.abs(hashCode(userId)) % PRESENCE_FLAT_COLORS.length;
+          const cleanup = highlightField(data.fieldName, data.user || {}, colorIdx);
 
-        if (cleanup) {
-          fieldHighlightCleanups.current.set(userId, cleanup);
+          if (cleanup) {
+            fieldHighlightCleanups.current.set(userId, cleanup);
+          }
         }
 
         // Auto-clear typing + highlight after 3 seconds
