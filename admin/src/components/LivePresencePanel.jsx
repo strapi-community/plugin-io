@@ -231,8 +231,9 @@ const LivePresencePanel = ({ documentId, model, document }) => {
     error: null,
   });
 
-  // Get the content type UID from model
   const uid = model?.uid || model;
+  const contentTypeName = model?.info?.displayName || model?.info?.singularName || uid?.split('.')?.pop() || '';
+  const entryTitle = document?.title || document?.name || document?.username || document?.email || documentId || '';
 
   // Step 1: Get session token from server with automatic refresh
   useEffect(() => {
@@ -406,8 +407,7 @@ const LivePresencePanel = ({ documentId, model, document }) => {
       console.log(`[${PLUGIN_ID}] Presence socket connected`);
       setPresenceState(prev => ({ ...prev, status: 'connected', error: null }));
       
-      // Join presence for this entity
-      socket.emit('presence:join', { uid, documentId }, (response) => {
+      socket.emit('presence:join', { uid, documentId, contentTypeName, entryTitle }, (response) => {
         if (response?.success) {
           setPresenceState(prev => ({
             ...prev,
@@ -514,9 +514,6 @@ const LivePresencePanel = ({ documentId, model, document }) => {
 
   const isConnected = status === 'connected';
 
-  // Debug logging
-  console.log(`[${PLUGIN_ID}] LivePresencePanel render:`, { uid, documentId, status, editors: otherEditors.length });
-
   // Return object format required by addEditViewSidePanel
   return {
     title: t('presence.title', 'Live Presence'),
@@ -535,6 +532,20 @@ const LivePresencePanel = ({ documentId, model, document }) => {
           </StatusText>
         </StatusCard>
 
+        {/* Current Context */}
+        {isConnected && contentTypeName && (
+          <StatusCard $status="connected">
+            <StatusText>
+              <StatusLabel $status="connected" style={{ fontSize: '12px' }}>
+                {contentTypeName}
+              </StatusLabel>
+              <StatusSubtext>
+                {entryTitle || documentId}
+              </StatusSubtext>
+            </StatusText>
+          </StatusCard>
+        )}
+
         {/* Other Editors List */}
         {isConnected && otherEditors.length > 0 && (
           <div>
@@ -545,6 +556,7 @@ const LivePresencePanel = ({ documentId, model, document }) => {
               {otherEditors.map((editor, idx) => {
                 const user = editor.user || {};
                 const typingInfo = getUserTypingInfo(user.id);
+                const editingContent = editor.contentTypeName || editor.entryTitle;
                 
                 return (
                   <EditorItem key={editor.socketId || idx}>
@@ -554,8 +566,12 @@ const LivePresencePanel = ({ documentId, model, document }) => {
                     <EditorInfo>
                       <EditorName>{getEditorName(user)}</EditorName>
                       {typingInfo?.fieldName ? (
-                        <EditorEmail>Typing in: {typingInfo.fieldName}</EditorEmail>
-                      ) : user.email && user.firstname ? (
+                        <EditorEmail style={{ color: '#92400e' }}>
+                          Typing in: {typingInfo.fieldName}
+                        </EditorEmail>
+                      ) : editingContent ? (
+                        <EditorEmail>{editingContent}{editor.entryTitle ? ` - ${editor.entryTitle}` : ''}</EditorEmail>
+                      ) : user.email ? (
                         <EditorEmail>{user.email}</EditorEmail>
                       ) : null}
                     </EditorInfo>

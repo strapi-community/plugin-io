@@ -234,8 +234,70 @@ async function bootstrapIO({ strapi: strapi2 }) {
   const io = new SocketIO(settings2.socket.serverOptions);
   strapi2.$io = io;
   sanitizeSensitiveFields({ strapi: strapi2 });
-  if (settings2.events?.length) {
-    strapi2.$io.server.on("connection", (socket) => {
+  const presenceMap = /* @__PURE__ */ new Map();
+  strapi2.$io.server.on("connection", (socket) => {
+    socket.on("presence:join", (data, callback) => {
+      if (!data?.uid || !data?.documentId) return;
+      const room = `presence:${data.uid}:${data.documentId}`;
+      socket.join(room);
+      socket.data.editing = socket.data.editing || [];
+      socket.data.editing.push({
+        uid: data.uid,
+        documentId: data.documentId,
+        contentTypeName: data.contentTypeName || "",
+        entryTitle: data.entryTitle || "",
+        room
+      });
+      const editors = getEditorsInRoom(strapi2.$io.server, room, presenceMap);
+      strapi2.$io.server.to(room).emit("presence:update", {
+        uid: data.uid,
+        documentId: data.documentId,
+        editors
+      });
+      if (typeof callback === "function") {
+        callback({ success: true, editors });
+      }
+    });
+    socket.on("presence:leave", (data) => {
+      if (!data?.uid || !data?.documentId) return;
+      const room = `presence:${data.uid}:${data.documentId}`;
+      socket.leave(room);
+      socket.data.editing = (socket.data.editing || []).filter(
+        (e) => e.room !== room
+      );
+      const editors = getEditorsInRoom(strapi2.$io.server, room, presenceMap);
+      strapi2.$io.server.to(room).emit("presence:update", {
+        uid: data.uid,
+        documentId: data.documentId,
+        editors
+      });
+    });
+    socket.on("presence:typing", (data) => {
+      if (!data?.uid || !data?.documentId) return;
+      const room = `presence:${data.uid}:${data.documentId}`;
+      socket.to(room).emit("presence:typing", {
+        uid: data.uid,
+        documentId: data.documentId,
+        user: socket.data.user || {},
+        fieldName: data.fieldName || ""
+      });
+    });
+    socket.on("presence:heartbeat", () => {
+      presenceMap.set(socket.id, Date.now());
+    });
+    socket.on("disconnect", () => {
+      presenceMap.delete(socket.id);
+      const rooms = socket.data.editing || [];
+      for (const entry of rooms) {
+        const editors = getEditorsInRoom(strapi2.$io.server, entry.room, presenceMap);
+        strapi2.$io.server.to(entry.room).emit("presence:update", {
+          uid: entry.uid,
+          documentId: entry.documentId,
+          editors
+        });
+      }
+    });
+    if (settings2.events?.length) {
       for (const event of settings2.events) {
         if (event.name === "connection") {
           event.handler({ strapi: strapi2, io }, socket);
@@ -243,8 +305,26 @@ async function bootstrapIO({ strapi: strapi2 }) {
           socket.on(event.name, (...args) => event.handler({ strapi: strapi2, io }, socket, ...args));
         }
       }
+    }
+  });
+}
+function getEditorsInRoom(server, room, presenceMap) {
+  const roomSockets = server.sockets.adapter.rooms?.get(room);
+  if (!roomSockets) return [];
+  const editors = [];
+  for (const socketId of roomSockets) {
+    const socket = server.sockets.sockets.get(socketId);
+    if (!socket) continue;
+    const editingEntry = (socket.data.editing || []).find((e) => e.room === room);
+    editors.push({
+      socketId: socket.id,
+      user: socket.data.user || {},
+      contentTypeName: editingEntry?.contentTypeName || "",
+      entryTitle: editingEntry?.entryTitle || "",
+      lastSeen: presenceMap.get(socketId) || Date.now()
     });
   }
+  return editors;
 }
 const require$1 = node_module.createRequire(typeof document === "undefined" ? require("url").pathToFileURL(__filename).href : _documentCurrentScript && _documentCurrentScript.tagName.toUpperCase() === "SCRIPT" && _documentCurrentScript.src || new URL("index.js", document.baseURI).href);
 let transactionCtx = null;
