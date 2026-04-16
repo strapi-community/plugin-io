@@ -1,3 +1,10 @@
+# [5.6.0](https://github.com/strapi-community/plugin-io/compare/5.5.0...5.6.0) (2026-04-16)
+
+
+### Features
+
+* **presence:** field-level visual presence with border + avatar dot ([e9988cf](https://github.com/strapi-community/plugin-io/commit/e9988cf84a2a224b3b68842411d7758b76be521b))
+
 # [5.5.0](https://github.com/strapi-community/plugin-io/compare/5.4.4...5.5.0) (2026-04-16)
 
 
