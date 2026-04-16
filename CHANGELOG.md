@@ -1,3 +1,10 @@
+## [5.8.1](https://github.com/strapi-community/plugin-io/compare/5.8.0...5.8.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* six runtime bugs from deep audit ([f29143e](https://github.com/strapi-community/plugin-io/commit/f29143e087534201acf03d2f2a752e3c6e58845a))
+
 # [5.8.0](https://github.com/strapi-community/plugin-io/compare/5.7.1...5.8.0) (2026-04-16)
 
 
