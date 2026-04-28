@@ -1,3 +1,10 @@
+## [5.8.2](https://github.com/strapi-community/plugin-io/compare/5.8.1...5.8.2) (2026-04-28)
+
+
+### Bug Fixes
+
+* **sanitize:** resolve full content-type before passing to Content API ([#111](https://github.com/strapi-community/plugin-io/issues/111)) ([47155b6](https://github.com/strapi-community/plugin-io/commit/47155b6980946bb1b0d9a4e8beb24b06d9fd2b54)), closes [#110](https://github.com/strapi-community/plugin-io/issues/110)
+
 ## [5.8.1](https://github.com/strapi-community/plugin-io/compare/5.8.0...5.8.1) (2026-04-16)
 
 
