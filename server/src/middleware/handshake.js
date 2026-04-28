@@ -1,17 +1,88 @@
 import { getService } from '../utils/getService.js';
 
 /**
- * Auto assign sockets to appropriate rooms based on tokens associated name.
+ * In-memory rate-limiter for socket handshakes. Limits authentication attempts
+ * per remote address over a sliding window so attackers cannot brute-force
+ * tokens through the Socket.IO handshake.
+ */
+const MAX_FAILED_ATTEMPTS = 20;
+const WINDOW_MS = 60 * 1000;
+const failedAttempts = new Map();
+
+/**
+ * Extracts a best-effort remote address from a socket handshake. Respects
+ * X-Forwarded-For only when explicitly trusted via env; otherwise uses the
+ * raw socket address to avoid trivial spoofing.
+ *
+ * @param {import('socket.io').Socket} socket
+ * @returns {string}
+ */
+function getRemoteAddress(socket) {
+	const trustProxy = process.env.TRUST_PROXY === 'true';
+	if (trustProxy) {
+		const xff = socket.handshake?.headers?.['x-forwarded-for'];
+		if (typeof xff === 'string' && xff.length > 0) {
+			return xff.split(',')[0].trim();
+		}
+	}
+	return socket.handshake?.address || 'unknown';
+}
+
+/**
+ * Records a failed auth attempt and returns true when the address exceeds the
+ * failure budget within the sliding window.
+ *
+ * @param {string} address
+ * @returns {boolean} true when the address should be blocked
+ */
+function recordFailure(address) {
+	const now = Date.now();
+	let entry = failedAttempts.get(address);
+	if (!entry || now - entry.firstAt > WINDOW_MS) {
+		entry = { count: 0, firstAt: now };
+	}
+	entry.count += 1;
+	failedAttempts.set(address, entry);
+
+	if (failedAttempts.size > 50_000) {
+		const cutoff = now - WINDOW_MS;
+		for (const [key, value] of failedAttempts.entries()) {
+			if (value.firstAt < cutoff) failedAttempts.delete(key);
+		}
+	}
+
+	return entry.count > MAX_FAILED_ATTEMPTS;
+}
+
+/**
+ * Clears failures for an address after a successful handshake.
+ * @param {string} address
+ */
+function clearFailures(address) {
+	failedAttempts.delete(address);
+}
+
+/**
+ * Auto assigns sockets to appropriate rooms based on tokens associated name.
  * Defaults to default role if no token provided.
  *
- * @param {import('socket.io').Socket} socket The socket attempting to connect
- * @param {Function} next Function to call the next middleware in the stack
+ * Rate-limits authentication attempts per remote address to prevent
+ * brute-force attacks against JWT/API-token/session-token strategies.
+ *
+ * @param {import('socket.io').Socket} socket
+ * @param {Function} next
  */
 async function handshake(socket, next) {
 	const strategyService = getService({ name: 'strategy' });
 	const auth = socket.handshake.auth || {};
 	let strategy = auth.strategy || 'jwt';
-	const token = auth.token || '';
+	const token = typeof auth.token === 'string' ? auth.token : '';
+	const remoteAddress = getRemoteAddress(socket);
+
+	const existing = failedAttempts.get(remoteAddress);
+	if (existing && existing.count > MAX_FAILED_ATTEMPTS && Date.now() - existing.firstAt < WINDOW_MS) {
+		return next(new Error('Too many authentication attempts. Try again later.'));
+	}
 
 	if (!token.length) {
 		strategy = '';
@@ -52,8 +123,13 @@ async function handshake(socket, next) {
 			throw new Error('No valid room found');
 		}
 
+		clearFailures(remoteAddress);
 		next();
 	} catch (error) {
+		const blocked = recordFailure(remoteAddress);
+		if (blocked) {
+			return next(new Error('Too many authentication attempts. Try again later.'));
+		}
 		next(new Error(error.message));
 	}
 }

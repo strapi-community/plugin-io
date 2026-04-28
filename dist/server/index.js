@@ -4,6 +4,7 @@ const socket_io = require("socket.io");
 const node_module = require("node:module");
 const z = require("zod");
 const require$$1 = require("crypto");
+const net = require("net");
 const dates = require("date-fns");
 const require$$0$1 = require("child_process");
 const require$$0$2 = require("os");
@@ -38,6 +39,7 @@ function _interopNamespace(e) {
 }
 const z__default = /* @__PURE__ */ _interopDefault(z);
 const require$$1__default = /* @__PURE__ */ _interopDefault(require$$1);
+const net__default = /* @__PURE__ */ _interopDefault(net);
 const require$$0__default = /* @__PURE__ */ _interopDefault(require$$0$1);
 const require$$0__default$1 = /* @__PURE__ */ _interopDefault(require$$0$2);
 const require$$0__default$3 = /* @__PURE__ */ _interopDefault(require$$0$4);
@@ -57,11 +59,48 @@ function getService({ name, plugin: plugin2 = pluginId, type: type2 = "plugin" }
   }
   return strapi.service(serviceUID);
 }
+const MAX_FAILED_ATTEMPTS = 20;
+const WINDOW_MS = 60 * 1e3;
+const failedAttempts = /* @__PURE__ */ new Map();
+function getRemoteAddress(socket) {
+  const trustProxy = process.env.TRUST_PROXY === "true";
+  if (trustProxy) {
+    const xff = socket.handshake?.headers?.["x-forwarded-for"];
+    if (typeof xff === "string" && xff.length > 0) {
+      return xff.split(",")[0].trim();
+    }
+  }
+  return socket.handshake?.address || "unknown";
+}
+function recordFailure(address) {
+  const now = Date.now();
+  let entry = failedAttempts.get(address);
+  if (!entry || now - entry.firstAt > WINDOW_MS) {
+    entry = { count: 0, firstAt: now };
+  }
+  entry.count += 1;
+  failedAttempts.set(address, entry);
+  if (failedAttempts.size > 5e4) {
+    const cutoff = now - WINDOW_MS;
+    for (const [key, value] of failedAttempts.entries()) {
+      if (value.firstAt < cutoff) failedAttempts.delete(key);
+    }
+  }
+  return entry.count > MAX_FAILED_ATTEMPTS;
+}
+function clearFailures(address) {
+  failedAttempts.delete(address);
+}
 async function handshake(socket, next) {
   const strategyService = getService({ name: "strategy" });
   const auth = socket.handshake.auth || {};
   let strategy2 = auth.strategy || "jwt";
-  const token = auth.token || "";
+  const token = typeof auth.token === "string" ? auth.token : "";
+  const remoteAddress = getRemoteAddress(socket);
+  const existing = failedAttempts.get(remoteAddress);
+  if (existing && existing.count > MAX_FAILED_ATTEMPTS && Date.now() - existing.firstAt < WINDOW_MS) {
+    return next(new Error("Too many authentication attempts. Try again later."));
+  }
   if (!token.length) {
     strategy2 = "";
   }
@@ -95,8 +134,13 @@ async function handshake(socket, next) {
     } else {
       throw new Error("No valid room found");
     }
+    clearFailures(remoteAddress);
     next();
   } catch (error2) {
+    const blocked = recordFailure(remoteAddress);
+    if (blocked) {
+      return next(new Error("Too many authentication attempts. Try again later."));
+    }
     next(new Error(error2.message));
   }
 }
@@ -229,6 +273,23 @@ const sanitizeSensitiveFields = ({ strapi: strapi2 }) => {
   };
   strapi2.log.info("socket.io: Sensitive fields sanitization middleware active");
 };
+const MAX_EDITING_ROOMS_PER_SOCKET = 50;
+const MAX_STRING_LEN = 256;
+function normalizePresencePayload(data) {
+  if (!data || typeof data !== "object") return null;
+  const uid = typeof data.uid === "string" ? data.uid.slice(0, MAX_STRING_LEN) : "";
+  const documentId = typeof data.documentId === "string" ? data.documentId.slice(0, MAX_STRING_LEN) : "";
+  if (!uid || !documentId) return null;
+  if (!/^[a-zA-Z0-9:._-]+$/.test(uid)) return null;
+  if (!/^[a-zA-Z0-9_-]+$/.test(documentId)) return null;
+  return {
+    uid,
+    documentId,
+    contentTypeName: typeof data.contentTypeName === "string" ? data.contentTypeName.slice(0, MAX_STRING_LEN) : "",
+    entryTitle: typeof data.entryTitle === "string" ? data.entryTitle.slice(0, MAX_STRING_LEN) : "",
+    fieldName: typeof data.fieldName === "string" ? data.fieldName.slice(0, MAX_STRING_LEN) : ""
+  };
+}
 async function bootstrapIO({ strapi: strapi2 }) {
   const settings2 = strapi2.config.get(`plugin::${pluginId}`);
   const io = new SocketIO(settings2.socket.serverOptions);
@@ -237,21 +298,35 @@ async function bootstrapIO({ strapi: strapi2 }) {
   const presenceMap = /* @__PURE__ */ new Map();
   strapi2.$io.server.on("connection", (socket) => {
     socket.on("presence:join", (data, callback) => {
-      if (!data?.uid || !data?.documentId) return;
-      const room = `presence:${data.uid}:${data.documentId}`;
-      socket.join(room);
+      const payload = normalizePresencePayload(data);
+      if (!payload) return;
       socket.data.editing = socket.data.editing || [];
+      if (socket.data.editing.length >= MAX_EDITING_ROOMS_PER_SOCKET) {
+        if (typeof callback === "function") {
+          callback({ success: false, error: "Too many editing sessions for this socket." });
+        }
+        return;
+      }
+      const room = `presence:${payload.uid}:${payload.documentId}`;
+      if (socket.data.editing.some((e) => e.room === room)) {
+        const editors2 = getEditorsInRoom(strapi2.$io.server, room, presenceMap);
+        if (typeof callback === "function") {
+          callback({ success: true, editors: editors2 });
+        }
+        return;
+      }
+      socket.join(room);
       socket.data.editing.push({
-        uid: data.uid,
-        documentId: data.documentId,
-        contentTypeName: data.contentTypeName || "",
-        entryTitle: data.entryTitle || "",
+        uid: payload.uid,
+        documentId: payload.documentId,
+        contentTypeName: payload.contentTypeName,
+        entryTitle: payload.entryTitle,
         room
       });
       const editors = getEditorsInRoom(strapi2.$io.server, room, presenceMap);
       strapi2.$io.server.to(room).emit("presence:update", {
-        uid: data.uid,
-        documentId: data.documentId,
+        uid: payload.uid,
+        documentId: payload.documentId,
         editors
       });
       if (typeof callback === "function") {
@@ -259,27 +334,31 @@ async function bootstrapIO({ strapi: strapi2 }) {
       }
     });
     socket.on("presence:leave", (data) => {
-      if (!data?.uid || !data?.documentId) return;
-      const room = `presence:${data.uid}:${data.documentId}`;
+      const payload = normalizePresencePayload(data);
+      if (!payload) return;
+      const room = `presence:${payload.uid}:${payload.documentId}`;
       socket.leave(room);
       socket.data.editing = (socket.data.editing || []).filter(
         (e) => e.room !== room
       );
       const editors = getEditorsInRoom(strapi2.$io.server, room, presenceMap);
       strapi2.$io.server.to(room).emit("presence:update", {
-        uid: data.uid,
-        documentId: data.documentId,
+        uid: payload.uid,
+        documentId: payload.documentId,
         editors
       });
     });
     socket.on("presence:typing", (data) => {
-      if (!data?.uid || !data?.documentId) return;
-      const room = `presence:${data.uid}:${data.documentId}`;
+      const payload = normalizePresencePayload(data);
+      if (!payload) return;
+      const room = `presence:${payload.uid}:${payload.documentId}`;
+      const isMemberOfRoom = (socket.data.editing || []).some((e) => e.room === room);
+      if (!isMemberOfRoom) return;
       socket.to(room).emit("presence:typing", {
-        uid: data.uid,
-        documentId: data.documentId,
+        uid: payload.uid,
+        documentId: payload.documentId,
         user: socket.data.user || {},
-        fieldName: data.fieldName || ""
+        fieldName: payload.fieldName
       });
     });
     socket.on("presence:heartbeat", () => {
@@ -28023,25 +28102,52 @@ z__namespace.enum([
 ]).describe("Filter by publication status");
 z__namespace.string().describe("Search query string");
 const { ValidationError: ValidationError3 } = errors;
+function isValidCorsOrigin(origin) {
+  if (typeof origin !== "string") return false;
+  if (origin === "*") return true;
+  try {
+    const url = new URL(origin);
+    return (url.protocol === "http:" || url.protocol === "https:") && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
+function isValidIpOrCidr(value) {
+  if (typeof value !== "string" || value.length === 0) return false;
+  const [addr, mask] = value.split("/");
+  if (mask !== void 0) {
+    const m = Number.parseInt(mask, 10);
+    if (!Number.isFinite(m) || m < 0 || m > 128) return false;
+  }
+  return net__default.default.isIP(addr) !== 0;
+}
 const settingsSchema = z.z.object({
   enabled: z.z.boolean().optional(),
   cors: z.z.object({
-    origins: z.z.array(z.z.string().url()).optional()
+    origins: z.z.array(
+      z.z.string().refine(isValidCorsOrigin, {
+        message: 'Each origin must be a valid http(s) URL or "*"'
+      })
+    ).optional()
   }).passthrough().optional(),
   connection: z.z.object({
-    maxConnections: z.z.number().int().positive().optional(),
-    pingTimeout: z.z.number().int().positive().optional(),
-    pingInterval: z.z.number().int().positive().optional(),
-    connectionTimeout: z.z.number().int().positive().optional()
+    maxConnections: z.z.number().int().positive().max(1e5).optional(),
+    pingTimeout: z.z.number().int().positive().max(6e5).optional(),
+    pingInterval: z.z.number().int().positive().max(6e5).optional(),
+    connectionTimeout: z.z.number().int().positive().max(6e5).optional()
   }).optional(),
   security: z.z.object({
     requireAuthentication: z.z.boolean().optional(),
     rateLimiting: z.z.object({
       enabled: z.z.boolean().optional(),
-      maxEventsPerSecond: z.z.number().int().positive().optional()
+      maxEventsPerSecond: z.z.number().int().positive().max(1e5).optional()
     }).optional(),
-    ipWhitelist: z.z.array(z.z.string()).optional(),
-    ipBlacklist: z.z.array(z.z.string()).optional()
+    ipWhitelist: z.z.array(z.z.string().refine(isValidIpOrCidr, {
+      message: "Each entry must be a valid IPv4/IPv6 address or CIDR"
+    })).max(1e3).optional(),
+    ipBlacklist: z.z.array(z.z.string().refine(isValidIpOrCidr, {
+      message: "Each entry must be a valid IPv4/IPv6 address or CIDR"
+    })).max(1e3).optional()
   }).optional(),
   events: z.z.object({
     customEventNames: z.z.boolean().optional(),
@@ -28151,17 +28257,42 @@ const settings$1 = ({ strapi: strapi2 }) => {
       };
     },
     /**
+     * Broadcasts a test event to all connected Socket.IO clients.
+     *
+     * Validates the event name against `[a-zA-Z0-9:._-]` (max 100 chars) and
+     * caps the serialized payload at 32 KB so an admin can't trivially flood
+     * connected sockets with massive payloads.
+     *
      * @route POST /io/test-event
      * @returns {{ ok: true }}
+     * @throws {ValidationError} When eventName is missing/invalid or data too large
      */
     async sendTestEvent(ctx) {
       const { eventName, data } = ctx.request.body || {};
-      if (!eventName) {
+      if (!eventName || typeof eventName !== "string") {
         throw new ValidationError3("eventName is required");
+      }
+      const securityService = strapi2.plugin("io")?.service?.("security");
+      const isValidName = securityService?.validateEventName ? securityService.validateEventName(eventName) : /^[a-zA-Z0-9:._-]+$/.test(eventName) && eventName.length < 100;
+      if (!isValidName) {
+        throw new ValidationError3("eventName must match [a-zA-Z0-9:._-]{1,99}");
+      }
+      let safeData = {};
+      if (data !== void 0) {
+        try {
+          const serialized = JSON.stringify(data);
+          if (serialized.length > 32 * 1024) {
+            throw new ValidationError3("Test event data too large (max 32 KB)");
+          }
+          safeData = JSON.parse(serialized);
+        } catch (err) {
+          if (err instanceof ValidationError3) throw err;
+          throw new ValidationError3("Test event data is not JSON-serializable");
+        }
       }
       const io = strapi2.$io;
       if (io?.server) {
-        io.server.emit(eventName, data || {});
+        io.server.emit(eventName, safeData);
       }
       ctx.body = { ok: true };
     },
@@ -32527,12 +32658,21 @@ const sanitize = ({ strapi: strapi2 }) => {
     const customFields = strapi2.config.get("plugin::io.sensitiveFields", []);
     return [...DEFAULT_SENSITIVE_FIELDS, ...customFields];
   }
+  function resolveContentType(schema2) {
+    if (!schema2) return void 0;
+    if (schema2.attributes) return schema2;
+    if (schema2.uid) {
+      return strapi2.contentTypes[schema2.uid] || void 0;
+    }
+    return void 0;
+  }
   async function output({ schema: schema2, data, options }) {
     let sanitizedData = data;
+    const fullSchema = resolveContentType(schema2);
     const contentAPISanitize = strapi2.contentAPI?.sanitize?.output;
-    if (contentAPISanitize) {
+    if (contentAPISanitize && fullSchema) {
       try {
-        sanitizedData = await contentAPISanitize(data, schema2, options);
+        sanitizedData = await contentAPISanitize(data, fullSchema, options);
       } catch (error2) {
         strapi2.log.debug(`[socket.io] Content API sanitization failed: ${error2.message}`);
       }

@@ -1,7 +1,39 @@
 import { z } from 'zod';
+import net from 'net';
 import { errors } from '@strapi/utils';
 
 const { ValidationError } = errors;
+
+/**
+ * Validates a CORS origin: https? URL, * or localhost with optional port.
+ * @param {string} origin
+ * @returns {boolean}
+ */
+function isValidCorsOrigin(origin) {
+  if (typeof origin !== 'string') return false;
+  if (origin === '*') return true;
+  try {
+    const url = new URL(origin);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Validates a string looks like an IPv4, IPv6 or CIDR block.
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isValidIpOrCidr(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  const [addr, mask] = value.split('/');
+  if (mask !== undefined) {
+    const m = Number.parseInt(mask, 10);
+    if (!Number.isFinite(m) || m < 0 || m > 128) return false;
+  }
+  return net.isIP(addr) !== 0;
+}
 
 /**
  * Zod schema for validating incoming settings updates.
@@ -12,16 +44,20 @@ const settingsSchema = z
     enabled: z.boolean().optional(),
     cors: z
       .object({
-        origins: z.array(z.string().url()).optional(),
+        origins: z.array(
+          z.string().refine(isValidCorsOrigin, {
+            message: 'Each origin must be a valid http(s) URL or "*"',
+          })
+        ).optional(),
       })
       .passthrough()
       .optional(),
     connection: z
       .object({
-        maxConnections: z.number().int().positive().optional(),
-        pingTimeout: z.number().int().positive().optional(),
-        pingInterval: z.number().int().positive().optional(),
-        connectionTimeout: z.number().int().positive().optional(),
+        maxConnections: z.number().int().positive().max(100000).optional(),
+        pingTimeout: z.number().int().positive().max(600000).optional(),
+        pingInterval: z.number().int().positive().max(600000).optional(),
+        connectionTimeout: z.number().int().positive().max(600000).optional(),
       })
       .optional(),
     security: z
@@ -30,11 +66,15 @@ const settingsSchema = z
         rateLimiting: z
           .object({
             enabled: z.boolean().optional(),
-            maxEventsPerSecond: z.number().int().positive().optional(),
+            maxEventsPerSecond: z.number().int().positive().max(100000).optional(),
           })
           .optional(),
-        ipWhitelist: z.array(z.string()).optional(),
-        ipBlacklist: z.array(z.string()).optional(),
+        ipWhitelist: z.array(z.string().refine(isValidIpOrCidr, {
+          message: 'Each entry must be a valid IPv4/IPv6 address or CIDR',
+        })).max(1000).optional(),
+        ipBlacklist: z.array(z.string().refine(isValidIpOrCidr, {
+          message: 'Each entry must be a valid IPv4/IPv6 address or CIDR',
+        })).max(1000).optional(),
       })
       .optional(),
     events: z
@@ -179,17 +219,48 @@ export default ({ strapi }) => {
     },
 
     /**
+     * Broadcasts a test event to all connected Socket.IO clients.
+     *
+     * Validates the event name against `[a-zA-Z0-9:._-]` (max 100 chars) and
+     * caps the serialized payload at 32 KB so an admin can't trivially flood
+     * connected sockets with massive payloads.
+     *
      * @route POST /io/test-event
      * @returns {{ ok: true }}
+     * @throws {ValidationError} When eventName is missing/invalid or data too large
      */
     async sendTestEvent(ctx) {
       const { eventName, data } = ctx.request.body || {};
-      if (!eventName) {
+      if (!eventName || typeof eventName !== 'string') {
         throw new ValidationError('eventName is required');
       }
+
+      const securityService = strapi.plugin('io')?.service?.('security');
+      const isValidName = securityService?.validateEventName
+        ? securityService.validateEventName(eventName)
+        : /^[a-zA-Z0-9:._-]+$/.test(eventName) && eventName.length < 100;
+
+      if (!isValidName) {
+        throw new ValidationError('eventName must match [a-zA-Z0-9:._-]{1,99}');
+      }
+
+      let safeData = {};
+      if (data !== undefined) {
+        try {
+          const serialized = JSON.stringify(data);
+          if (serialized.length > 32 * 1024) {
+            throw new ValidationError('Test event data too large (max 32 KB)');
+          }
+          safeData = JSON.parse(serialized);
+        } catch (err) {
+          if (err instanceof ValidationError) throw err;
+          throw new ValidationError('Test event data is not JSON-serializable');
+        }
+      }
+
       const io = strapi.$io;
       if (io?.server) {
-        io.server.emit(eventName, data || {});
+        io.server.emit(eventName, safeData);
       }
       ctx.body = { ok: true };
     },

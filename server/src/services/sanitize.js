@@ -61,9 +61,28 @@ export default ({ strapi }) => {
 	}
 
 	/**
+	 * Resolves a full Strapi content-type definition from a minimal schema
+	 * that may only contain `{ singularName, uid }`. The Content API
+	 * sanitizer needs the full content type with `attributes`, otherwise
+	 * it crashes with "Cannot read properties of undefined (reading 'id')".
+	 *
+	 * @param {object} schema - At minimum `{ uid }` or a full content-type
+	 * @returns {object|undefined} Full content-type with `attributes`, or undefined
+	 */
+	function resolveContentType(schema) {
+		if (!schema) return undefined;
+		if (schema.attributes) return schema;
+		if (schema.uid) {
+			return strapi.contentTypes[schema.uid] || undefined;
+		}
+		return undefined;
+	}
+
+	/**
 	 * Sanitize data output with a provided schema for a specified role.
 	 * Uses Strapi's runtime content API sanitizer and additionally
-	 * strips sensitive fields.
+	 * strips sensitive fields. Skips the Content API step when the
+	 * schema cannot be resolved to a full content-type.
 	 *
 	 * @param {object} param
 	 * @param {object} param.schema - Content type schema (must have uid)
@@ -74,10 +93,12 @@ export default ({ strapi }) => {
 	async function output({ schema, data, options }) {
 		let sanitizedData = data;
 
+		const fullSchema = resolveContentType(schema);
 		const contentAPISanitize = strapi.contentAPI?.sanitize?.output;
-		if (contentAPISanitize) {
+
+		if (contentAPISanitize && fullSchema) {
 			try {
-				sanitizedData = await contentAPISanitize(data, schema, options);
+				sanitizedData = await contentAPISanitize(data, fullSchema, options);
 			} catch (error) {
 				strapi.log.debug(`[socket.io] Content API sanitization failed: ${error.message}`);
 			}

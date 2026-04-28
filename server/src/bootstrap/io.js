@@ -2,6 +2,40 @@ import { SocketIO } from '../structures/index.js';
 import { pluginId } from '../utils/pluginId.js';
 import sanitizeSensitiveFields from '../middlewares/sanitize-sensitive-fields.js';
 
+const MAX_EDITING_ROOMS_PER_SOCKET = 50;
+const MAX_STRING_LEN = 256;
+
+/**
+ * Normalizes and validates presence event input. Returns a safe record or
+ * null when the payload is invalid.
+ *
+ * @param {*} data
+ * @returns {{uid: string, documentId: string, contentTypeName: string, entryTitle: string, fieldName: string}|null}
+ */
+function normalizePresencePayload(data) {
+  if (!data || typeof data !== 'object') return null;
+  const uid = typeof data.uid === 'string' ? data.uid.slice(0, MAX_STRING_LEN) : '';
+  const documentId = typeof data.documentId === 'string' ? data.documentId.slice(0, MAX_STRING_LEN) : '';
+  if (!uid || !documentId) return null;
+
+  if (!/^[a-zA-Z0-9:._-]+$/.test(uid)) return null;
+  if (!/^[a-zA-Z0-9_-]+$/.test(documentId)) return null;
+
+  return {
+    uid,
+    documentId,
+    contentTypeName: typeof data.contentTypeName === 'string'
+      ? data.contentTypeName.slice(0, MAX_STRING_LEN)
+      : '',
+    entryTitle: typeof data.entryTitle === 'string'
+      ? data.entryTitle.slice(0, MAX_STRING_LEN)
+      : '',
+    fieldName: typeof data.fieldName === 'string'
+      ? data.fieldName.slice(0, MAX_STRING_LEN)
+      : '',
+  };
+}
+
 /**
  * Bootstrap IO instance and related "services"
  *
@@ -11,39 +45,49 @@ import sanitizeSensitiveFields from '../middlewares/sanitize-sensitive-fields.js
 async function bootstrapIO({ strapi }) {
 	const settings = strapi.config.get(`plugin::${pluginId}`);
 
-	// initialize io
 	const io = new SocketIO(settings.socket.serverOptions);
 
-	// make io avaiable anywhere strapi global object is
 	strapi.$io = io;
 
-	// Apply sensitive fields sanitization middleware
 	sanitizeSensitiveFields({ strapi });
 
-	// Presence tracking per document
 	const presenceMap = new Map();
 
 	strapi.$io.server.on('connection', (socket) => {
-		// Presence: join a document editing session
 		socket.on('presence:join', (data, callback) => {
-			if (!data?.uid || !data?.documentId) return;
-
-			const room = `presence:${data.uid}:${data.documentId}`;
-			socket.join(room);
+			const payload = normalizePresencePayload(data);
+			if (!payload) return;
 
 			socket.data.editing = socket.data.editing || [];
+			if (socket.data.editing.length >= MAX_EDITING_ROOMS_PER_SOCKET) {
+				if (typeof callback === 'function') {
+					callback({ success: false, error: 'Too many editing sessions for this socket.' });
+				}
+				return;
+			}
+
+			const room = `presence:${payload.uid}:${payload.documentId}`;
+			if (socket.data.editing.some((e) => e.room === room)) {
+				const editors = getEditorsInRoom(strapi.$io.server, room, presenceMap);
+				if (typeof callback === 'function') {
+					callback({ success: true, editors });
+				}
+				return;
+			}
+
+			socket.join(room);
 			socket.data.editing.push({
-				uid: data.uid,
-				documentId: data.documentId,
-				contentTypeName: data.contentTypeName || '',
-				entryTitle: data.entryTitle || '',
+				uid: payload.uid,
+				documentId: payload.documentId,
+				contentTypeName: payload.contentTypeName,
+				entryTitle: payload.entryTitle,
 				room,
 			});
 
 			const editors = getEditorsInRoom(strapi.$io.server, room, presenceMap);
 			strapi.$io.server.to(room).emit('presence:update', {
-				uid: data.uid,
-				documentId: data.documentId,
+				uid: payload.uid,
+				documentId: payload.documentId,
 				editors,
 			});
 
@@ -52,11 +96,11 @@ async function bootstrapIO({ strapi }) {
 			}
 		});
 
-		// Presence: leave a document editing session
 		socket.on('presence:leave', (data) => {
-			if (!data?.uid || !data?.documentId) return;
+			const payload = normalizePresencePayload(data);
+			if (!payload) return;
 
-			const room = `presence:${data.uid}:${data.documentId}`;
+			const room = `presence:${payload.uid}:${payload.documentId}`;
 			socket.leave(room);
 			socket.data.editing = (socket.data.editing || []).filter(
 				(e) => e.room !== room
@@ -64,22 +108,25 @@ async function bootstrapIO({ strapi }) {
 
 			const editors = getEditorsInRoom(strapi.$io.server, room, presenceMap);
 			strapi.$io.server.to(room).emit('presence:update', {
-				uid: data.uid,
-				documentId: data.documentId,
+				uid: payload.uid,
+				documentId: payload.documentId,
 				editors,
 			});
 		});
 
-		// Presence: typing indicator
 		socket.on('presence:typing', (data) => {
-			if (!data?.uid || !data?.documentId) return;
+			const payload = normalizePresencePayload(data);
+			if (!payload) return;
 
-			const room = `presence:${data.uid}:${data.documentId}`;
+			const room = `presence:${payload.uid}:${payload.documentId}`;
+			const isMemberOfRoom = (socket.data.editing || []).some((e) => e.room === room);
+			if (!isMemberOfRoom) return;
+
 			socket.to(room).emit('presence:typing', {
-				uid: data.uid,
-				documentId: data.documentId,
+				uid: payload.uid,
+				documentId: payload.documentId,
 				user: socket.data.user || {},
-				fieldName: data.fieldName || '',
+				fieldName: payload.fieldName,
 			});
 		});
 
