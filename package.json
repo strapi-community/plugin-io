@@ -59,7 +59,7 @@
     "@semantic-release/release-notes-generator": "^14.0.1",
     "@strapi/design-system": "^2.2.3",
     "@strapi/icons": "^2.2.3",
-    "@strapi/sdk-plugin": "^6.1.1",
+    "@strapi/sdk-plugin": "6.0.1",
     "@strapi/strapi": "^5.51.1",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.2",
