@@ -1,141 +1,150 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
+import { buildLlmsFull } from './build-llms-full.js';
+import { generateStructuredData } from './structured-data.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DOCS_ROOT = path.resolve(__dirname, '..');
 
 const SITE_URL = 'https://strapi-community.github.io/plugin-io';
 const REPO_URL = 'https://github.com/strapi-community/plugin-io';
 const NPM_URL = 'https://www.npmjs.com/package/@strapi-community/plugin-io';
 const VERSION = '5.8.2';
+const SITE_NAME = 'Strapi Plugin IO';
+const SITE_DESCRIPTION =
+  'Socket.IO plugin for Strapi v5 — real-time events, OAuth/JWT auth, rooms, Redis scaling, presence, and admin monitoring. Free MIT open source.';
 
 export default defineConfig({
-  title: 'Strapi Plugin IO',
-  titleTemplate: ':title - Socket.IO for Strapi v5',
-  description:
-    'Socket.IO plugin for Strapi v5 CMS with OAuth authentication, real-time events, room management, Redis adapter, and production-ready features. Free & open-source.',
-
+  title: SITE_NAME,
+  titleTemplate: `:title - Socket.IO for Strapi v5`,
+  description: SITE_DESCRIPTION,
+  lang: 'en-US',
   base: '/plugin-io/',
+  lastUpdated: true,
+  cleanUrls: true,
+  ignoreDeadLinks: true,
+  srcExclude: ['README.md'],
 
-  // SEO Meta Tags
+  sitemap: {
+    hostname: SITE_URL,
+    transformItems: (items) =>
+      items
+        .filter((item) => item.url !== 'README' && !item.url.startsWith('README'))
+        .map((item) => ({
+          ...item,
+          changefreq: item.url === '' ? 'weekly' : 'monthly',
+          priority:
+            item.url === ''
+              ? 1.0
+              : item.url.startsWith('guide/')
+                ? 0.9
+                : item.url.startsWith('api/')
+                  ? 0.85
+                  : 0.7,
+        })),
+  },
+
+  async buildEnd(siteConfig) {
+    const outDir = siteConfig.outDir;
+    try {
+      const size = await buildLlmsFull(DOCS_ROOT, path.join(outDir, 'llms-full.txt'));
+      await buildLlmsFull(DOCS_ROOT, path.join(DOCS_ROOT, 'public', 'llms-full.txt'));
+      console.log(`  ✓ llms-full.txt written (${(size / 1024).toFixed(1)} KB)`);
+    } catch (err) {
+      console.warn('  ⚠ llms-full.txt generation failed:', err.message);
+    }
+  },
+
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/plugin-io/logo.svg' }],
+    ['link', { rel: 'apple-touch-icon', href: '/plugin-io/logo.svg' }],
     ['meta', { name: 'theme-color', content: '#4945ff' }],
-
-    // Primary Meta Tags
+    ['meta', { name: 'color-scheme', content: 'light dark' }],
+    ['meta', { name: 'author', content: 'ComfortablyCoding, hrdunn, Schero94, strapi-community' }],
+    ['meta', { name: 'publisher', content: 'strapi-community' }],
     [
       'meta',
       {
-        name: 'title',
-        content: 'Strapi Socket.IO Plugin - Real-Time WebSocket Integration for Strapi v5',
+        name: 'robots',
+        content: 'index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1',
       },
     ],
-    [
-      'meta',
-      {
-        name: 'description',
-        content:
-          'Production-ready Socket.IO plugin for Strapi v5 CMS. Features: OAuth 2.0 authentication, automatic content type events, room management, Redis adapter, rate limiting. Free MIT license.',
-      },
-    ],
+    ['meta', { name: 'googlebot', content: 'index, follow' }],
+    ['meta', { name: 'bingbot', content: 'index, follow' }],
     [
       'meta',
       {
         name: 'keywords',
         content:
-          'strapi, socket.io, websocket, real-time, strapi v5, strapi plugin, nodejs, oauth, jwt, redis, websockets, cms plugin, headless cms, real-time events, strapi-plugin-io, @strapi-community/plugin-io',
+          'strapi, socket.io, websocket, real-time, strapi v5, strapi plugin, oauth, jwt, redis, presence, headless cms, @strapi-community/plugin-io, strapi transfer',
       },
     ],
-    ['meta', { name: 'author', content: 'ComfortablyCoding, hrdunn, Schero94' }],
-    ['meta', { name: 'robots', content: 'index, follow' }],
-    ['link', { rel: 'canonical', href: `${SITE_URL}/` }],
-
-    // Open Graph / Facebook
-    ['meta', { property: 'og:type', content: 'website' }],
-    ['meta', { property: 'og:url', content: `${SITE_URL}/` }],
-    [
-      'meta',
-      {
-        property: 'og:title',
-        content: 'Strapi Socket.IO Plugin - Real-Time WebSocket Integration',
-      },
-    ],
-    [
-      'meta',
-      {
-        property: 'og:description',
-        content:
-          'Production-ready Socket.IO plugin for Strapi v5. OAuth authentication, real-time events, Redis scaling, room management. Open-source & free.',
-      },
-    ],
-    ['meta', { property: 'og:image', content: `${SITE_URL}/og-image.png` }],
-    ['meta', { property: 'og:image:width', content: '1200' }],
-    ['meta', { property: 'og:image:height', content: '630' }],
-    ['meta', { property: 'og:locale', content: 'en_US' }],
-    ['meta', { property: 'og:site_name', content: 'Strapi Plugin IO' }],
-
-    // Twitter Card
-    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:url', content: `${SITE_URL}/` }],
-    [
-      'meta',
-      {
-        name: 'twitter:title',
-        content: 'Strapi Socket.IO Plugin - Real-Time WebSocket Integration',
-      },
-    ],
-    [
-      'meta',
-      {
-        name: 'twitter:description',
-        content:
-          'Production-ready Socket.IO plugin for Strapi v5. OAuth, real-time events, Redis, room management. Free & open-source.',
-      },
-    ],
-    ['meta', { name: 'twitter:image', content: `${SITE_URL}/og-image.png` }],
-    ['meta', { name: 'twitter:creator', content: '@Schero94' }],
-
-    // Additional SEO
-    ['meta', { name: 'application-name', content: 'Strapi Plugin IO' }],
-    ['meta', { name: 'apple-mobile-web-app-title', content: 'Strapi Plugin IO' }],
-    ['meta', { name: 'apple-mobile-web-app-capable', content: 'yes' }],
-    ['meta', { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }],
+    ['meta', { name: 'application-name', content: SITE_NAME }],
+    ['meta', { name: 'apple-mobile-web-app-title', content: SITE_NAME }],
     ['meta', { name: 'format-detection', content: 'telephone=no' }],
-    ['meta', { name: 'mobile-web-app-capable', content: 'yes' }],
-
-    // Structured Data (JSON-LD)
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:site_name', content: SITE_NAME }],
+    ['meta', { property: 'og:locale', content: 'en_US' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:creator', content: '@Schero94' }],
+    ['link', { rel: 'alternate', type: 'text/plain', href: `${SITE_URL}/llms.txt`, title: 'llms.txt' }],
     [
-      'script',
-      { type: 'application/ld+json' },
-      JSON.stringify({
-        '@context': 'https://schema.org',
-        '@type': 'SoftwareApplication',
-        name: 'Strapi Plugin IO',
-        applicationCategory: 'DeveloperApplication',
-        operatingSystem: 'Node.js',
-        description:
-          'Socket.IO plugin for Strapi v5 CMS with real-time WebSocket integration, OAuth authentication, and production-ready features.',
-        offers: {
-          '@type': 'Offer',
-          price: '0',
-          priceCurrency: 'USD',
-        },
-        author: {
-          '@type': 'Organization',
-          name: 'strapi-community',
-          url: 'https://github.com/strapi-community',
-        },
-        maintainer: {
-          '@type': 'Person',
-          name: 'Schero94',
-          url: 'https://github.com/Schero94',
-        },
-        license: 'https://opensource.org/licenses/MIT',
-        downloadUrl: NPM_URL,
-        softwareVersion: VERSION,
-        releaseNotes: 'Strapi v5 support, Redis adapter, OAuth authentication, presence, field-level highlighting',
-        programmingLanguage: 'JavaScript',
-        runtimePlatform: 'Node.js',
-        url: `${SITE_URL}/`,
-      }),
+      'link',
+      {
+        rel: 'alternate',
+        type: 'text/plain',
+        href: `${SITE_URL}/llms-full.txt`,
+        title: 'llms-full.txt',
+      },
     ],
   ],
+
+  transformHead({ pageData }) {
+    const head = [];
+    const frontmatter = pageData.frontmatter || {};
+    const relativePath = pageData.relativePath || '';
+    const isHome = relativePath === 'index.md';
+    const pagePath = isHome
+      ? ''
+      : relativePath.replace(/\.md$/, '').replace(/\/index$/, '/');
+    const canonicalUrl = `${SITE_URL}/${pagePath}`.replace(/\/+$/, '/') || `${SITE_URL}/`;
+    const pageTitle = frontmatter.title || pageData.title || SITE_NAME;
+    const pageDescription = frontmatter.description || pageData.description || SITE_DESCRIPTION;
+    const pageOgImage = frontmatter.ogImage
+      ? `${SITE_URL}${frontmatter.ogImage}`
+      : `${SITE_URL}/logo.svg`;
+    const fullTitle = isHome
+      ? `${SITE_NAME} — Socket.IO for Strapi v5`
+      : `${pageTitle} | ${SITE_NAME}`;
+
+    head.push(['link', { rel: 'canonical', href: canonicalUrl }]);
+    head.push(['meta', { name: 'description', content: pageDescription }]);
+    head.push(['meta', { property: 'og:title', content: fullTitle }]);
+    head.push(['meta', { property: 'og:description', content: pageDescription }]);
+    head.push(['meta', { property: 'og:url', content: canonicalUrl }]);
+    head.push(['meta', { property: 'og:image', content: pageOgImage }]);
+    head.push(['meta', { property: 'og:image:alt', content: `${pageTitle} — ${SITE_NAME}` }]);
+    head.push(['meta', { name: 'twitter:title', content: fullTitle }]);
+    head.push(['meta', { name: 'twitter:description', content: pageDescription }]);
+    head.push(['meta', { name: 'twitter:image', content: pageOgImage }]);
+    head.push(['meta', { name: 'twitter:url', content: canonicalUrl }]);
+
+    const structured = generateStructuredData({
+      relativePath,
+      frontmatter,
+      pageTitle,
+      pageDescription,
+      canonicalUrl,
+      siteUrl: SITE_URL,
+    });
+
+    for (const schema of structured) {
+      head.push(['script', { type: 'application/ld+json' }, JSON.stringify(schema)]);
+    }
+
+    return head;
+  },
 
   themeConfig: {
     logo: '/logo.svg',
@@ -150,6 +159,7 @@ export default defineConfig({
         items: [
           { text: 'Changelog', link: `${REPO_URL}/releases` },
           { text: 'GitHub', link: REPO_URL },
+          { text: 'llms.txt', link: `${SITE_URL}/llms.txt` },
         ],
       },
     ],
@@ -209,7 +219,7 @@ export default defineConfig({
 
     footer: {
       message:
-        'Released under the MIT License. Updated and made better by <a href="https://github.com/Schero94" target="_blank">@Schero94</a>',
+        'Released under the MIT License. Updated and made better by <a href="https://github.com/Schero94" target="_blank">@Schero94</a> · <a href="https://strapi-community.github.io/plugin-io/llms.txt">llms.txt</a>',
       copyright: 'Copyright © 2023-present ComfortablyCoding & hrdunn | Maintained by strapi-community',
     },
 
@@ -241,39 +251,6 @@ export default defineConfig({
             },
           },
         },
-        miniSearch: {
-          searchOptions: {
-            combineWith: 'AND',
-            fuzzy: 0.3,
-            prefix: true,
-            boost: {
-              title: 10,
-              heading: 6,
-              text: 2,
-              code: 1,
-            },
-            fields: ['title', 'titles', 'text'],
-          },
-          options: {
-            extractField: (document, fieldName) => {
-              if (fieldName === 'text') {
-                const text = document[fieldName] || '';
-                return text
-                  .replace(/```[\s\S]*?```/g, '')
-                  .replace(/\[.*?\]\(.*?\)/g, '')
-                  .replace(/[#*_~`]/g, '')
-                  .toLowerCase();
-              }
-              return document[fieldName];
-            },
-            tokenize: (text) => {
-              return text.split(/[\s\-_\.,:;!?]+/).filter((token) => token.length > 1);
-            },
-            processTerm: (term) => {
-              return term.toLowerCase();
-            },
-          },
-        },
       },
     },
   },
@@ -281,12 +258,4 @@ export default defineConfig({
   markdown: {
     lineNumbers: true,
   },
-
-  sitemap: {
-    hostname: SITE_URL,
-  },
-
-  cleanUrls: true,
-
-  lastUpdated: true,
 });

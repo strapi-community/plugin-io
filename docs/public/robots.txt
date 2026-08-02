@@ -1,22 +1,87 @@
-# robots.txt for Strapi Plugin IO Documentation
+# robots.txt — Strapi Plugin IO docs
+# https://strapi-community.github.io/plugin-io/
 
-# Allow all search engines
 User-agent: *
 Allow: /
 
-# Sitemap location
+# Search engines
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: DuckDuckBot
+Allow: /
+
+User-agent: Slurp
+Allow: /
+
+User-agent: Yandex
+Allow: /
+
+# AI / LLM crawlers — explicitly welcomed for SEO/GEO/AIO
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: GoogleOther
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Meta-ExternalAgent
+Allow: /
+
+User-agent: FacebookBot
+Allow: /
+
+User-agent: Applebot
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bytespider
+Allow: /
+
+User-agent: cohere-ai
+Allow: /
+
+User-agent: MistralAI-User
+Allow: /
+
+User-agent: DuckAssistBot
+Allow: /
+
+User-agent: YouBot
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+# Sitemaps & LLM resources (https://llmstxt.org)
 Sitemap: https://strapi-community.github.io/plugin-io/sitemap.xml
-
-# Crawl-delay (optional - prevents overloading)
-Crawl-delay: 1
-
-# Disallow specific paths (if needed)
-# Disallow: /admin/
-# Disallow: /private/
-
-# Allow important pages explicitly
-Allow: /guide/
-Allow: /api/
-Allow: /examples/
-Allow: /ecosystem
-
+# llms.txt:      https://strapi-community.github.io/plugin-io/llms.txt
+# llms-full.txt: https://strapi-community.github.io/plugin-io/llms-full.txt

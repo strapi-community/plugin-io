@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/package",
   "name": "@strapi-community/plugin-io",
   "version": "5.8.2",
-  "description": "A plugin for Strapi CMS that provides the ability for Socket IO integration",
+  "description": "Socket.IO plugin for Strapi v5 — real-time events, OAuth, presence, and Redis scaling.",
   "keywords": [
     "strapi",
     "strapi-plugin",
@@ -90,7 +90,7 @@
   "strapi": {
     "name": "io",
     "displayName": "IO",
-    "description": "A plugin for Strapi CMS that provides the ability for Socket IO integration",
+    "description": "Socket.IO plugin for Strapi v5 — real-time events, OAuth, presence, and Redis scaling.",
     "kind": "plugin"
   },
   "engines": {

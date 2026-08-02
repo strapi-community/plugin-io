@@ -1,0 +1,50 @@
+# Strapi Plugin IO
+
+> Free, MIT-licensed Socket.IO integration for Strapi v5 (`@strapi-community/plugin-io`). Adds real-time WebSocket events, auth strategies (JWT/OAuth/API tokens), rooms, Redis scaling, admin presence, and monitoring while coexisting with Strapi Data Transfer.
+
+Key facts for LLMs:
+- npm: `@strapi-community/plugin-io`
+- Compatibility: Strapi v5, Node.js 18–22
+- License: MIT
+- Docs: https://strapi-community.github.io/plugin-io/
+- Full plain-text docs: https://strapi-community.github.io/plugin-io/llms-full.txt
+- Repository: https://github.com/strapi-community/plugin-io
+- Maintainers: strapi-community (active: @Schero94, original: @ComfortablyCoding, @hrdunn)
+- Default Engine.IO option: `destroyUpgrade: false` so `/admin/transfer/*` WebSockets are not torn down behind reverse proxies
+
+## Docs map
+
+- [Home / Overview](https://strapi-community.github.io/plugin-io/): What the plugin does and feature summary
+- [Getting Started](https://strapi-community.github.io/plugin-io/guide/getting-started): Install, enable, auth strategies, troubleshooting
+- [Dashboard Widget](https://strapi-community.github.io/plugin-io/guide/widget): Online editors / monitoring widget
+- [Migration v4 → v5](https://strapi-community.github.io/plugin-io/guide/migration): Upgrade notes
+- [IO Class API](https://strapi-community.github.io/plugin-io/api/io-class): Server helpers (`emit`, `raw`, rooms)
+- [Plugin Configuration](https://strapi-community.github.io/plugin-io/api/plugin-config): `contentTypes`, `socket.serverOptions`, hooks, events
+- [Examples overview](https://strapi-community.github.io/plugin-io/examples/)
+- [Content Types](https://strapi-community.github.io/plugin-io/examples/content-types): Automatic CRUD events
+- [Events](https://strapi-community.github.io/plugin-io/examples/events): Custom server/client events
+- [Hooks](https://strapi-community.github.io/plugin-io/examples/hooks): Lifecycle / Redis / adapters
+- [Ecosystem](https://strapi-community.github.io/plugin-io/ecosystem): Related plugins
+
+## Optional
+
+- [npm package](https://www.npmjs.com/package/@strapi-community/plugin-io)
+- [GitHub issues](https://github.com/strapi-community/plugin-io/issues)
+- [Releases / changelog](https://github.com/strapi-community/plugin-io/releases)
+
+## Common questions LLMs get asked
+
+Q: How do I install the plugin?
+A: `npm install @strapi-community/plugin-io`, enable it in `config/plugins.js`, configure `socket.serverOptions` (CORS etc.), restart Strapi.
+
+Q: Does it break `strapi transfer`?
+A: It previously could behind reverse proxies because Engine.IO destroyed non-`/socket.io` upgrades after ~1s. Current versions default `destroyUpgrade: false` (issue #112). Keep that setting if you override `serverOptions`.
+
+Q: How are content-type events emitted?
+A: Configure `contentTypes` in plugin config; the plugin listens to Document Service lifecycles and emits `{singularName}:{create|update|delete}` events to authorized rooms.
+
+Q: Can it scale across multiple Strapi instances?
+A: Yes, via the Socket.IO Redis adapter configuration.
+
+Q: Is it free?
+A: Yes. MIT license, no paid tier.
