@@ -34,12 +34,7 @@ jobs:
 
       - name: Install docs dependencies
         working-directory: docs
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci
 
       - name: Build VitePress site
         working-directory: docs

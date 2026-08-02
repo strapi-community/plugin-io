@@ -12,10 +12,9 @@ build
 .strapi
 .vscode
 .idea
-package-lock.json
+/package-lock.json
 yarn.lock
 *.swp
 *.swo
 *~
 .tmp
-package-lock.json
