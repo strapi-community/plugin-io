@@ -1,3 +1,10 @@
+## [5.8.3](https://github.com/strapi-community/plugin-io/compare/5.8.2...5.8.3) (2026-08-02)
+
+
+### Bug Fixes
+
+* **socket:** stop Engine.IO from killing Strapi transfer upgrades ([5111a74](https://github.com/strapi-community/plugin-io/commit/5111a74ca447f7d80e691509f00623e4ec03906b)), closes [#112](https://github.com/strapi-community/plugin-io/issues/112)
+
 ## [5.8.2](https://github.com/strapi-community/plugin-io/compare/5.8.1...5.8.2) (2026-04-28)
 
 
