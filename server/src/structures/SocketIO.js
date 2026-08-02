@@ -3,10 +3,15 @@ import { handshake } from '../middleware/index.js';
 import { getService } from '../utils/getService.js';
 import { pluginId } from '../utils/pluginId.js';
 import { API_TOKEN_TYPE } from '../utils/constants.js';
+import { resolveSocketServerOptions } from './resolveSocketServerOptions.js';
 
 class SocketIO {
+	/**
+	 * @param {import('socket.io').ServerOptions | undefined} options - Plugin `socket.serverOptions`.
+	 */
 	constructor(options) {
-		this._socket = new Server(strapi.server.httpServer, options);
+		const serverOptions = resolveSocketServerOptions(options);
+		this._socket = new Server(strapi.server.httpServer, serverOptions);
 		const { hooks } = strapi.config.get(`plugin::${pluginId}`);
 		hooks.init?.({ strapi, $io: this });
 		this._socket.use(handshake);

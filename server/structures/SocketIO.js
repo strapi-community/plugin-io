@@ -5,10 +5,15 @@ const { handshake } = require('../middleware');
 const { getService } = require('../utils/getService');
 const { pluginId } = require('../utils/pluginId');
 const { API_TOKEN_TYPE } = require('../utils/constants');
+const { resolveSocketServerOptions } = require('./resolveSocketServerOptions');
 
 class SocketIO {
+	/**
+	 * @param {object | undefined} options - Plugin `socket.serverOptions`.
+	 */
 	constructor(options) {
-		this._socket = new Server(strapi.server.httpServer, options);
+		const serverOptions = resolveSocketServerOptions(options);
+		this._socket = new Server(strapi.server.httpServer, serverOptions);
 		// Hooks are now optional and read from stored settings, not config
 		// The init hook is called from bootstrap/io.js after settings are loaded
 		this._socket.use(handshake);

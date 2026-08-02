@@ -89,6 +89,8 @@ async function bootstrapIO({ strapi }) {
 	const monitoringService = strapi.plugin(pluginId).service('monitoring');
 
 	const serverOptions = {
+		// Keep Strapi transfer / other WS upgrades alive on the same HTTP server (#112).
+		destroyUpgrade: false,
 		cors: {
 			origin: settings.cors?.origins || ['http://localhost:3000'],
 			methods: settings.cors?.methods || ['GET', 'POST'],

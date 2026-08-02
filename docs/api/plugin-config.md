@@ -129,6 +129,9 @@ Direct pass-through to [Socket.IO Server Options](https://socket.io/docs/v4/serv
 ```javascript
 socket: {
   serverOptions: {
+    // Keep Strapi transfer / other WS upgrades alive (default since 5.8.3, issue #112)
+    destroyUpgrade: false,
+
     // CORS configuration
     cors: {
       origin: env('CLIENT_URL', 'http://localhost:3000'),
@@ -150,6 +153,10 @@ socket: {
   }
 }
 ```
+
+::: tip Strapi Transfer
+Engine.IO's default `destroyUpgrade: true` ends non-`/socket.io` upgrades after ~1s. That breaks `strapi transfer` behind reverse proxies (HTTP 504). This plugin forces `destroyUpgrade: false` unless you override it explicitly.
+:::
 
 ### Common Configurations
 

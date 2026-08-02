@@ -322,5 +322,5 @@ config: {
 See our [Migration Guide](/guide/migration) for step-by-step instructions to upgrade from Strapi v4 to v5.
 
 ::: warning Data Transfer
-If using `strapi transfer` command, temporarily disable this plugin or run it on a different port. See [issue #76](https://github.com/strapi-community/plugin-io/issues/76) for details.
+`strapi transfer` shares the Strapi HTTP server's WebSocket upgrade channel. From plugin `5.8.3` onward, Engine.IO is configured with `destroyUpgrade: false` so transfer upgrades to `/admin/transfer/*` are no longer torn down after 1s (see [issue #112](https://github.com/strapi-community/plugin-io/issues/112)). If you override `socket.serverOptions`, keep `destroyUpgrade: false` unless you intentionally isolate Socket.IO on another port.
 :::

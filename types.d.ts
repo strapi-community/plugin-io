@@ -28,7 +28,17 @@ export interface SocketIOConfig {
   };
   contentTypes?: Array<string | ContentTypeConfig>;
   socket?: {
-    serverOptions?: any;
+    /**
+     * Options forwarded to the Socket.IO / Engine.IO server.
+     * The plugin defaults `destroyUpgrade` to `false` so Strapi Data Transfer
+     * WebSocket upgrades (`/admin/transfer/*`) are not torn down (#112).
+     */
+    serverOptions?: Record<string, unknown> & {
+      destroyUpgrade?: boolean;
+      destroyUpgradeTimeout?: number;
+      path?: string;
+      cors?: unknown;
+    };
   };
   /**
    * Additional sensitive field names to exclude from emitted data.
