@@ -322,5 +322,5 @@ config: {
 See our [Migration Guide](/guide/migration) for step-by-step instructions to upgrade from Strapi v4 to v5.
 
 ::: warning Data Transfer
-If using `strapi transfer` command, temporarily disable this plugin or run it on a different port. See [issue #76](https://github.com/strapi-community/strapi-plugin-io/issues/76) for details.
+If using `strapi transfer` command, temporarily disable this plugin or run it on a different port. See [issue #76](https://github.com/strapi-community/plugin-io/issues/76) for details.
 :::

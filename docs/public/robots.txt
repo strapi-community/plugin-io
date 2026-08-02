@@ -5,7 +5,7 @@ User-agent: *
 Allow: /
 
 # Sitemap location
-Sitemap: https://strapi-plugin-io.netlify.app/sitemap.xml
+Sitemap: https://strapi-community.github.io/plugin-io/sitemap.xml
 
 # Crawl-delay (optional - prevents overloading)
 Crawl-delay: 1

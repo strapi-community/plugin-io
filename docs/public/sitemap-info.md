@@ -8,7 +8,7 @@ VitePress automatically generates a sitemap at build time when configured in `co
 
 ```javascript
 sitemap: {
-  hostname: 'https://strapi-plugin-io.netlify.app'
+  hostname: 'https://strapi-community.github.io/plugin-io'
 }
 ```
 

@@ -41,7 +41,7 @@ docs/
 ├── public/
 │   └── logo.svg               # Plugin logo
 └── .vitepress/
-    └── config.js              # VitePress configuration
+    └── config.js              # VitePress configuration (GitHub Pages base: /plugin-io/)
 ```
 
 ---
@@ -267,13 +267,13 @@ MIT License - Same as the plugin
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/strapi-community/strapi-plugin-io/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/strapi-community/strapi-plugin-io/discussions)
-- **Documentation**: [strapi-plugin-io.netlify.app](https://strapi-plugin-io.netlify.app/)
+- **Issues**: [GitHub Issues](https://github.com/strapi-community/plugin-io/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/strapi-community/plugin-io/discussions)
+- **Documentation**: [strapi-community.github.io/plugin-io](https://strapi-community.github.io/plugin-io/)
 
 ---
 
-**Last Updated**: November 27, 2025  
+**Last Updated**: August 2, 2026  
 **VitePress Version**: 1.6.4  
-**Plugin Version**: 3.0.0
+**Plugin Version**: 5.8.2
 

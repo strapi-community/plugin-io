@@ -4,7 +4,7 @@
 
 [![NPM Version](https://img.shields.io/npm/v/@strapi-community/plugin-io?style=flat-square)](https://www.npmjs.com/package/@strapi-community/plugin-io)
 [![NPM Downloads](https://img.shields.io/npm/dm/@strapi-community/plugin-io?style=flat-square)](https://www.npmjs.com/package/@strapi-community/plugin-io)
-[![License](https://img.shields.io/npm/l/@strapi-community/plugin-io?style=flat-square)](https://github.com/strapi-community/strapi-plugin-io/blob/main/LICENSE)
+[![License](https://img.shields.io/npm/l/@strapi-community/plugin-io?style=flat-square)](https://github.com/strapi-community/plugin-io/blob/main/LICENSE)
 [![Strapi Version](https://img.shields.io/badge/strapi-v5-blueviolet?style=flat-square)](https://strapi.io)
 
 Add real-time capabilities to your Strapi application with WebSocket support. Automatically broadcast content changes, manage user connections, and build live features like chat, notifications, and collaborative editing.
@@ -1326,7 +1326,7 @@ For detailed migration instructions, see [docs/guide/migration.md](./docs/guide/
 
 ### Official Documentation
 
-- **[Online Documentation](https://strapi-plugin-io.netlify.app/)** - Complete interactive docs
+- **[Online Documentation](https://strapi-community.github.io/plugin-io/)** - Complete interactive docs
 - **[API Reference](./docs/api/io-class.md)** - All methods and properties
 - **[Configuration Guide](./docs/api/plugin-config.md)** - Detailed configuration options
 - **[Usage Examples](./docs/examples/)** - Real-world use cases
@@ -1372,7 +1372,7 @@ We welcome contributions! Here's how you can help:
 
 ### Report Bugs
 
-Found a bug? [Open an issue](https://github.com/strapi-community/strapi-plugin-io/issues) with:
+Found a bug? [Open an issue](https://github.com/strapi-community/plugin-io/issues) with:
 - Strapi version
 - Plugin version
 - Steps to reproduce
@@ -1380,7 +1380,7 @@ Found a bug? [Open an issue](https://github.com/strapi-community/strapi-plugin-i
 
 ### Suggest Features
 
-Have an idea? [Start a discussion](https://github.com/strapi-community/strapi-plugin-io/discussions) to:
+Have an idea? [Start a discussion](https://github.com/strapi-community/plugin-io/discussions) to:
 - Describe the feature
 - Explain the use case
 - Discuss implementation
@@ -1397,7 +1397,7 @@ Have an idea? [Start a discussion](https://github.com/strapi-community/strapi-pl
 
 ```bash
 # Clone the repository
-git clone https://github.com/strapi-community/strapi-plugin-io.git
+git clone https://github.com/strapi-community/plugin-io.git
 cd strapi-plugin-io
 
 # Install dependencies
@@ -1417,9 +1417,9 @@ npm run verify
 
 ## Support
 
-- **Documentation**: https://strapi-plugin-io.netlify.app/
-- **GitHub Issues**: https://github.com/strapi-community/strapi-plugin-io/issues
-- **GitHub Discussions**: https://github.com/strapi-community/strapi-plugin-io/discussions
+- **Documentation**: https://strapi-community.github.io/plugin-io/
+- **GitHub Issues**: https://github.com/strapi-community/plugin-io/issues
+- **GitHub Discussions**: https://github.com/strapi-community/plugin-io/discussions
 - **Strapi Discord**: https://discord.strapi.io
 
 ---
@@ -1473,10 +1473,10 @@ For full changelog, see [CHANGELOG.md](./CHANGELOG.md).
 
 <div align="center">
   
-**[Documentation](https://strapi-plugin-io.netlify.app/)** | 
+**[Documentation](https://strapi-community.github.io/plugin-io/)** | 
 **[API Reference](./docs/api/io-class.md)** | 
 **[Examples](./docs/examples/)** | 
-**[GitHub](https://github.com/strapi-community/strapi-plugin-io)**
+**[GitHub](https://github.com/strapi-community/plugin-io)**
 
 Made with love for the Strapi community
 

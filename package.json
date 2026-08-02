@@ -39,7 +39,9 @@
     "watch:link": "strapi-plugin watch:link",
     "verify": "strapi-plugin verify",
     "lint": "eslint . --fix",
-    "format": "prettier --write \"./**/*.{js,json,yml,md}\""
+    "format": "prettier --write \"./**/*.{js,json,yml,md}\"",
+    "docs:dev": "npm --prefix docs run dev",
+    "docs:build": "npm --prefix docs run build"
   },
   "dependencies": {
     "date-fns": "^3.6.0",

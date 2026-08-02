@@ -252,10 +252,10 @@ Configure everything visually in the admin panel:
 
 ## Community & Support
 
-- 📖 [Full Documentation](https://strapi-plugin-io.netlify.app/)
-- 🐛 [Report Issues](https://github.com/strapi-community/strapi-plugin-io/issues)
-- 💬 [Discussions](https://github.com/strapi-community/strapi-plugin-io/discussions)
-- ⭐ [Star on GitHub](https://github.com/strapi-community/strapi-plugin-io)
+- 📖 [Full Documentation](https://strapi-community.github.io/plugin-io/)
+- 🐛 [Report Issues](https://github.com/strapi-community/plugin-io/issues)
+- 💬 [Discussions](https://github.com/strapi-community/plugin-io/discussions)
+- ⭐ [Star on GitHub](https://github.com/strapi-community/plugin-io)
 
 ## Next Steps
 
@@ -300,7 +300,7 @@ Powerful bookmark management system with real-time sync capabilities. Share book
 
 ## License
 
-MIT License - see [LICENSE](https://github.com/strapi-community/strapi-plugin-io/blob/master/LICENSE) for details
+MIT License - see [LICENSE](https://github.com/strapi-community/plugin-io/blob/master/LICENSE) for details
 
 ---
 

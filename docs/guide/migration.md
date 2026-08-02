@@ -547,9 +547,9 @@ npm install @strapi-community/plugin-io@2
 ### Resources
 - 📖 [Official Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - 📖 [Strapi v5 Breaking Changes](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
-- 🔗 [Plugin GitHub Repository](https://github.com/strapi-community/strapi-plugin-io)
-- 💬 [GitHub Discussions](https://github.com/strapi-community/strapi-plugin-io/discussions)
-- 🐛 [Report Issues](https://github.com/strapi-community/strapi-plugin-io/issues)
+- 🔗 [Plugin GitHub Repository](https://github.com/strapi-community/plugin-io)
+- 💬 [GitHub Discussions](https://github.com/strapi-community/plugin-io/discussions)
+- 🐛 [Report Issues](https://github.com/strapi-community/plugin-io/issues)
 
 ### Support
 If you encounter issues during migration:
@@ -598,6 +598,6 @@ If you encounter issues during migration:
 
 **Migration Guide Version**: 1.0  
 **Last Updated**: November 2025  
-**Plugin Version**: v3.0.0 → Latest  
+**Plugin Version**: v4 → v5 (current: 5.8.2)  
 **Maintained by**: [@Schero94](https://github.com/Schero94)
 
