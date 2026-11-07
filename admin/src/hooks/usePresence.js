@@ -5,6 +5,12 @@ import { io } from 'socket.io-client';
 const HEARTBEAT_MS = 30000;
 const TYPING_THROTTLE_MS = 2000;
 const TYPING_VISIBLE_MS = 4000;
+/**
+ * The Content Manager mounts edit-view side panels twice in a row. Starting a
+ * moment later means the throwaway mount never spends a one-time session token
+ * or opens a socket.
+ */
+const START_DELAY_MS = 150;
 
 /**
  * Resolves the Strapi server URL the admin talks to.
@@ -39,7 +45,7 @@ export function usePresence({ uid, documentId }) {
 
 		const fetchSession = async () => (await post('/io/presence/session')).data.data;
 
-		(async () => {
+		const start = async () => {
 			setState((prev) => ({ ...prev, status: 'connecting' }));
 			let session;
 			try {
@@ -104,16 +110,27 @@ export function usePresence({ uid, documentId }) {
 			heartbeat = setInterval(() => {
 				if (document.visibilityState === 'visible' && socket.connected) socket.emit('presence:heartbeat');
 			}, HEARTBEAT_MS);
-		})();
+		};
+		const startTimer = setTimeout(start, START_DELAY_MS);
 
 		return () => {
 			cancelled = true;
+			clearTimeout(startTimer);
 			clearInterval(heartbeat);
 			for (const timer of typingTimers.values()) clearTimeout(timer);
 			const socket = socketRef.current;
 			if (socket) {
-				socket.emit('presence:leave', { uid, documentId });
-				socket.disconnect();
+				socket.off();
+				if (socket.connected) {
+					socket.emit('presence:leave', { uid, documentId });
+					socket.disconnect();
+				} else {
+					// Closing a WebSocket that is still connecting logs a browser warning;
+					// close it as soon as the handshake settles instead.
+					const close = () => socket.disconnect();
+					socket.once('connect', close);
+					socket.once('connect_error', close);
+				}
 			}
 			socketRef.current = null;
 		};

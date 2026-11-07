@@ -17,10 +17,9 @@ import {
 } from '@strapi/design-system';
 import { ArrowClockwise, Trash } from '@strapi/icons';
 import { Page, useFetchClient, useNotification, useRBAC } from '@strapi/strapi/admin';
-import { useCallback, useState } from 'react';
-import { FormattedRelativeTime, useIntl } from 'react-intl';
+import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ConfirmAction, PageShell, SectionCard } from '../../components/ui';
+import { ConfirmAction, PageShell, RelativeTime, SectionCard } from '../../components/ui';
 import { useOnlineUsers, useSocketStats } from '../../hooks/useMonitoringData';
 import { usePolling } from '../../hooks/usePolling';
 import { useT } from '../../hooks/useT';
@@ -30,23 +29,6 @@ import { StatCards } from './StatCards';
 import { TestEventModal } from './TestEventModal';
 
 const RBAC = [...PERMISSIONS.monitoring.read, ...PERMISSIONS.monitoring.manage];
-
-/**
- * Relative time with the absolute time as title.
- *
- * @param {{ value: string }} props - ISO timestamp.
- * @returns {JSX.Element} Time.
- */
-const RelativeTime = ({ value }) => {
-	const { formatDate } = useIntl();
-	const [renderedAt] = useState(() => Date.now());
-	const seconds = Math.round((Date.parse(value) - renderedAt) / 1000);
-	return (
-		<time dateTime={value} title={formatDate(value, { dateStyle: 'medium', timeStyle: 'medium' })}>
-			<FormattedRelativeTime value={seconds} numeric="auto" updateIntervalInSeconds={10} />
-		</time>
-	);
-};
 
 /**
  * Settings > Socket.IO > Monitoring: live counters, admins online and the

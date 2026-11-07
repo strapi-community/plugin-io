@@ -19,6 +19,8 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **settings:** `PUT /io/settings` validates a strict schema and returns 400 with field paths. `@strapi/utils` is now a declared dependency, so the error is Strapi's own `ValidationError` instead of a bundled copy that produced 500s.
 * **monitoring:** statistics, event log and admins online report real values and never contain IP addresses, emails, tokens or socket ids. Test events refuse reserved, content and presence names.
 * **admin:** the presence panel reconnects with a fresh one-time token, and the stats widget no longer shows zeros.
+* **admin:** the Live presence panel opens one socket per edit view. The Content Manager mounts side panels twice; the first mount used to spend a session token and close a connecting WebSocket, which logged a browser warning.
+* **admin:** the homepage widgets follow the native ones: "Socket.IO" is laid out like "Project statistics" (bordered grid of link cells with tinted icons) and "Admins online" like "Last edited entries" (rows open the entry, ghost edit button). The widget icon takes the native grey.
 * **api:** the scaffold route `GET /api/io`, which answered 500, is removed.
 * **types:** `types.d.ts` matches the runtime API and is published through `types` and the `strapi-server` export.
 

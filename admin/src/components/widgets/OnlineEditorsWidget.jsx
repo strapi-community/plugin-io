@@ -1,19 +1,26 @@
-import { Avatar, Box, Flex, Link as DSLink, Typography } from '@strapi/design-system';
+import { Avatar, Box, Flex, IconButton, Table, Tbody, Td, Tr, Typography } from '@strapi/design-system';
+import { Pencil } from '@strapi/icons';
 import { useAuth } from '@strapi/strapi/admin';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useOnlineUsers } from '../../hooks/useMonitoringData';
 import { useT } from '../../hooks/useT';
 import { contentManagerPath, displayName, initials } from '../../utils/content-manager.mjs';
+import { RelativeTime } from '../ui';
 import { WidgetError, WidgetLoading, WidgetNoData } from './WidgetStates';
 
+const MAX_ROWS = 6;
+
 /**
- * Homepage widget "Admins online": other admins connected through live
- * presence and the entries they are editing.
+ * Homepage widget "Admins online": other admins with the Content Manager open.
+ * Mirrors the native "Last edited entries" widget (`@strapi/content-manager`
+ * RecentDocumentsTable): a borderless table whose rows open the entry, with
+ * the name, the content type, a relative time and a ghost edit button.
  *
  * @returns {JSX.Element} Widget body.
  */
 const OnlineEditorsWidget = () => {
 	const t = useT();
+	const navigate = useNavigate();
 	const me = useAuth('OnlineEditorsWidget', (state) => state.user);
 	const online = useOnlineUsers(15000);
 
@@ -32,28 +39,53 @@ const OnlineEditorsWidget = () => {
 	if (!others.length)
 		return <WidgetNoData label={t('widget.online.empty', 'No other admins are editing right now.')} />;
 
+	const rows = others.slice(0, MAX_ROWS);
 	return (
-		<Flex tag="ul" direction="column" alignItems="stretch" gap={3}>
-			{others.slice(0, 6).map((admin) => (
-				<Flex tag="li" key={admin.id} gap={3} minWidth={0}>
-					<Avatar.Item fallback={initials(admin)} delayMs={0} />
-					<Box minWidth={0} flex="1 1 0">
-						<Typography tag="p" textColor="neutral800" fontWeight="semiBold" ellipsis>
-							{displayName(admin) || t('common.unnamed', 'Unnamed admin')}
-						</Typography>
-						{admin.editing[0] ? (
-							<DSLink tag={Link} to={contentManagerPath(admin.editing[0])}>
-								{t('widget.online.editing', 'Editing {contentType}', { contentType: admin.editing[0].contentTypeName })}
-							</DSLink>
-						) : (
-							<Typography variant="pi" textColor="neutral600">
-								{t('widget.online.notEditing', 'Not editing')}
-							</Typography>
-						)}
-					</Box>
-				</Flex>
-			))}
-		</Flex>
+		<Table colCount={4} rowCount={rows.length}>
+			<Tbody>
+				{rows.map((admin) => {
+					const entry = admin.editing[0];
+					const name = displayName(admin) || t('common.unnamed', 'Unnamed admin');
+					const to = entry ? contentManagerPath(entry) : null;
+					return (
+						<Tr key={admin.id} onClick={to ? () => navigate(to) : undefined} cursor={to ? 'pointer' : undefined}>
+							<Td>
+								<Flex gap={2} minWidth={0}>
+									<Avatar.Item fallback={initials(admin)} delayMs={0} />
+									<Typography variant="omega" textColor="neutral800" ellipsis title={name}>
+										{name}
+									</Typography>
+								</Flex>
+							</Td>
+							<Td>
+								<Typography variant="omega" textColor="neutral600" ellipsis>
+									{entry ? entry.contentTypeName : t('widget.online.notEditing', 'Not editing')}
+								</Typography>
+							</Td>
+							<Td>
+								<Typography textColor="neutral600">
+									<RelativeTime value={admin.connectedAt} />
+								</Typography>
+							</Td>
+							<Td onClick={(event) => event.stopPropagation()}>
+								{to ? (
+									<Box display="inline-block">
+										<IconButton
+											tag={Link}
+											to={to}
+											label={t('widget.online.open', 'Open the entry {name} is editing', { name })}
+											variant="ghost"
+										>
+											<Pencil />
+										</IconButton>
+									</Box>
+								) : null}
+							</Td>
+						</Tr>
+					);
+				})}
+			</Tbody>
+		</Table>
 	);
 };
 

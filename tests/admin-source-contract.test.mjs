@@ -46,3 +46,22 @@ test('no unreferenced admin modules', () => {
   });
   assert.deepEqual(unused, []);
 });
+
+const source = (file) => sources.find(([f]) => f === file)?.[1] ?? '';
+
+test('presence hook defers the connection and never closes a connecting socket', () => {
+  const hook = source('hooks/usePresence.js');
+  assert.match(hook, /setTimeout\(start, START_DELAY_MS\)/);
+  assert.match(hook, /clearTimeout\(startTimer\)/);
+  assert.match(hook, /socket\.once\('connect', close\)/);
+});
+
+test('homepage widgets mirror the native widgets', () => {
+  const stats = source('components/widgets/StatsWidget.jsx');
+  assert.match(stats, /<BaseLink/, 'cells are router links like Project statistics');
+  assert.match(stats, /borderColor="neutral200"/, 'bordered grid like Project statistics');
+  const online = source('components/widgets/OnlineEditorsWidget.jsx');
+  assert.match(online, /<Table colCount=\{4\}/, 'table rows like Last edited entries');
+  assert.match(online, /<IconButton[\s\S]*variant="ghost"/, 'ghost edit button like Last edited entries');
+  assert.match(source('components/PluginIcon.jsx'), /\{\.\.\.props\}/, 'icon accepts the widget fill');
+});
