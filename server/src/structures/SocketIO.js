@@ -43,6 +43,11 @@ class SocketIO {
 			enginePath,
 			ownListeners: engineListeners,
 		});
+		if (!this._removeUpgradeForwarder) {
+			strapiInstance.log?.warn?.(
+				'[io] This Node.js version has no shouldUpgradeCallback (needs 22.21+ or 24.9+). Strapi Data Transfer will not work next to Socket.IO.'
+			);
+		}
 
 		this._handshake = createHandshake({ strapi: strapiInstance });
 		this._handshakeAttached = false;

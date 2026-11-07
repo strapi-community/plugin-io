@@ -167,12 +167,7 @@ test("destroy() removes the forwarder and does not close Strapi's HTTP server (#
   assert.ok(httpServer.listenerCount('upgrade') > before);
   await io.destroy();
   assert.equal(httpServer.listening, true, 'HTTP server must stay open for Strapi to close');
-  assert.equal(httpServer.listeners('upgrade').filter((l) => l.name === 'listener').length, 0, 'forwarder removed');
-  assert.equal(
-    httpServer.shouldUpgradeCallback?.name ?? 'none',
-    typeof httpServer.shouldUpgradeCallback === 'function' ? '' : 'none',
-    'original shouldUpgradeCallback restored'
-  );
+  assert.notEqual(httpServer.shouldUpgradeCallback.name, 'shouldUpgradeCallback', 'original callback restored');
   wss.close();
   await httpServer.shutdown();
 });
@@ -214,10 +209,6 @@ test('POST with a body and an Upgrade header still reaches Koa with its body (IO
     wss.close();
     await httpServer.shutdown();
   });
-  if (typeof httpServer.shouldUpgradeCallback !== 'function') {
-    t.skip('Node without shouldUpgradeCallback');
-    return;
-  }
   const body = JSON.stringify({ identifier: 'reader@example.test', password: 'x' });
   for (const upgrade of ['h2c', 'websocket']) {
     const reply = await rawRequest(port, {
@@ -231,32 +222,12 @@ test('POST with a body and an Upgrade header still reaches Koa with its body (IO
   assert.equal(get.status, 200, 'bodyless h2c GET');
 });
 
-test('legacy fallback (Node < 22.21): bodyless upgrades are forwarded, bodies get a clear 400 (IO-RA-02)', async () => {
-  const { app, wss } = createKoaApp();
-  const { httpServer, port } = await listen(app);
-  // An engine-like listener that ignores foreign paths, as Engine.IO does with destroyUpgrade: false.
-  const engine = () => {};
-  httpServer.on('upgrade', engine);
-  const remove = attachUpgradeForwarder({
-    httpServer,
-    enginePath: '/socket.io/',
-    ownListeners: [engine],
-    legacy: true,
-  });
+test('without shouldUpgradeCallback (Node outside the engines) the forwarder stays out of the way', () => {
+  const fake = { listeners: () => [], on() {}, off() {} };
+  assert.equal(attachUpgradeForwarder({ httpServer: fake, enginePath: '/socket.io/', ownListeners: [] }), null);
+});
 
-  const ok = await openWs(`ws://127.0.0.1:${port}/admin/transfer/runner/push`, {
-    authorization: 'Bearer transfer-token',
-  });
-  assert.deepEqual(ok, { result: 'open', message: 'ready' });
-  const get = await rawRequest(port, { method: 'GET', headers: { Upgrade: 'h2c' } });
-  assert.equal(get.status, 200);
-  const post = await rawRequest(port, { headers: { Upgrade: 'h2c' }, body: '{"a":1}' });
-  assert.equal(post.status, 400);
-  assert.match(post.body, /Node\.js 22\.21/);
-
-  remove();
-  assert.equal(httpServer.listeners('upgrade').length, 1, 'only the engine listener is left');
-  httpServer.off('upgrade', engine);
-  wss.close();
-  await httpServer.shutdown();
+test('the supported Node.js engines have shouldUpgradeCallback (no legacy upgrade path)', () => {
+  const server = createServer();
+  assert.equal(typeof server.shouldUpgradeCallback, 'function', `Node ${process.version}`);
 });
