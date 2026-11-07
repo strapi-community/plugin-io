@@ -169,6 +169,8 @@ Defaults the plugin sets unless you override them in `socket.serverOptions`:
 
 The plugin adds a **Socket.IO** section under _Settings_ with two pages, two homepage widgets and a side panel in the Content Manager. All screens use the Strapi Design System and follow the layout of the native settings pages.
 
+![Settings > Socket.IO > Settings](./pics/settings.png)
+
 **Settings** (`plugin::io.settings.read` / `plugin::io.settings.update`). Every setting applies to new connections without a restart:
 
 | Section        | Settings                                                                                                                                           |
@@ -182,9 +184,17 @@ The plugin adds a **Socket.IO** section under _Settings_ with two pages, two hom
 
 **Monitoring** (`plugin::io.monitoring.read`; reset and test events need `plugin::io.monitoring.manage`): connected clients by type, active rooms, events per second, events sent, admins online with the entries they edit, and the event log. Test events go to every connected client; names used by content and presence events are refused.
 
+![Settings > Socket.IO > Monitoring](./pics/monitoringSettings.png)
+
 **Homepage widgets** (Strapi 5.13+): _Socket.IO_ (four counters) and _Admins online_. Both need `plugin::io.monitoring.read`.
 
+![Socket.IO homepage widget](./pics/widget.png)
+
 **Live presence panel** in the Content Manager edit view: shows the other admins editing the same entry and, optionally, which field they are typing in. Admins only join the presence room of content types they may read in the Content Manager. The panel connects with a one-time token per connection attempt and shows no email addresses.
+
+![Live presence panel in the edit view](./pics/livepresenceindi.png)
+
+Screenshots come from a local test host with synthetic data.
 
 Strapi grants new permissions to Super Admins only. Give other roles access in _Settings > Administration Panel > Roles > Plugins > IO_.
 
