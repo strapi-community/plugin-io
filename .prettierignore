@@ -8,4 +8,3 @@ docs/package-lock.json
 docs/.vitepress/cache
 docs/.vitepress/dist
 CHANGELOG.md
-api-reference.json
