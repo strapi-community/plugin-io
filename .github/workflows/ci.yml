@@ -29,9 +29,12 @@ jobs:
         node: ['22', '24']
     # PostgreSQL for the multi-process suites (tests/cluster*.test.mjs): the
     # shared tables and several plugin nodes with the real Postgres adapter.
+    # The image is pinned by the digest of its multi-arch index (tag
+    # 16.15-alpine, resolved 2026-11-07). Dependabot does not update service
+    # images in workflows, so CONTRIBUTING.md describes how to refresh it.
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16.15-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
         env:
           POSTGRES_USER: io
           POSTGRES_PASSWORD: io-ci-only
