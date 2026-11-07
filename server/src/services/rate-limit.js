@@ -26,7 +26,7 @@ function createTokenBucket(ratePerSecond, now = Date.now) {
  * token guessing. Only failed authentication attempts count.
  *
  * @param {{ maxFailures?: number, windowMs?: number }} [options] - Limits.
- * @returns {{ isBlocked: (ip: string) => boolean, fail: (ip: string) => boolean, clear: (ip: string) => void, size: () => number }} Limiter.
+ * @returns {{ isBlocked: (ip: string) => boolean, fail: (ip: string) => boolean, clear: (ip: string) => void, has: (ip: string) => boolean, size: () => number }} Limiter.
  */
 function createFailureLimiter({ maxFailures = 20, windowMs = 60_000 } = {}) {
 	const entries = new Map();
@@ -50,10 +50,77 @@ function createFailureLimiter({ maxFailures = 20, windowMs = 60_000 } = {}) {
 		clear(ip) {
 			entries.delete(ip);
 		},
+		has(ip) {
+			return entries.has(ip);
+		},
 		size() {
 			return entries.size;
 		},
 	};
 }
 
-export { createFailureLimiter, createTokenBucket };
+/**
+ * Failed-handshake lockout shared by every process through the cluster
+ * store (`plugin_io_counters`, keys are SHA-256 hashes of the IP).
+ *
+ * - `isBlocked()` is synchronous and reads only local state, so a successful
+ *   handshake never queries the database.
+ * - `fail()` increments the shared counter in one atomic UPDATE. When the
+ *   cluster-wide count reaches the limit, this process blocks the IP locally
+ *   until the window ends. Another process learns about the block at its
+ *   next failure from that IP, so the effective limit is `maxFailures` plus
+ *   at most one attempt per other process.
+ * - Without coordination, or when the database call fails, it behaves like
+ *   `createFailureLimiter` (per process).
+ *
+ * @param {object} options - Options.
+ * @param {() => { hit: Function, clearCounter: Function } | null} options.store - Shared store, or null for local only.
+ * @param {(ip: string) => string} [options.key] - Counter key for an IP.
+ * @param {number} [options.maxFailures] - Failures per window.
+ * @param {number} [options.windowMs] - Window length.
+ * @returns {{ isBlocked: (ip: string) => boolean, fail: (ip: string) => Promise<boolean>, clear: (ip: string) => void, size: () => number }} Limiter.
+ */
+function createSharedFailureLimiter({ store, key = (ip) => ip, maxFailures = 20, windowMs = 60_000 }) {
+	const local = createFailureLimiter({ maxFailures, windowMs });
+	/** @type {Map<string, number>} Blocks learned from the shared counter (ip -> until). */
+	const blocked = new Map();
+	return {
+		isBlocked(ip) {
+			const until = blocked.get(ip);
+			if (until && until > Date.now()) return true;
+			if (until) blocked.delete(ip);
+			return local.isBlocked(ip);
+		},
+		async fail(ip) {
+			const localBlocked = local.fail(ip);
+			const shared = store();
+			if (!shared) return localBlocked;
+			try {
+				const { hits, windowStart } = await shared.hit(key(ip), windowMs);
+				if (hits >= maxFailures) {
+					blocked.set(ip, windowStart + windowMs);
+					if (blocked.size > 10_000) {
+						const now = Date.now();
+						for (const [k, v] of blocked) if (v <= now) blocked.delete(k);
+					}
+					return true;
+				}
+			} catch {
+				// Database unavailable: the local count still applies.
+			}
+			return localBlocked;
+		},
+		clear(ip) {
+			const hadFailures = local.has(ip) || blocked.has(ip);
+			local.clear(ip);
+			blocked.delete(ip);
+			const shared = store();
+			if (shared && hadFailures) shared.clearCounter(key(ip)).catch(() => {});
+		},
+		size() {
+			return local.size();
+		},
+	};
+}
+
+export { createFailureLimiter, createSharedFailureLimiter, createTokenBucket };

@@ -11,7 +11,7 @@ const READ = { action: 'plugin::content-manager.explorer.read' };
  * Registers an active admin in the stub database and creates a session token
  * like POST /io/presence/session.
  */
-const session = (host, user, canRead = true, sessionId = null) => {
+const session = async (host, user, canRead = true, sessionId = null) => {
   const admins = host.strapi.state.admins;
   const index = admins.findIndex((a) => a.id === user.id);
   const row = { ...user, isActive: true, blocked: false, permissions: canRead ? [READ] : [] };
@@ -35,12 +35,12 @@ test('admins see each other without emails; one-time tokens cannot be reused', a
   const host = await startHost({ usersPermissions });
   const alice = { id: 1, firstname: 'Ada', lastname: 'Example', email: 'ada@example.test' };
   const bob = { id: 2, firstname: 'Bo', lastname: 'Sample', email: 'bo@example.test' };
-  const { token: aliceToken } = session(host, alice);
+  const { token: aliceToken } = await session(host, alice);
   const { socket: a } = await host.connect({ strategy: 'admin-jwt', token: aliceToken });
   const reused = await host.connect({ strategy: 'admin-jwt', token: aliceToken });
   assert.equal(reused.error.message, 'Authentication failed');
 
-  const { socket: b } = await host.connect({ strategy: 'admin-jwt', token: session(host, bob).token });
+  const { socket: b } = await host.connect({ strategy: 'admin-jwt', token: (await session(host, bob)).token });
   await ack(a, 'presence:join', { uid: 'api::article.article', documentId: 'abc', entryTitle: '<img>' });
   const update = nextEvent(a, 'presence:update');
   const reply = await ack(b, 'presence:join', { uid: 'api::article.article', documentId: 'abc' });
@@ -60,7 +60,7 @@ test('admins see each other without emails; one-time tokens cannot be reused', a
 
 test('admins without Content Manager read permission cannot join', async () => {
   const host = await startHost({ usersPermissions });
-  const { token } = session(host, { id: 3, firstname: 'C', lastname: 'D' }, false);
+  const { token } = await session(host, { id: 3, firstname: 'C', lastname: 'D' }, false);
   const { socket } = await host.connect({ strategy: 'admin-jwt', token });
   const reply = await ack(socket, 'presence:join', { uid: 'api::article.article', documentId: 'abc' });
   assert.equal(reply.success, false);
@@ -72,7 +72,7 @@ test('presence can be turned off in the settings', async () => {
     usersPermissions,
     settings: { presence: { enabled: false, showTypingIndicator: true } },
   });
-  const { socket } = await host.connect({ strategy: 'admin-jwt', token: session(host, { id: 1 }).token });
+  const { socket } = await host.connect({ strategy: 'admin-jwt', token: (await session(host, { id: 1 })).token });
   const reply = await ack(socket, 'presence:join', { uid: 'api::article.article', documentId: 'abc' });
   assert.equal(reply.success, false);
   await host.close();
@@ -82,11 +82,11 @@ test('one admin holds at most five unused tokens; the oldest are dropped (IO-RA-
   const host = await startHost({ usersPermissions });
   const presence = host.strapi.plugin('io').service('presence');
   const tokens = [];
-  for (let i = 0; i < 7; i += 1) tokens.push(session(host, { id: 9 }).token);
-  assert.equal(presence.size(9), 5);
-  assert.equal(presence.consumeSessionToken(tokens[0]), null, 'oldest dropped');
-  assert.equal(presence.consumeSessionToken(tokens[1]), null, 'second oldest dropped');
-  const consumed = presence.consumeSessionToken(tokens[6]);
+  for (let i = 0; i < 7; i += 1) tokens.push((await session(host, { id: 9 })).token);
+  assert.equal(await presence.size(9), 5);
+  assert.equal(await presence.consumeSessionToken(tokens[0]), null, 'oldest dropped');
+  assert.equal(await presence.consumeSessionToken(tokens[1]), null, 'second oldest dropped');
+  const consumed = await presence.consumeSessionToken(tokens[6]);
   assert.deepEqual(Object.keys(consumed).sort(), ['sessionId', 'user'], 'no ability object is stored');
   await host.close();
 });
@@ -95,10 +95,10 @@ test('the route answers 429 once 10,000 tokens are pending (IO-RA-01)', async ()
   const host = await startHost({ usersPermissions });
   const presence = host.strapi.plugin('io').service('presence');
   for (let id = 1; id <= 2000; id += 1) {
-    for (let i = 0; i < 5; i += 1) presence.createSessionToken({ id });
+    for (let i = 0; i < 5; i += 1) await presence.createSessionToken({ id });
   }
-  assert.equal(presence.size(), 10_000);
-  assert.equal(presence.createSessionToken({ id: 5000 }), null);
+  assert.equal(await presence.size(), 10_000);
+  assert.equal(await presence.createSessionToken({ id: 5000 }), null);
   let status = null;
   const ctx = {
     state: { user: { id: 5000 }, session: { id: 's' } },
@@ -111,7 +111,7 @@ test('the route answers 429 once 10,000 tokens are pending (IO-RA-01)', async ()
   assert.equal(status, 429);
   assert.equal(ctx.body, undefined);
   // An admin who already holds tokens can still rotate them.
-  assert.ok(presence.createSessionToken({ id: 1 }));
+  assert.ok(await presence.createSessionToken({ id: 1 }));
   await host.close();
 });
 
@@ -129,7 +129,7 @@ test('admin sockets keep their identity under data.admin, never data.user (IO-RA
   });
   const { socket } = await host.connect({
     strategy: 'admin-jwt',
-    token: session(host, { id: 4, firstname: 'A' }).token,
+    token: (await session(host, { id: 4, firstname: 'A' })).token,
   });
   const [server] = await host.strapi.$io.server.fetchSockets();
   assert.equal(server.data.user, undefined);
@@ -149,12 +149,15 @@ test('a revoked Strapi session cannot connect and drops connected sockets (IO-RA
   const sessionManager = () => ({ isSessionActive: async (id) => active.has(id) });
   const host = await startHost({ usersPermissions, sessionManager });
   active.delete('sess-2');
-  const refused = await host.connect({ strategy: 'admin-jwt', token: session(host, { id: 1 }, true, 'sess-2').token });
+  const refused = await host.connect({
+    strategy: 'admin-jwt',
+    token: (await session(host, { id: 1 }, true, 'sess-2')).token,
+  });
   assert.equal(refused.error?.message, 'Authentication failed');
 
   const { socket } = await host.connect({
     strategy: 'admin-jwt',
-    token: session(host, { id: 1 }, true, 'sess-1').token,
+    token: (await session(host, { id: 1 }, true, 'sess-1')).token,
   });
   assert.equal(socket.connected, true);
   assert.equal(await host.strapi.$io.revalidateSockets(['admin']), 0);
@@ -177,7 +180,7 @@ test('deleting a Strapi session re-checks that admin right away (IO-RA-07)', asy
   registerInvalidation({ strapi: host.strapi });
   const { socket } = await host.connect({
     strategy: 'admin-jwt',
-    token: session(host, { id: 1 }, true, 'sess-1').token,
+    token: (await session(host, { id: 1 }, true, 'sess-1')).token,
   });
   const sessionsSub = subscribers.find((s) => s.models.includes('admin::session'));
   const gone = nextEvent(socket, 'disconnect', 1500);
@@ -189,7 +192,7 @@ test('deleting a Strapi session re-checks that admin right away (IO-RA-07)', asy
 
 test('revalidation reloads the ability and drops admins who lost read access to a joined entry (IO-RA-07)', async () => {
   const host = await startHost({ usersPermissions });
-  const { socket } = await host.connect({ strategy: 'admin-jwt', token: session(host, { id: 2 }).token });
+  const { socket } = await host.connect({ strategy: 'admin-jwt', token: (await session(host, { id: 2 })).token });
   assert.equal((await ack(socket, 'presence:join', { uid: 'api::article.article', documentId: 'abc' })).success, true);
   host.strapi.state.admins.find((a) => a.id === 2).permissions = [];
   const gone = nextEvent(socket, 'disconnect', 1000);
@@ -200,7 +203,7 @@ test('revalidation reloads the ability and drops admins who lost read access to 
 
 test('deactivated admins are refused at the handshake', async () => {
   const host = await startHost({ usersPermissions });
-  const { token } = session(host, { id: 6 });
+  const { token } = await session(host, { id: 6 });
   host.strapi.state.admins.find((a) => a.id === 6).isActive = false;
   const { error } = await host.connect({ strategy: 'admin-jwt', token });
   assert.equal(error?.message, 'Authentication failed');

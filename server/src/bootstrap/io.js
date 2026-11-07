@@ -1,3 +1,4 @@
+import { createConfiguredAdapter } from '../cluster/adapter.js';
 import { SocketIO } from '../structures/SocketIO.js';
 import { createTokenBucket } from '../services/rate-limit.js';
 import { pluginId } from '../utils/pluginId.js';
@@ -17,7 +18,21 @@ async function bootstrapIO({ strapi }) {
 	const settingsService = strapi.plugin(pluginId).service('settings');
 	const monitoring = strapi.plugin(pluginId).service('monitoring');
 
-	const io = new SocketIO(config.socket?.serverOptions, { strapi, deferHandshake: true });
+	// Multi-server adapter from `config.socket.adapter` (postgres, redis or
+	// custom); null keeps Socket.IO's in-memory adapter.
+	const built = await createConfiguredAdapter(config.socket?.adapter, { strapi });
+	const serverOptions = { ...config.socket?.serverOptions };
+	if (built) serverOptions.adapter = built.adapter;
+	// WebSocket only: no long-polling, so no sticky sessions are needed
+	// (https://socket.io/docs/v4/using-multiple-nodes/). An explicit
+	// `serverOptions.transports` wins.
+	if (config.socket?.websocketOnly === true && serverOptions.transports === undefined) {
+		serverOptions.transports = ['websocket'];
+	}
+
+	const io = new SocketIO(serverOptions, { strapi, deferHandshake: true });
+	io._closeAdapter = built?.close ?? null;
+	io.adapterType = built?.type ?? null;
 	strapi.$io = io;
 
 	// hooks.init runs before the plugin handshake is added (same order as
@@ -32,7 +47,6 @@ async function bootstrapIO({ strapi }) {
 		io.useHandshake();
 	}
 
-	const lastSeen = new Map();
 	const subscriptions = strapi.plugin(pluginId).service('subscriptions');
 	subscriptions.track(io.server);
 
@@ -55,7 +69,7 @@ async function bootstrapIO({ strapi }) {
 			if (error?.message === 'Rate limit exceeded') socket.emit('io:error', { message: error.message });
 		});
 
-		registerPresence({ strapi, io: io.server, socket, lastSeen });
+		registerPresence({ strapi, io: io.server, socket });
 		subscriptions.register(socket);
 
 		for (const event of config.events || []) {

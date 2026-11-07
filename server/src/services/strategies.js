@@ -1,5 +1,6 @@
 import { errors } from '@strapi/utils';
 import { API_TOKEN_TYPE, ROOM_PREFIX } from '../utils/constants.js';
+import { setPrivate } from '../utils/socket-private.js';
 
 const { UnauthorizedError, ForbiddenError } = errors;
 
@@ -174,7 +175,7 @@ export default ({ strapi }) => {
 		 * @throws {UnauthorizedError} When the token is missing, used or expired, or the admin or session is no longer active.
 		 */
 		async authenticate(auth) {
-			const session = strapi.plugin('io').service('presence').consumeSessionToken(auth?.token);
+			const session = await strapi.plugin('io').service('presence').consumeSessionToken(auth?.token);
 			if (!session) fail();
 			if (session.sessionId && !(await activeSessions('admin', [session.sessionId])).get(session.sessionId)) fail();
 			const loaded = (await loadAdmins([session.user.id])).get(String(session.user.id));
@@ -209,7 +210,7 @@ export default ({ strapi }) => {
 					failed.add(socket.id);
 					continue;
 				}
-				socket.data.adminAbility = loaded.ability;
+				setPrivate(socket, 'adminAbility', loaded.ability);
 			}
 			return failed;
 		},

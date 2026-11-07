@@ -19,8 +19,20 @@ const config: SocketIOConfig = {
 		},
 		{ name: 'admin-only', admin: true, handler: () => undefined },
 	],
-	socket: { serverOptions: { cors: { origin: 'https://app.example.com' } } },
+	socket: { serverOptions: { cors: { origin: 'https://app.example.com' } }, adapter: 'postgres', websocketOnly: true },
+	cluster: { enabled: 'auto', pollInterval: 3000 },
 };
+
+const redis: SocketIOConfig = {
+	contentTypes: [],
+	socket: { adapter: { type: 'redis', url: 'redis://cache.example.test:6379', requestsTimeout: 5000 } },
+};
+
+async function unfollow(socketId: string): Promise<boolean> {
+	const result = await strapi.$io.unsubscribeFromEntity(socketId, 'api::article.article', 'abc123');
+	const list = await strapi.$io.getEntitySubscriptions(socketId);
+	return result.success && list.success;
+}
 
 async function run(): Promise<number> {
 	strapi.$io.server.emit('hello', { ok: true });
@@ -35,4 +47,4 @@ async function follow(socketId: string): Promise<string | null> {
 	const result = await strapi.$io.subscribeToEntity(socketId, 'api::article.article', 'abc123');
 	return result.success ? result.documentId : result.error;
 }
-export { config, run, onlyPublished, maxPerSocket, follow };
+export { config, redis, run, onlyPublished, maxPerSocket, follow, unfollow };

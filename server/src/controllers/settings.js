@@ -45,19 +45,28 @@ export default ({ strapi }) => {
 		 * @returns {{ data: object }} Current settings.
 		 */
 		async getSettings(ctx) {
-			ctx.body = { data: await service().getSettings() };
+			const data = await service().getSettings();
+			ctx.body = { data, meta: { revision: service().revision() } };
 		},
 
 		/**
 		 * @route PUT /io/settings
 		 * @access admin with `plugin::io.settings.update`
-		 * @param {object} ctx.request.body - Full or partial settings; unknown keys are rejected.
-		 * @returns {{ data: object }} Saved settings.
+		 * @param {object} ctx.request.body - Full or partial settings; unknown keys are rejected. `revision` (from `meta.revision`) makes the save fail with 409 when someone saved in between.
+		 * @returns {{ data: object, meta: { revision: number } }} Saved settings and their new revision.
 		 * @throws {ValidationError} 400 with `details.errors[]` (path, message).
-		 * @sideeffect Writes core_store and applies the settings to new connections.
+		 * @throws 409 with `details.currentRevision` when `revision` is stale.
+		 * @sideeffect Writes core_store, applies the settings to new connections and signals the other processes.
 		 */
 		async updateSettings(ctx) {
-			ctx.body = { data: await service().setSettings(parseUpdate(ctx.request.body)) };
+			const update = parseUpdate(ctx.request.body);
+			try {
+				const data = await service().setSettings(update);
+				ctx.body = { data, meta: { revision: service().revision() } };
+			} catch (error) {
+				if (error?.name !== 'SettingsConflictError') throw error;
+				return ctx.conflict(error.message, { currentRevision: error.currentRevision });
+			}
 		},
 
 		/**

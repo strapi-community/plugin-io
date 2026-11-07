@@ -1,4 +1,5 @@
 import { createTokenBucket } from '../services/rate-limit.js';
+import { getPrivate } from '../utils/socket-private.js';
 
 const MAX_ROOMS_PER_SOCKET = 50;
 const UID_RE = /^[a-zA-Z0-9:._-]{1,200}$/;
@@ -33,27 +34,66 @@ function parsePresencePayload(data) {
  */
 const toEditor = (user) => ({ id: user.id, firstname: user.firstname ?? null, lastname: user.lastname ?? null });
 
+/** Presence updates for one room are coalesced for this long. */
+const BROADCAST_DELAY_MS = 100;
+
 /**
- * Lists the admins in a presence room, one entry per admin.
+ * Lists the admins in a presence room, one entry per admin, across every
+ * Socket.IO server: `fetchSockets()` asks the other servers through the
+ * adapter and returns their sockets' `id`, `rooms` and `data`
+ * (https://socket.io/docs/v4/server-instance/#fetchsockets). Without a
+ * multi-server adapter it lists this process only.
  *
  * @param {import('socket.io').Server} io - Socket.IO server.
  * @param {string} room - Presence room.
- * @param {Map<string, number>} lastSeen - Heartbeats by socket id.
- * @returns {Array<{ id: number, firstname: string | null, lastname: string | null, lastSeen: number }>} Editors.
+ * @returns {Promise<Array<{ id: number, firstname: string | null, lastname: string | null, lastSeen: number }>>} Editors.
  */
-function getEditors(io, room, lastSeen) {
-	const ids = io.of('/').adapter.rooms?.get(room);
-	if (!ids) return [];
+async function getEditors(io, room) {
+	let sockets;
+	try {
+		sockets = await io.in(room).fetchSockets();
+	} catch {
+		// A server did not answer in time; fall back to this process.
+		sockets = await io.local.in(room).fetchSockets();
+	}
 	const editors = new Map();
-	for (const socketId of ids) {
-		const socket = io.of('/').sockets.get(socketId);
+	for (const socket of sockets) {
 		const user = socket?.data?.admin;
 		if (!user?.id || socket.data.kind !== 'admin') continue;
-		const seen = lastSeen.get(socketId) || Date.now();
+		const seen = Number(socket.data.lastSeen) || Date.now();
 		const existing = editors.get(user.id);
 		if (!existing || existing.lastSeen < seen) editors.set(user.id, { ...toEditor(user), lastSeen: seen });
 	}
 	return [...editors.values()];
+}
+
+/** @type {WeakMap<object, Map<string, NodeJS.Timeout>>} Pending broadcasts per server and room. */
+const pendingBroadcasts = new WeakMap();
+
+/**
+ * Sends the room's editor list to the room after a short delay, once for
+ * all joins and leaves in that time (each list is a cross-server request).
+ *
+ * @param {import('socket.io').Server} io - Socket.IO server.
+ * @param {string} uid - Content type uid.
+ * @param {string} documentId - Document id.
+ * @param {string} room - Presence room.
+ */
+function scheduleBroadcast(io, uid, documentId, room) {
+	let pending = pendingBroadcasts.get(io);
+	if (!pending) {
+		pending = new Map();
+		pendingBroadcasts.set(io, pending);
+	}
+	if (pending.has(room)) return;
+	const timer = setTimeout(() => {
+		pending.delete(room);
+		getEditors(io, room)
+			.then((editors) => io.to(room).emit('presence:update', { uid, documentId, editors }))
+			.catch(() => {});
+	}, BROADCAST_DELAY_MS);
+	timer.unref?.();
+	pending.set(room, timer);
 }
 
 /**
@@ -65,23 +105,21 @@ function getEditors(io, room, lastSeen) {
  * @param {import('@strapi/types').Core.Strapi} deps.strapi - Strapi instance.
  * @param {import('socket.io').Server} deps.io - Socket.IO server.
  * @param {import('socket.io').Socket} deps.socket - Connected socket.
- * @param {Map<string, number>} deps.lastSeen - Heartbeat map.
  */
-function registerPresence({ strapi, io, socket, lastSeen }) {
+function registerPresence({ strapi, io, socket }) {
 	if (socket.data.kind !== 'admin') return;
 	const settings = () => strapi.plugin('io').service('settings').current().presence;
 	const allow = createTokenBucket(() => PRESENCE_EVENTS_PER_SECOND);
 	const reply = (callback, payload) => typeof callback === 'function' && callback(payload);
-	const broadcast = (uid, documentId, room) =>
-		io.to(room).emit('presence:update', { uid, documentId, editors: getEditors(io, room, lastSeen) });
 
 	socket.data.editing = [];
+	socket.data.lastSeen = Date.now();
 
-	socket.on('presence:join', (data, callback) => {
+	socket.on('presence:join', async (data, callback) => {
 		if (!settings().enabled || !allow()) return reply(callback, { success: false });
 		const payload = parsePresencePayload(data);
 		if (!payload || !strapi.contentTypes[payload.uid]) return reply(callback, { success: false });
-		const ability = socket.data.adminAbility;
+		const ability = getPrivate(socket, 'adminAbility');
 		if (!ability?.can?.('plugin::content-manager.explorer.read', payload.uid)) {
 			return reply(callback, { success: false });
 		}
@@ -90,9 +128,13 @@ function registerPresence({ strapi, io, socket, lastSeen }) {
 			if (socket.data.editing.length >= MAX_ROOMS_PER_SOCKET) return reply(callback, { success: false });
 			socket.join(room);
 			socket.data.editing.push({ uid: payload.uid, documentId: payload.documentId, room });
-			broadcast(payload.uid, payload.documentId, room);
+			scheduleBroadcast(io, payload.uid, payload.documentId, room);
 		}
-		return reply(callback, { success: true, editors: getEditors(io, room, lastSeen) });
+		let editors = [];
+		try {
+			editors = await getEditors(io, room);
+		} catch {}
+		return reply(callback, { success: true, editors });
 	});
 
 	socket.on('presence:leave', (data) => {
@@ -103,7 +145,7 @@ function registerPresence({ strapi, io, socket, lastSeen }) {
 		if (!socket.data.editing.some((entry) => entry.room === room)) return;
 		socket.leave(room);
 		socket.data.editing = socket.data.editing.filter((entry) => entry.room !== room);
-		broadcast(payload.uid, payload.documentId, room);
+		scheduleBroadcast(io, payload.uid, payload.documentId, room);
 	});
 
 	socket.on('presence:typing', (data) => {
@@ -121,12 +163,11 @@ function registerPresence({ strapi, io, socket, lastSeen }) {
 	});
 
 	socket.on('presence:heartbeat', () => {
-		if (allow()) lastSeen.set(socket.id, Date.now());
+		if (allow()) socket.data.lastSeen = Date.now();
 	});
 
 	socket.on('disconnect', () => {
-		lastSeen.delete(socket.id);
-		for (const entry of socket.data.editing || []) broadcast(entry.uid, entry.documentId, entry.room);
+		for (const entry of socket.data.editing || []) scheduleBroadcast(io, entry.uid, entry.documentId, entry.room);
 	});
 }
 

@@ -1,4 +1,5 @@
 import { CONTENT_TYPE_UID_RE, ROOM_PREFIX } from '../utils/constants.js';
+import { isClusterAdapter } from '../cluster/env.js';
 import { createTokenBucket } from './rate-limit.js';
 
 const DOCUMENT_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -187,8 +188,7 @@ export default ({ strapi }) => {
 		 */
 		hasSubscribers(uid, documentIds) {
 			if (!settings().enabled) return false;
-			const name = trackedAdapter?.constructor?.name;
-			if (trackedAdapter && name !== 'Adapter' && name !== 'SessionAwareAdapter') return true;
+			if (isClusterAdapter(trackedAdapter)) return true;
 			if (!counts.size) return false;
 			for (const documentId of documentIds) if (counts.has(key(uid, documentId))) return true;
 			return false;

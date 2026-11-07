@@ -18,7 +18,12 @@ test('runtime dependencies are declared, so @strapi/utils stays external (#F-08)
 test('engines and peers match Strapi 5.61', () => {
   assert.equal(pkg.engines.node, '^22.21.0 || >=24.9.0 <=26.x.x');
   assert.equal(pkg.peerDependencies['@strapi/design-system'], '^2.2.0');
-  assert.equal(pkg.peerDependenciesMeta, undefined, 'DS and icons are required peers');
+  assert.equal(pkg.peerDependenciesMeta['@strapi/design-system'], undefined, 'DS and icons are required peers');
+  assert.equal(pkg.peerDependenciesMeta['@strapi/icons'], undefined);
+  for (const name of ['@socket.io/postgres-adapter', '@socket.io/redis-adapter', 'ioredis', 'pg']) {
+    assert.ok(pkg.peerDependencies[name], `${name} is a declared peer`);
+    assert.equal(pkg.peerDependenciesMeta[name]?.optional, true, `${name} is optional (multi-instance adapters only)`);
+  }
 });
 
 test('types are published and resolvable', () => {
@@ -41,7 +46,9 @@ test('server sources import no undeclared packages', () => {
     readdirSync(d).flatMap((e) => (statSync(join(d, e)).isDirectory() ? walk(join(d, e)) : [join(d, e)]));
   const allowed = new Set([...Object.keys(pkg.dependencies), ...Object.keys(pkg.peerDependencies)]);
   for (const file of walk(join(rootDir, 'server/src')).filter((f) => f.endsWith('.js'))) {
-    for (const [, spec] of readFileSync(file, 'utf8').matchAll(/from '([^'.][^']*)'/g)) {
+    const source = readFileSync(file, 'utf8');
+    const specs = [...source.matchAll(/from '([^'.][^']*)'/g), ...source.matchAll(/load\('([^'.][^']*)'/g)];
+    for (const [, spec] of specs) {
       if (spec.startsWith('node:')) continue;
       const name = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
       assert.ok(allowed.has(name), `${file}: ${spec}`);
@@ -56,4 +63,8 @@ test('built server bundle keeps @strapi/utils external (when dist exists)', (t) 
   assert.ok(code.includes('require("@strapi/utils")'));
   assert.ok(!/class ApplicationError/.test(code), 'no inlined copy of Strapi error classes');
   assert.ok(statSync(bundle).size < 200_000);
+  for (const name of ['@socket.io/postgres-adapter', '@socket.io/redis-adapter', 'ioredis', 'pg']) {
+    assert.ok(code.includes(`"${name}"`) || code.includes(`'${name}'`), `${name} is loaded at runtime, not bundled`);
+  }
+  assert.ok(!code.includes('class PostgresAdapter'), 'no inlined adapter');
 });

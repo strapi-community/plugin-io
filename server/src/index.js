@@ -7,7 +7,8 @@ import { pluginId } from './utils/pluginId.js';
 
 /**
  * Releases every handle the plugin created: Socket.IO clients and timers,
- * the upgrade forwarder and the presence token sweep. Strapi's HTTP server is
+ * the upgrade forwarder, the presence token sweep, the cluster heartbeat
+ * and poll, and the adapter's own connections (pg pool or Redis clients). Strapi's HTTP server is
  * left for Strapi to close, so shutdown and `strapi ts:generate-types` exit
  * cleanly (#109).
  *
@@ -17,6 +18,7 @@ import { pluginId } from './utils/pluginId.js';
 const destroy = async ({ strapi }) => {
 	try {
 		strapi.plugin(pluginId)?.service('presence')?.stop();
+		await strapi.plugin(pluginId)?.service('cluster')?.stop();
 		await strapi.$io?.destroy();
 	} catch (error) {
 		strapi.log.error(`[io] Error during destroy: ${error?.message}`);

@@ -117,10 +117,13 @@ const settingsSchema = z.strictObject({
 
 /**
  * Body schema for `PUT /io/settings`: every section is optional, so the admin
- * can send the whole form or one section; unknown keys are rejected.
+ * can send the whole form or one section; unknown keys are rejected. The
+ * optional `revision` turns the save into a conflict-checked one.
  */
 const settingsUpdateSchema = z.strictObject({
 	version: z.literal(SETTINGS_VERSION).optional(),
+	/** Revision the change is based on (`meta.revision` of GET /io/settings); a stale one answers 409. */
+	revision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
 	cors: sections.cors.optional(),
 	connection: sections.connection.optional(),
 	security: sections.security.optional(),

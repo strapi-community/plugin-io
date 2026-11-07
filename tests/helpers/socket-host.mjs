@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { io as ioClient } from 'socket.io-client';
 import { bootstrapIO } from '../../server/src/bootstrap/io.js';
+import { registerClusterSignals, registerInvalidation } from '../../server/src/bootstrap/invalidation.js';
 import { createStrapi } from './strapi-stub.mjs';
 
 /**
@@ -23,8 +24,11 @@ export async function startHost(options = {}) {
   const strapi = createStrapi({ ...options, httpServer });
   await strapi.plugin('io').service('settings').load();
   if (options.settings) await strapi.plugin('io').service('settings').setSettings(options.settings);
+  const io = await bootstrapIO({ strapi });
+  await strapi.plugin('io').service('cluster').start({ io: io.server, adapterType: io.adapterType });
+  registerClusterSignals({ strapi });
+  if (options.invalidation) registerInvalidation({ strapi });
   strapi.plugin('io').service('presence').start();
-  await bootstrapIO({ strapi });
   const url = `http://127.0.0.1:${httpServer.address().port}`;
   const clients = [];
 
@@ -45,8 +49,9 @@ export async function startHost(options = {}) {
 
   const close = async () => {
     for (const client of clients) client.close();
-    await strapi.$io.destroy();
     strapi.plugin('io').service('presence').stop();
+    await strapi.plugin('io').service('cluster').stop();
+    await strapi.$io.destroy();
     for (const socket of sockets) socket.destroy();
     await new Promise((resolve) => httpServer.close(() => resolve()));
   };

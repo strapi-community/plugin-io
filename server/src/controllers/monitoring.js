@@ -64,26 +64,22 @@ export default ({ strapi }) => {
 		/**
 		 * @route GET /io/stats
 		 * @access admin with `plugin::io.monitoring.read`
-		 * @returns {{ data: { connections: object, events: object } }} Counters.
+		 * @returns {{ data: { connections: object, events: object, instances: object } }} Counters summed over every live process, and how many there are.
 		 */
 		async getStats(ctx) {
-			ctx.body = {
-				data: {
-					connections: await monitoring().getConnectionStats(),
-					events: monitoring().getEventStats(),
-				},
-			};
+			ctx.body = { data: await monitoring().getClusterStats() };
 		},
 
 		/**
 		 * @route GET /io/event-log
 		 * @access admin with `plugin::io.monitoring.read`
 		 * @param {string} [ctx.query.limit] - 1 to the configured log size (default 50).
-		 * @returns {{ data: Array<object>, meta: { enabled: boolean } }} Newest entries first.
+		 * @returns {{ data: Array<object>, meta: { enabled: boolean, scope: 'all' | 'instance' } }} Newest entries first; `scope: 'instance'` when other processes could not be asked (no multi-server adapter).
 		 */
 		async getEventLog(ctx) {
 			const enabled = strapi.plugin('io').service('settings').current().monitoring.enableEventLogging;
-			ctx.body = { data: monitoring().getEventLog(ctx.query?.limit), meta: { enabled } };
+			const { entries, scope } = await monitoring().collectEventLog(ctx.query?.limit);
+			ctx.body = { data: entries, meta: { enabled, scope } };
 		},
 
 		/**
@@ -93,7 +89,7 @@ export default ({ strapi }) => {
 		 *
 		 * @route GET /io/online-users
 		 * @access admin with `plugin::io.monitoring.read`
-		 * @returns {{ data: { admins: Array<object>, counts: object } }} Admins online and counts by kind.
+		 * @returns {{ data: { admins: Array<object>, counts: object }, meta: { scope: 'all' | 'instance' } }} Admins online and counts by kind (all processes with a multi-server adapter).
 		 */
 		async getOnlineUsers(ctx) {
 			const io = strapi.$io?.server;
@@ -143,11 +139,13 @@ export default ({ strapi }) => {
 					}
 				}
 			}
+			const status = strapi.plugin('io').service('cluster').status();
 			ctx.body = {
 				data: {
 					admins: [...admins.values()].map((a) => ({ ...a, connectedAt: new Date(a.connectedAt).toISOString() })),
 					counts,
 				},
+				meta: { scope: status.clusterAdapter || status.instances <= 1 ? 'all' : 'instance' },
 			};
 		},
 
@@ -191,7 +189,8 @@ export default ({ strapi }) => {
 				payload = JSON.parse(serialized);
 			}
 			const io = strapi.$io?.server;
-			const recipients = io ? io.of('/').sockets.size : 0;
+			// The emit reaches every process through the adapter; the count is the cluster total.
+			const recipients = io ? (await monitoring().getClusterStats()).connections.connected : 0;
 			io?.emit(eventName, payload);
 			monitoring().recordEvent(eventName, { source: 'test', audiences: recipients });
 			ctx.body = { data: { eventName, recipients } };
@@ -201,10 +200,15 @@ export default ({ strapi }) => {
 		 * @route POST /io/reset-stats
 		 * @access admin with `plugin::io.monitoring.manage`
 		 * @returns {{ data: { reset: true } }} Confirmation.
-		 * @sideeffect Clears counters and the event log.
+		 * @sideeffect Clears counters and the event log on every process.
 		 */
 		async resetStats(ctx) {
 			monitoring().reset();
+			await strapi
+				.plugin('io')
+				.service('cluster')
+				.publish('stats-reset')
+				.catch(() => {});
 			ctx.body = { data: { reset: true } };
 		},
 	};

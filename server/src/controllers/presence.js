@@ -10,13 +10,13 @@ export default ({ strapi }) => ({
 	 * @access any authenticated admin (joining a document also requires Content Manager read permission)
 	 * @returns {{ data: { token: string, expiresAt: string, wsPath: string, enabled: boolean } }} Session.
 	 * @throws 429 when 10,000 unused tokens are pending across all admins.
-	 * @sideeffect Stores a one-time token in memory for two minutes (at most five per admin; the oldest is dropped).
+	 * @sideeffect Stores a one-time token (hashed) for two minutes, in memory or, with several processes, in `plugin_io_presence_tokens` (at most five per admin; the oldest is dropped).
 	 */
 	async createSession(ctx) {
 		const user = ctx.state.user;
 		if (!user?.id) return ctx.unauthorized();
 		const settings = strapi.plugin('io').service('settings').current();
-		const session = strapi
+		const session = await strapi
 			.plugin('io')
 			.service('presence')
 			.createSessionToken(user, { sessionId: ctx.state.session?.id ?? null });

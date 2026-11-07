@@ -1,4 +1,5 @@
 import { Server } from 'socket.io';
+import { isClusterAdapter } from '../cluster/env.js';
 import { createHandshake } from '../middleware/handshake.js';
 import { pluginId } from '../utils/pluginId.js';
 import { originsOf, resolveSocketServerOptions } from './resolveSocketServerOptions.js';
@@ -278,8 +279,11 @@ class SocketIO {
 	 * server. Rooms without sockets are skipped before sanitizing, so an emit
 	 * costs one sanitize pass per room that is actually listening.
 	 *
-	 * With an adapter that spans several servers (Redis), rooms on other nodes
-	 * are not visible here, so the check is skipped and every room is used.
+	 * With an adapter that spans several servers (Postgres, Redis), rooms on
+	 * other nodes are not visible here, so the check is skipped and every room
+	 * is used. The Postgres adapter has no cross-server room list, and a
+	 * cached one would drop events for rooms joined since the last refresh,
+	 * so this costs one sanitize pass per audience (see README).
 	 *
 	 * @param {string} room - Room name.
 	 * @returns {boolean} True when the room may have listeners.
@@ -288,12 +292,36 @@ class SocketIO {
 		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [this._socket.of('/')];
 		for (const nsp of namespaces) {
 			const adapter = nsp.adapter;
-			if (adapter && adapter.constructor?.name !== 'Adapter' && adapter.constructor?.name !== 'SessionAwareAdapter') {
-				return true;
-			}
+			if (isClusterAdapter(adapter)) return true;
 			if (adapter?.rooms?.get(room)?.size) return true;
 		}
 		return false;
+	}
+
+	/** @returns {boolean} True when the default namespace's adapter spans several servers. */
+	_spansServers() {
+		return isClusterAdapter(this._socket.of('/').adapter);
+	}
+
+	/**
+	 * Finds a socket on another server through the adapter and wraps it so the
+	 * subscription checks can read it like a local one.
+	 *
+	 * @param {string} socketId - Socket id.
+	 * @returns {Promise<object | null>} Socket-like object, or null.
+	 */
+	async _remoteSocket(socketId) {
+		if (typeof socketId !== 'string' || !socketId || !this._spansServers()) return null;
+		const [remote] = await this._socket.in(socketId).fetchSockets();
+		if (!remote) return null;
+		return {
+			id: remote.id,
+			data: remote.data ?? {},
+			rooms: remote.rooms instanceof Set ? remote.rooms : new Set(remote.rooms ?? []),
+			connected: true,
+			join: (name) => remote.join(name),
+			leave: (name) => remote.leave(name),
+		};
 	}
 
 	/**
@@ -328,28 +356,43 @@ class SocketIO {
 	/**
 	 * Adds a socket to a room. Plugin-managed rooms cannot be joined.
 	 *
+	 * With a multi-server adapter a socket on another server is joined through
+	 * the adapter (`io.in(socketId).socketsJoin(room)`); the result is then
+	 * `true` for "requested", as the adapter does not report whether the
+	 * socket exists.
+	 *
 	 * @param {string} socketId - Socket id.
 	 * @param {string} room - Room name.
-	 * @returns {boolean} True when the socket exists and joined.
+	 * @returns {boolean} True when the socket joined (or the join was sent to the other servers).
 	 */
 	joinRoom(socketId, room) {
+		if (isReservedRoom(room)) return false;
 		const socket = this._socket.of('/').sockets.get(socketId);
-		if (!socket || isReservedRoom(room)) return false;
-		socket.join(room);
+		if (socket) {
+			socket.join(room);
+			return true;
+		}
+		if (typeof socketId !== 'string' || !socketId || !this._spansServers()) return false;
+		this._socket.in(socketId).socketsJoin(room);
 		return true;
 	}
 
 	/**
-	 * Removes a socket from a room.
+	 * Removes a socket from a room, on any server with a multi-server adapter
+	 * (see `joinRoom` for the return value).
 	 *
 	 * @param {string} socketId - Socket id.
 	 * @param {string} room - Room name.
-	 * @returns {boolean} True when the socket exists.
+	 * @returns {boolean} True when the socket exists (or the request was sent to the other servers).
 	 */
 	leaveRoom(socketId, room) {
 		const socket = this._socket.of('/').sockets.get(socketId);
-		if (!socket) return false;
-		socket.leave(room);
+		if (socket) {
+			socket.leave(room);
+			return true;
+		}
+		if (typeof socketId !== 'string' || !socketId || typeof room !== 'string' || !this._spansServers()) return false;
+		this._socket.in(socketId).socketsLeave(room);
 		return true;
 	}
 
@@ -409,7 +452,7 @@ class SocketIO {
 	 * @returns {Promise<{ success: boolean, error?: string, uid?: string, documentId?: string, id?: string }>} Outcome.
 	 */
 	async subscribeToEntity(socketId, uid, documentId) {
-		const socket = this._socket.of('/').sockets.get(socketId);
+		const socket = this._socket.of('/').sockets.get(socketId) ?? (await this._remoteSocket(socketId));
 		if (!socket) return { success: false, error: 'Socket not found' };
 		return this.strapi.plugin(pluginId).service('subscriptions').subscribe(socket, { uid, documentId });
 	}
@@ -420,36 +463,50 @@ class SocketIO {
 	 * @param {string} socketId - Socket id.
 	 * @param {string} uid - Content type uid.
 	 * @param {string} documentId - Document id.
-	 * @returns {{ success: boolean, error?: string, uid?: string, documentId?: string, id?: string }} Outcome.
+	 * @returns {{ success: boolean, error?: string, uid?: string, documentId?: string, id?: string } | Promise<{ success: boolean, error?: string, uid?: string, documentId?: string, id?: string }>} Outcome; a Promise when the socket is on another server (multi-server adapter), so `await` the result.
 	 */
 	unsubscribeFromEntity(socketId, uid, documentId) {
+		const subscriptions = this.strapi.plugin(pluginId).service('subscriptions');
 		const socket = this._socket.of('/').sockets.get(socketId);
-		if (!socket) return { success: false, error: 'Socket not found' };
-		return this.strapi.plugin(pluginId).service('subscriptions').unsubscribe(socket, { uid, documentId });
+		if (socket) return subscriptions.unsubscribe(socket, { uid, documentId });
+		if (!this._spansServers()) return { success: false, error: 'Socket not found' };
+		return this._remoteSocket(socketId).then((remote) =>
+			remote ? subscriptions.unsubscribe(remote, { uid, documentId }) : { success: false, error: 'Socket not found' }
+		);
 	}
 
 	/**
 	 * Lists the entity subscriptions of a socket.
 	 *
 	 * @param {string} socketId - Socket id.
-	 * @returns {{ success: boolean, error?: string, subscriptions?: Array<{ uid: string, documentId: string, id: string }> }} Outcome.
+	 * @returns {{ success: boolean, error?: string, subscriptions?: Array<{ uid: string, documentId: string, id: string }> } | Promise<{ success: boolean, error?: string, subscriptions?: Array<{ uid: string, documentId: string, id: string }> }>} Outcome; a Promise when the socket is on another server, so `await` the result.
 	 */
 	getEntitySubscriptions(socketId) {
+		const subscriptions = this.strapi.plugin(pluginId).service('subscriptions');
 		const socket = this._socket.of('/').sockets.get(socketId);
-		if (!socket) return { success: false, error: 'Socket not found' };
-		return { success: true, subscriptions: this.strapi.plugin(pluginId).service('subscriptions').list(socket) };
+		if (socket) return { success: true, subscriptions: subscriptions.list(socket) };
+		if (!this._spansServers()) return { success: false, error: 'Socket not found' };
+		return this._remoteSocket(socketId).then((remote) =>
+			remote
+				? { success: true, subscriptions: subscriptions.list(remote) }
+				: { success: false, error: 'Socket not found' }
+		);
 	}
 
 	/**
 	 * Disconnects a socket.
 	 *
 	 * @param {string} socketId - Socket id.
-	 * @returns {boolean} True when the socket existed.
+	 * @returns {boolean} True when the socket existed (or, with a multi-server adapter, the disconnect was sent to the other servers).
 	 */
 	disconnectSocket(socketId) {
 		const socket = this._socket.of('/').sockets.get(socketId);
-		if (!socket) return false;
-		socket.disconnect(true);
+		if (socket) {
+			socket.disconnect(true);
+			return true;
+		}
+		if (typeof socketId !== 'string' || !socketId || !this._spansServers()) return false;
+		this._socket.in(socketId).disconnectSockets(true);
 		return true;
 	}
 
@@ -471,6 +528,9 @@ class SocketIO {
 		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [];
 		await Promise.allSettled(namespaces.map((nsp) => nsp.adapter?.close?.()));
 		this._socket.engine?.close?.();
+		// The configured adapter's own connections (pg pool, Redis clients).
+		await this._closeAdapter?.();
+		this._closeAdapter = null;
 	}
 
 	/**

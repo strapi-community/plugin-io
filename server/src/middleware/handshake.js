@@ -1,6 +1,17 @@
+import { sha256 } from '../cluster/store.js';
 import { getClientIp } from '../utils/client-ip.js';
 import { createIpRules } from '../utils/ip-rules.js';
-import { createFailureLimiter } from '../services/rate-limit.js';
+import { setPrivate } from '../utils/socket-private.js';
+import { createSharedFailureLimiter } from '../services/rate-limit.js';
+
+/**
+ * Unknown or used admin presence tokens per IP and minute before presence
+ * handshakes from that IP are refused. Kept apart from the general lockout:
+ * with several processes a presence token can be retried after a restart or
+ * deploy, and several admins behind one office NAT must not lock out every
+ * other client of that IP.
+ */
+const PRESENCE_MISSES_PER_MINUTE = 120;
 
 /** Strategy names a client may send in `auth.strategy`. */
 const STRATEGY_TYPES = Object.freeze({
@@ -21,7 +32,9 @@ const MESSAGES = Object.freeze({
 
 /**
  * Creates the Socket.IO handshake middleware. It applies, in order: the
- * failed-attempt lockout, IP rules, the connection cap, authentication
+ * failed-attempt lockout (shared by all processes when coordination is on),
+ * IP rules, the connection cap (a total across processes when coordination
+ * is on, from their last heartbeat), authentication
  * (JWT, API token, admin session or public role), the role's "allow
  * connection" setting, and finally joins the socket to its audience room.
  * Clients only ever see generic error messages.
@@ -31,7 +44,14 @@ const MESSAGES = Object.freeze({
  * @see https://socket.io/docs/v4/middlewares/
  */
 function createHandshake({ strapi }) {
-	const failures = createFailureLimiter();
+	const cluster = () => strapi.plugin('io').service('cluster');
+	const sharedStore = () => (cluster()?.isCoordinated?.() ? cluster().store() : null);
+	const failures = createSharedFailureLimiter({ store: sharedStore, key: (ip) => `hs:${sha256(ip)}` });
+	const presenceMisses = createSharedFailureLimiter({
+		store: sharedStore,
+		key: (ip) => `ps:${sha256(ip)}`,
+		maxFailures: PRESENCE_MISSES_PER_MINUTE,
+	});
 	let ipRulesFor = null;
 	let ipRules = () => true;
 
@@ -62,14 +82,15 @@ function createHandshake({ strapi }) {
 	const handshake = async (socket, next) => {
 		const settings = settingsService().current();
 		const ip = getClientIp(socket.request, strapi.server?.app);
-		socket.data.clientIp = ip;
+		setPrivate(socket, 'clientIp', ip);
 
 		if (failures.isBlocked(ip)) return next(new Error(MESSAGES.TOO_MANY));
 		if (!currentIpRules(settings.security)(ip)) return next(new Error(MESSAGES.NOT_ALLOWED));
 
 		const max = settings.connection.maxConnections;
 		const engineCount = socket.nsp?.server?.engine?.clientsCount ?? 0;
-		if (max > 0 && engineCount > max) return next(new Error(MESSAGES.FULL));
+		const elsewhere = max > 0 ? (cluster()?.connectionsElsewhere?.() ?? 0) : 0;
+		if (max > 0 && engineCount + elsewhere > max) return next(new Error(MESSAGES.FULL));
 
 		const auth = socket.handshake.auth && typeof socket.handshake.auth === 'object' ? socket.handshake.auth : {};
 		const token = typeof auth.token === 'string' ? auth.token : '';
@@ -94,6 +115,7 @@ function createHandshake({ strapi }) {
 
 			const type = STRATEGY_TYPES[strategyName];
 			if (!type) throw new Error('unknown strategy');
+			if (type === 'admin' && presenceMisses.isBlocked(ip)) return next(new Error(MESSAGES.TOO_MANY));
 			const strategy = strategies()[type];
 			const identity = await strategy.authenticate(auth);
 
@@ -102,7 +124,7 @@ function createHandshake({ strapi }) {
 				// handlers written for Users & Permissions ids cannot mix them up.
 				socket.data.kind = 'admin';
 				socket.data.admin = identity.user;
-				socket.data.adminAbility = identity.ability;
+				setPrivate(socket, 'adminAbility', identity.ability);
 				socket.data.adminSessionId = identity.sessionId ?? null;
 				socket.join(strategy.getRoomName(identity.user));
 			} else if (type === 'role') {
@@ -122,17 +144,22 @@ function createHandshake({ strapi }) {
 			}
 
 			failures.clear(ip);
+			if (type === 'admin') presenceMisses.clear(ip);
 			return next();
 		} catch (error) {
 			if (error?.name !== 'UnauthorizedError' && error?.message !== 'unknown strategy') {
 				strapi.log.error(`[io] Handshake error: ${error?.name || 'Error'}`);
 			}
-			failures.fail(ip);
-			return next(new Error(failures.isBlocked(ip) ? MESSAGES.TOO_MANY : MESSAGES.AUTH_FAILED));
+			// An unknown or used presence token is not a guessed credential (the
+			// tokens are 256-bit); it counts in its own, wider limit.
+			const limiter = STRATEGY_TYPES[strategyName] === 'admin' ? presenceMisses : failures;
+			const blocked = await limiter.fail(ip);
+			return next(new Error(blocked ? MESSAGES.TOO_MANY : MESSAGES.AUTH_FAILED));
 		}
 	};
 
 	handshake.failures = failures;
+	handshake.presenceMisses = presenceMisses;
 	return handshake;
 }
 

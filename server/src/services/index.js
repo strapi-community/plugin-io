@@ -1,3 +1,4 @@
+import cluster from './cluster.js';
 import monitoring from './monitoring.js';
 import presence from './presence.js';
 import rooms from './rooms.js';
@@ -8,6 +9,7 @@ import subscriptions from './subscriptions.js';
 import transform from './transform.js';
 
 export default {
+	cluster,
 	monitoring,
 	presence,
 	rooms,

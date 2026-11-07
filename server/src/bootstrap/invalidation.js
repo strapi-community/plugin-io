@@ -58,13 +58,33 @@ function batch(run, ms = BATCH_MS) {
  * Creating a row never re-checks sockets (nobody can be connected with it
  * yet), and the plugin's own `lastUsedAt` update on API tokens is ignored.
  *
+ * Lifecycles run only on the process that wrote the row, so each batch is
+ * also sent to the other processes (`revalidate` and `audiences` signals,
+ * see `registerClusterSignals`).
+ *
  * @param {{ strapi: import('@strapi/types').Core.Strapi }} deps - Strapi instance.
  */
 function registerInvalidation({ strapi }) {
-	const rooms = () => strapi.plugin(pluginId).service('rooms');
+	const cluster = () => strapi.plugin(pluginId).service('cluster');
+	const localRooms = () => strapi.plugin(pluginId).service('rooms');
+	const publishAudiences = batch(() => {
+		cluster()
+			?.publish('audiences')
+			.catch(() => {});
+	});
+	// Clears this process's cache now and tells the other processes once per batch.
+	const rooms = () => ({
+		invalidate() {
+			localRooms().invalidate();
+			publishAudiences(null);
+		},
+	});
 	const revalidator = (kind) =>
 		batch((ids) => {
 			strapi.$io?.revalidateSockets([kind], ids ? { ids } : {}).catch(() => {});
+			cluster()
+				?.publish('revalidate', { kind, ids: ids ?? null })
+				.catch(() => {});
 		});
 	const revalidate = { user: revalidator('user'), token: revalidator('token'), admin: revalidator('admin') };
 
@@ -119,4 +139,38 @@ function sessionTarget(event) {
 	return { origin: pick('origin'), userId: pick('userId') };
 }
 
-export { batch, changedIds, registerInvalidation, sessionTarget };
+const KINDS = new Set(['user', 'token', 'admin']);
+const MAX_SIGNAL_IDS = 1000;
+
+/**
+ * Applies the control signals of other processes on this one:
+ * - `revalidate` `{ kind, ids }`: re-check the local sockets of those users,
+ *   admins or tokens (all of that kind when `ids` is null);
+ * - `audiences`: clear the audience cache (roles, permissions, tokens);
+ * - `settings`: load a newer settings revision;
+ * - `stats-reset`: clear the local monitoring counters.
+ *
+ * Payloads come from the plugin's own processes but are still checked, as
+ * they pass through the adapter and the signal table.
+ *
+ * @param {{ strapi: import('@strapi/types').Core.Strapi }} deps - Strapi instance.
+ */
+function registerClusterSignals({ strapi }) {
+	const plugin = () => strapi.plugin(pluginId);
+	const cluster = plugin().service('cluster');
+	cluster.on('revalidate', async (payload) => {
+		const kind = payload?.kind;
+		if (!KINDS.has(kind)) return;
+		// More ids than the cap: check every socket of that kind instead.
+		const ids =
+			Array.isArray(payload.ids) && payload.ids.length <= MAX_SIGNAL_IDS
+				? payload.ids.filter((id) => typeof id === 'string' || typeof id === 'number')
+				: null;
+		await strapi.$io?.revalidateSockets([kind], ids ? { ids } : {});
+	});
+	cluster.on('audiences', () => plugin().service('rooms').invalidate());
+	cluster.on('settings', () => plugin().service('settings').refresh());
+	cluster.on('stats-reset', () => plugin().service('monitoring').reset());
+}
+
+export { batch, changedIds, registerClusterSignals, registerInvalidation, sessionTarget };

@@ -70,15 +70,20 @@
     "@semantic-release/github": "^12.0.10",
     "@semantic-release/npm": "^13.2.0",
     "@semantic-release/release-notes-generator": "^14.1.1",
+    "@socket.io/postgres-adapter": "^0.5.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@strapi/design-system": "^2.2.4",
     "@strapi/icons": "^2.2.4",
     "@strapi/sdk-plugin": "^6.1.1",
     "@strapi/strapi": "^5.61.0",
+    "better-sqlite3": "^13.0.3",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",
+    "ioredis": "^6.0.0",
     "koa": "^3.3.0",
+    "pg": "^8.23.1",
     "playwright": "^1.65.0",
     "prettier": "^3.9.10",
     "react": "^18.3.1",
@@ -91,14 +96,32 @@
     "ws": "^8.22.1"
   },
   "peerDependencies": {
+    "@socket.io/postgres-adapter": "^0.5.0",
+    "@socket.io/redis-adapter": "^8.3.0",
     "@strapi/design-system": "^2.2.0",
     "@strapi/icons": "^2.2.0",
     "@strapi/strapi": "^5.13.0",
+    "ioredis": "^5.9.0 || ^6.0.0",
+    "pg": "^8.11.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-intl": "^6.6.2",
     "react-router-dom": "^6.30.0",
     "styled-components": "^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@socket.io/postgres-adapter": {
+      "optional": true
+    },
+    "@socket.io/redis-adapter": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    }
   },
   "strapi": {
     "name": "io",

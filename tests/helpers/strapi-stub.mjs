@@ -21,7 +21,16 @@ export const abilityFor = (permissions) => {
  */
 export function createStrapi(options = {}) {
   const logs = { info: [], warn: [], error: [], debug: [] };
-  const store = new Map();
+  /** core_store rows like `strapi_core_store_settings` (id, key, value, type, environment, tag). */
+  const coreStore = options.coreStore ?? [];
+  // The id sequence lives on the array, so stubs sharing the rows share it (like one table).
+  if (coreStore.nextId === undefined) coreStore.nextId = coreStore.reduce((max, row) => Math.max(max, row.id), 0);
+  const storeKey = ({ type = 'core', name } = {}, key) => `${type}${name ? `_${name}` : ''}_${key}`;
+  const matches = (row, where = {}) =>
+    Object.entries(where).every(([field, value]) => {
+      if (value && typeof value === 'object' && Array.isArray(value.$in)) return value.$in.includes(row[field]);
+      return (row[field] ?? null) === (value ?? null);
+    });
   const state = {
     roles: options.roles ?? [
       { id: 1, name: 'Public', type: 'public', permissions: [{ action: 'api::article.article.find' }] },
@@ -32,6 +41,7 @@ export function createStrapi(options = {}) {
     admins: options.admins ?? [],
     documents: options.documents ?? [],
     queries: [],
+    lifecycles: [],
   };
   const config = {
     events: [],
@@ -63,12 +73,29 @@ export function createStrapi(options = {}) {
       get(path, fallback) {
         if (path === 'plugin::io') return config;
         if (path.startsWith('plugin::io.')) return config[path.slice('plugin::io.'.length)] ?? fallback;
+        if (options.globalConfig && path in options.globalConfig) return options.globalConfig[path];
         return fallback;
       },
     },
-    store: () => ({
-      get: async ({ key }) => store.get(key) ?? null,
-      set: async ({ key, value }) => store.set(key, structuredClone(value)),
+    store: (scope) => ({
+      get: async ({ key }) => {
+        const row = coreStore.find((r) => r.key === storeKey(scope, key));
+        return row ? JSON.parse(row.value) : null;
+      },
+      set: async ({ key, value }) => {
+        const k = storeKey(scope, key);
+        const row = coreStore.find((r) => r.key === k);
+        if (row) row.value = JSON.stringify(value);
+        else
+          coreStore.push({
+            id: ++coreStore.nextId,
+            key: k,
+            value: JSON.stringify(value),
+            type: typeof value,
+            environment: null,
+            tag: null,
+          });
+      },
     }),
     plugin(name) {
       if (name === 'users-permissions') return options.usersPermissions ?? null;
@@ -105,9 +132,38 @@ export function createStrapi(options = {}) {
       sanitize: { output: options.sanitizeOutput ?? (async (data) => data) },
     },
     db: {
-      lifecycles: { subscribe: () => {} },
+      lifecycles: { subscribe: (subscriber) => state.lifecycles.push(subscriber) },
+      connection: options.knex,
+      dialect: options.knex ? { client: options.dialect ?? 'postgres' } : undefined,
       inTransaction: () => false,
       query(uid) {
+        if (uid === 'strapi::core-store') {
+          return {
+            findMany: async ({ where } = {}) =>
+              structuredClone(coreStore.filter((r) => matches(r, where)).sort((a, b) => a.id - b.id)),
+            findOne: async ({ where } = {}) => structuredClone(coreStore.find((r) => matches(r, where)) ?? null),
+            create: async ({ data }) => {
+              const row = { id: ++coreStore.nextId, environment: null, tag: null, ...data };
+              coreStore.push(row);
+              return structuredClone(row);
+            },
+            updateMany: async ({ where, data }) => {
+              let count = 0;
+              for (const row of coreStore) {
+                if (!matches(row, where)) continue;
+                Object.assign(row, data);
+                count += 1;
+              }
+              return { count };
+            },
+            deleteMany: async ({ where }) => {
+              const before = coreStore.length;
+              for (let i = coreStore.length - 1; i >= 0; i -= 1)
+                if (matches(coreStore[i], where)) coreStore.splice(i, 1);
+              return { count: before - coreStore.length };
+            },
+          };
+        }
         return {
           findMany: async ({ where } = {}) => {
             state.queries.push({ uid, op: 'findMany', where });
@@ -139,6 +195,13 @@ export function createStrapi(options = {}) {
       },
     },
     server: { httpServer: options.httpServer, app: options.app ?? { proxy: false } },
+    /** Fires the database lifecycle subscribers for a model (like Strapi after a write on this process). */
+    async fireLifecycle(model, action, event) {
+      for (const subscriber of state.lifecycles) {
+        if (subscriber.models?.includes(model)) await subscriber[action]?.({ action, model: { uid: model }, ...event });
+      }
+    },
   };
+  strapi.coreStore = coreStore;
   return strapi;
 }
