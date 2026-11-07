@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Button, Flex } from '@strapi/design-system';
 import { ArrowClockwise, Check } from '@strapi/icons';
 import { Blocker, Form, Page, useForm, useRBAC } from '@strapi/strapi/admin';
@@ -47,6 +47,7 @@ const SettingsPage = () => {
 	const t = useT();
 	const { allowedActions, isLoading: rbacLoading } = useRBAC(RBAC);
 	const form = useSettingsForm();
+	const saveRef = useRef(null);
 
 	if (rbacLoading) return <Page.Loading />;
 	if (!allowedActions.canRead) return <Page.NoPermissions />;
@@ -97,6 +98,7 @@ const SettingsPage = () => {
 						getFallbackFocus={() => document.querySelector('main h1')}
 					/>
 					<Button
+						ref={saveRef}
 						size="S"
 						startIcon={<Check />}
 						onClick={form.save}
@@ -123,7 +125,13 @@ const SettingsPage = () => {
 				busy={form.saving}
 				t={t}
 			/>
-			<ConflictDialog open={form.conflict} onKeep={form.dismissConflict} onReload={form.discard} t={t} />
+			<ConflictDialog
+				open={form.conflict}
+				onKeep={form.dismissConflict}
+				onReload={form.discard}
+				t={t}
+				getReturnFocus={() => saveRef.current}
+			/>
 			{/* Kept empty: DS Tag buttons have no type and would submit a real form on Enter. */}
 			<Form method="PUT" initialValues={form.saved}>
 				<DraftSync values={form.draft} />

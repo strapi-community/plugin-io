@@ -239,9 +239,18 @@ test(
     await dialog.waitFor({ state: 'hidden' });
     assert.equal(await subs.isChecked(), !subsBefore, 'draft kept');
     assert.equal(await save(b.page).isDisabled(), false, 'still unsaved');
+    await b.page.waitForFunction(() => document.activeElement?.textContent.trim() === 'Save');
+    // Escape is the same as "Keep editing".
+    await b.page.keyboard.press('Enter');
+    await dialog.waitFor();
+    await b.page.waitForFunction(() => document.activeElement?.closest('[role="alertdialog"]'));
+    await b.page.keyboard.press('Escape');
+    await dialog.waitFor({ state: 'hidden' });
+    await b.page.waitForFunction(() => document.activeElement?.textContent.trim() === 'Save');
+    assert.deepEqual(statuses, [409, 409]);
     await save(b.page).click();
     await dialog.waitFor();
-    assert.deepEqual(statuses, [409, 409]);
+    assert.deepEqual(statuses, [409, 409, 409]);
 
     // "Load latest settings" replaces the form with the values A stored.
     await dialog.getByRole('button', { name: 'Load latest settings' }).click();
@@ -255,6 +264,7 @@ test(
     );
     assert.equal(await subs.isChecked(), subsBefore, 'the refused draft is gone');
     assert.equal(await save(b.page).isDisabled(), true, 'clean after loading');
+    await b.page.waitForFunction(() => document.activeElement?.tagName === 'H1', null, { timeout: 5000 });
 
     // restore through B, which now has the current revision
     await auth(b.page).click();
