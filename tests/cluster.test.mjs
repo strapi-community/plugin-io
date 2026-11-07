@@ -93,8 +93,8 @@ async function startCluster(count, { adapter = true } = {}) {
                   type: 'postgres',
                   connectionString: PG_URL,
                   channelPrefix,
+                  // cleanupInterval left out on purpose: the adapter default must survive.
                   heartbeatInterval: 1000,
-                  cleanupInterval: 5000,
                 },
               }
             : {}),

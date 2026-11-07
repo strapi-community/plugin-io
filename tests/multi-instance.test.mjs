@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { createConfiguredAdapter, normalizeAdapterConfig, pgConnection } from '../server/src/cluster/adapter.js';
+import {
+  createConfiguredAdapter,
+  defined,
+  normalizeAdapterConfig,
+  pgConnection,
+} from '../server/src/cluster/adapter.js';
 import { createMemoryStore } from '../server/src/cluster/store.js';
 import { createSharedFailureLimiter } from '../server/src/services/rate-limit.js';
 import { ROW_KEY } from '../server/src/services/settings.js';
@@ -212,6 +217,10 @@ test('adapter config: shorthands, missing packages and connection defaults', asy
   await assert.rejects(createConfiguredAdapter({ type: 'redis' }, { strapi }), /REDIS_URL/);
   const custom = await createConfiguredAdapter(() => function adapter() {}, { strapi });
   assert.equal(typeof custom.adapter, 'function');
+});
+
+test('adapter options without a value keep the adapter defaults', () => {
+  assert.deepEqual(defined({ tableName: 't', cleanupInterval: undefined, key: null }), { tableName: 't', key: null });
 });
 
 test('adapter packages are optional peers loaded only when configured', () => {

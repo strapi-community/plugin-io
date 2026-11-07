@@ -50,6 +50,17 @@ async function load(name, feature) {
 const pick = (mod, name) => mod?.[name] ?? mod?.default?.[name];
 
 /**
+ * Drops undefined options. The adapters merge options with
+ * `Object.assign(defaults, opts)`, so an undefined key would replace a
+ * default (for example `cleanupInterval`, which then breaks the cleanup
+ * query with "undefined milliseconds").
+ *
+ * @param {Record<string, unknown>} options - Options.
+ * @returns {Record<string, unknown>} Options without undefined values.
+ */
+const defined = (options) => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined));
+
+/**
  * Normalises `config.socket.adapter` (`'postgres'`, `'redis'`, an object with
  * `type`, or a function).
  *
@@ -136,15 +147,18 @@ async function createConfiguredAdapter(adapterConfig, { strapi }) {
 				throw error;
 			}
 		}
-		const adapter = createAdapter(pool, {
-			tableName,
-			channelPrefix: options.channelPrefix,
-			payloadThreshold: options.payloadThreshold,
-			cleanupInterval: options.cleanupInterval,
-			heartbeatInterval: options.heartbeatInterval,
-			heartbeatTimeout: options.heartbeatTimeout,
-			errorHandler,
-		});
+		const adapter = createAdapter(
+			pool,
+			defined({
+				tableName,
+				channelPrefix: options.channelPrefix,
+				payloadThreshold: options.payloadThreshold,
+				cleanupInterval: options.cleanupInterval,
+				heartbeatInterval: options.heartbeatInterval,
+				heartbeatTimeout: options.heartbeatTimeout,
+				errorHandler,
+			})
+		);
 		return {
 			type,
 			adapter,
@@ -165,11 +179,15 @@ async function createConfiguredAdapter(adapterConfig, { strapi }) {
 		const subClient = pubClient.duplicate();
 		pubClient.on('error', errorHandler);
 		subClient.on('error', errorHandler);
-		const adapter = createAdapter(pubClient, subClient, {
-			key: options.key,
-			requestsTimeout: options.requestsTimeout ?? 5000,
-			publishOnSpecificResponseChannel: options.publishOnSpecificResponseChannel ?? true,
-		});
+		const adapter = createAdapter(
+			pubClient,
+			subClient,
+			defined({
+				key: options.key,
+				requestsTimeout: options.requestsTimeout ?? 5000,
+				publishOnSpecificResponseChannel: options.publishOnSpecificResponseChannel ?? true,
+			})
+		);
 		return {
 			type,
 			adapter,
@@ -191,4 +209,4 @@ async function createConfiguredAdapter(adapterConfig, { strapi }) {
 	throw new Error(`[io] Unknown socket.adapter type "${type}". Use "postgres", "redis" or a function.`);
 }
 
-export { createConfiguredAdapter, normalizeAdapterConfig, pgConnection };
+export { createConfiguredAdapter, defined, normalizeAdapterConfig, pgConnection };
