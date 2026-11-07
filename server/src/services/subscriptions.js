@@ -71,6 +71,8 @@ function parseTarget(data) {
 export default ({ strapi }) => {
 	/** Subscriber count per `<uid>|<documentId>` on this server (all audiences). */
 	const counts = new Map();
+	/** Subscribe requests per socket that passed the limit check and still run their async checks. */
+	const pending = new WeakMap();
 	let trackedAdapter = null;
 
 	const settings = () => strapi.plugin('io').service('settings').current().subscriptions;
@@ -216,24 +218,35 @@ export default ({ strapi }) => {
 
 			const room = entityRoom(audience, uid, documentId);
 			if (socket.rooms.has(room)) return { success: true, uid, documentId, id: documentId };
-			if (list(socket).length >= maxPerSocket) {
-				return { success: false, error: `Maximum subscriptions (${maxPerSocket}) reached` };
-			}
-
-			const rooms = strapi.plugin('io').service('rooms');
-			const entry = (await rooms.getAudiences()).find((a) => a.name === audience);
-			if (!entry || !rooms.canRead(entry, uid)) return { success: false, error: ERRORS.NOT_ALLOWED };
+			const limitReached = { success: false, error: `Maximum subscriptions (${maxPerSocket}) reached` };
+			// Requests that run at the same time each reserve a slot before the
+			// first await, so parallel subscribes cannot pass the check together.
+			const inFlight = pending.get(socket) || 0;
+			if (list(socket).length + inFlight >= maxPerSocket) return limitReached;
+			pending.set(socket, inFlight + 1);
 
 			try {
-				if (!(await exists(uid, documentId))) return { success: false, error: ERRORS.NOT_FOUND };
-			} catch (error) {
-				strapi.log.warn(`[io] Entity subscription check failed: ${error?.name || 'Error'}`);
-				return { success: false, error: ERRORS.FAILED };
+				const rooms = strapi.plugin('io').service('rooms');
+				const entry = (await rooms.getAudiences()).find((a) => a.name === audience);
+				if (!entry || !rooms.canRead(entry, uid)) return { success: false, error: ERRORS.NOT_ALLOWED };
+
+				try {
+					if (!(await exists(uid, documentId))) return { success: false, error: ERRORS.NOT_FOUND };
+				} catch (error) {
+					strapi.log.warn(`[io] Entity subscription check failed: ${error?.name || 'Error'}`);
+					return { success: false, error: ERRORS.FAILED };
+				}
+				// The socket may have disconnected while the checks ran.
+				if (!socket.connected) return { success: false, error: ERRORS.FAILED };
+				// Joining is synchronous, so this second check is the hard cap.
+				if (!socket.rooms.has(room) && list(socket).length >= maxPerSocket) return limitReached;
+				socket.join(room);
+				return { success: true, uid, documentId, id: documentId };
+			} finally {
+				const left = (pending.get(socket) || 1) - 1;
+				if (left > 0) pending.set(socket, left);
+				else pending.delete(socket);
 			}
-			// The socket may have disconnected while the checks ran.
-			if (!socket.connected) return { success: false, error: ERRORS.FAILED };
-			socket.join(room);
-			return { success: true, uid, documentId, id: documentId };
 		},
 
 		/**

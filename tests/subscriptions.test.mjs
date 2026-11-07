@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createDocumentEventsMiddleware } from '../server/src/bootstrap/document-events.js';
-import { ERRORS, entityRoom, parseEntityRoom, parseTarget } from '../server/src/services/subscriptions.js';
+import createSubscriptions, {
+  ERRORS,
+  entityRoom,
+  parseEntityRoom,
+  parseTarget,
+} from '../server/src/services/subscriptions.js';
 import { nextEvent, startHost } from './helpers/socket-host.mjs';
 import { createStrapi } from './helpers/strapi-stub.mjs';
 
@@ -174,6 +179,57 @@ test('the per-socket limit is enforced', async () => {
     error: 'Maximum subscriptions (2) reached',
   });
   await host.close();
+});
+
+test('parallel subscribes cannot exceed the per-socket limit', async () => {
+  const maxPerSocket = 3;
+  const services = {
+    settings: { current: () => ({ subscriptions: { enabled: true, maxPerSocket }, events: { onlyPublished: false } }) },
+    strategy: {
+      role: { getRoomName: (role) => `io-role-${role.type}` },
+      token: { getRoomName: (t) => `io-token-${t.id}` },
+    },
+    rooms: { getAudiences: async () => [{ name: 'io-role-public' }], canRead: () => true },
+  };
+  let queries = 0;
+  const strapi = {
+    plugin: () => ({ service: (name) => services[name] }),
+    contentTypes: { [ARTICLE.uid]: { options: {} } },
+    db: {
+      query: () => ({
+        findOne: async () => {
+          queries += 1;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return { id: 1 };
+        },
+      }),
+    },
+    log: { warn() {} },
+  };
+  const service = createSubscriptions({ strapi });
+  const rooms = new Set(['socket-id']);
+  const socket = {
+    data: { kind: 'public', role: { type: 'public' } },
+    rooms,
+    connected: true,
+    join: (room) => rooms.add(room),
+    leave: (room) => rooms.delete(room),
+  };
+  const replies = await Promise.all(
+    Array.from({ length: 10 }, (_, index) =>
+      service.subscribe(socket, { uid: ARTICLE.uid, documentId: `doc-${index}` })
+    )
+  );
+  assert.equal(replies.filter((reply) => reply.success).length, maxPerSocket);
+  assert.equal(service.list(socket).length, maxPerSocket);
+  // Rejected requests stop before the database check.
+  assert.equal(queries, maxPerSocket);
+  for (const reply of replies.filter((r) => !r.success)) {
+    assert.equal(reply.error, `Maximum subscriptions (${maxPerSocket}) reached`);
+  }
+  // Released reservations: after one unsubscribe, a new subscribe succeeds again.
+  service.unsubscribe(socket, { uid: ARTICLE.uid, documentId: 'doc-0' });
+  assert.equal((await service.subscribe(socket, { uid: ARTICLE.uid, documentId: 'doc-9' })).success, true);
 });
 
 test('subscriptions are removed when the socket disconnects', async () => {
