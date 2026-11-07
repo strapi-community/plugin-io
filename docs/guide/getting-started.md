@@ -10,7 +10,7 @@ From `npm install` to your first live event in about a minute.
 
 |                     | Version                                                  |
 | ------------------- | -------------------------------------------------------- |
-| Strapi              | 5.13 or later (tested with 5.61)                         |
+| Strapi              | 5.38 or later (tested with 5.61)                         |
 | Node.js             | 22.21+ or 24.9+ (up to 26, like Strapi 5.61)             |
 | Users & Permissions | Optional. Needed for user JWTs and the Public role room. |
 
@@ -112,7 +112,7 @@ handshakes only ever see `Authentication failed`.
 
 - **Settings > Socket.IO > Settings**: origins, limits, security, content events, roles, presence and monitoring. Changes apply without a restart.
 - **Settings > Socket.IO > Monitoring**: connected clients, rooms, events per second, admins online and the recent event log.
-- **Homepage widgets**: _Socket.IO_ counters and _Admins online_ (Strapi 5.13+).
+- **Homepage widgets**: _Socket.IO_ counters and _Admins online_.
 - **Live presence** in the Content Manager edit view.
 
 Super Admins see everything. Grant the plugin's permissions to other roles in

@@ -1,6 +1,6 @@
 # Homepage widgets
 
-The plugin adds two widgets to the Strapi admin homepage through the official Widget API (Strapi 5.13 and later). They look and behave like Strapi's own widgets and can be arranged or removed with **Add Widget** on the homepage.
+The plugin adds two widgets to the Strapi admin homepage through Strapi's official Widget API. They look and behave like Strapi's own widgets and can be arranged or removed with **Add Widget** on the homepage.
 
 Both widgets need the admin permission **Read monitoring** (`plugin::io.monitoring.read`). Super Admins have it; grant it to other roles under _Settings > Administration panel > Roles > Plugins > IO > Monitoring_.
 
@@ -45,7 +45,7 @@ _Settings > Socket.IO > Monitoring_ shows the same counters with a breakdown by 
 
 ## Troubleshooting
 
-**The widgets do not appear.** Check that your Strapi version is 5.13 or later and that your role has `plugin::io.monitoring.read`. Then rebuild the admin (`npm run build`).
+**The widgets do not appear.** Check that your Strapi version is 5.38 or later (the plugin requirement) and that your role has `plugin::io.monitoring.read`. Then rebuild the admin (`npm run build`).
 
 **Connected clients stays at 0.** No client is connected. Connect one and wait for the next refresh:
 

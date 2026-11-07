@@ -37,7 +37,7 @@ Full documentation: <https://strapi-community.github.io/plugin-io/>
 
 |                     | Version                                                  |
 | ------------------- | -------------------------------------------------------- |
-| Strapi              | 5.13 or later (tested with 5.61)                         |
+| Strapi              | 5.38 or later (tested with 5.61)                         |
 | Node.js             | 22.21+ or 24.9+ (up to 26, like Strapi 5.61)             |
 | Users & Permissions | Optional. Needed for user JWTs and the Public role room. |
 
@@ -213,7 +213,7 @@ Import sends the file to `POST /io/settings/validate` (needs `plugin::io.setting
 
 ![Settings > Socket.IO > Monitoring](./pics/monitoringSettings.png)
 
-**Homepage widgets** (Strapi 5.13+): _Socket.IO_ (four counters) and _Admins online_. Both need `plugin::io.monitoring.read`.
+**Homepage widgets**: _Socket.IO_ (four counters) and _Admins online_. Both need `plugin::io.monitoring.read`.
 
 ![Socket.IO homepage widget](./pics/widget.png)
 
@@ -353,8 +353,9 @@ With an adapter that spans several servers, a server cannot see which entries ar
 9. **Message size.** `maxHttpBufferSize` defaults to 100 KB. Raise it in `socket.serverOptions` if clients send larger messages.
 10. **Allowed origins apply to WebSocket too.** 5.x accepted WebSocket clients from any origin. With an empty list only same-origin browsers (plus `server.url` / `admin.url`) may connect; list your frontends.
 11. **Admin sockets use `socket.data.admin`.** Presence sockets no longer appear as `socket.data.user`, and `config.events` handlers skip them unless the event sets `admin: true`.
-12. **Node.js 22.21+ or 24.9+** is required.
+12. **Node.js 22.21+ or 24.9+ and Strapi 5.38+** are required (Strapi ships Design System 2.2 with its admin from 5.38.0 on).
 13. **`hooks.init`** receives `{ strapi, $io, io }` and runs before the plugin handshake, as in 5.x. Middleware added there runs before authentication.
+14. **Several processes** (replicas, pm2 cluster): set `socket.adapter` (`'postgres'` or `{ type: 'redis' }`) instead of attaching an adapter in `hooks.init`, add `socket.websocketOnly: true` without sticky sessions, and size `database.connection.pool.max` for two extra adapter connections per process. The plugin then creates four `plugin_io_*` tables on first start. See [Running several instances](#running-several-instances).
 
 The [migration guide](https://strapi-community.github.io/plugin-io/guide/migration) explains each step with code.
 

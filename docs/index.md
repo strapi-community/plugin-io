@@ -101,8 +101,8 @@ Screenshots come from a local test host with synthetic data.
 
 ## Requirements
 
-- Strapi 5.13 or later (tested with 5.61)
-- Node.js 22 or 24
+- Strapi 5.38 or later (tested with 5.61)
+- Node.js 22.21+ or 24.9+ (up to 26)
 - Socket.IO 4.8 clients (`socket.io-client`)
 
 ## Community

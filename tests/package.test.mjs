@@ -19,6 +19,11 @@ test('runtime dependencies are declared, so @strapi/utils stays external (#F-08)
 test('engines and peers match Strapi 5.61', () => {
   assert.equal(pkg.engines.node, '^22.21.0 || >=24.9.0 <=26.x.x');
   assert.equal(pkg.peerDependencies['@strapi/design-system'], '^2.2.0');
+  assert.equal(pkg.peerDependencies['@strapi/icons'], '^2.2.0');
+  // @strapi/admin pins Design System 2.0.0-rc.23 in 5.13, 2.1.2 in 5.37.1
+  // and 2.2.0 from 5.38.0, so the Strapi floor must be the first release
+  // that ships the Design System range above.
+  assert.equal(pkg.peerDependencies['@strapi/strapi'], '^5.38.0');
   // Strapi apps get these through @strapi/admin (exact versions), so they
   // are optional peers: no install warning, and no second copy is added.
   for (const name of ['@strapi/design-system', '@strapi/icons', 'react-intl']) {

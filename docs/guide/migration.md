@@ -8,7 +8,7 @@ description: Upgrade the Strapi Socket.IO plugin from 5.x to 6.0 - read-permissi
 
 | Plugin | Strapi        | Node.js                   | Status   |
 | ------ | ------------- | ------------------------- | -------- |
-| 6.x    | 5.13 or later | 22.21+ or 24.9+ (to 26.x) | Current  |
+| 6.x    | 5.38 or later | 22.21+ or 24.9+ (to 26.x) | Current  |
 | 5.x    | 5.x           | 18 to 22                  | Previous |
 | 2.x    | 4.x           | 14 to 20                  | Legacy   |
 
@@ -16,6 +16,10 @@ description: Upgrade the Strapi Socket.IO plugin from 5.x to 6.0 - read-permissi
 server's `shouldUpgradeCallback`, added in those releases, to leave every
 non-Socket.IO request, including upgrade requests with a body, to Strapi
 exactly as Node would without the plugin.
+
+6.x needs Strapi 5.38 or later. The admin is built with Strapi Design
+System 2.2, and Strapi ships that version with its admin from 5.38.0 on
+(5.37 ships 2.1). Upgrade Strapi first if your project is older.
 
 ## 5.x to 6.0
 
@@ -131,7 +135,7 @@ values, fills the form, and nothing is stored until _Save_.
 | Removed                      | Replacement and reason                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `security` service           | The settings _Allowed/blocked IPs_, _Limit client events_, _Maximum connections_                                                                                                                                                                                                                                                                                                                                                      |
-| Redis toggle in the settings | Attach `@socket.io/redis-adapter` in `hooks.init`                                                                                                                                                                                                                                                                                                                                                                                     |
+| Redis toggle in the settings | `socket.adapter: { type: 'redis' }` in the plugin config (an adapter attached in `hooks.init` keeps working); see [Several instances](./multiple-instances)                                                                                                                                                                                                                                                                           |
 | Live preview events          | Not restored. 5.x relayed unsaved field values from the editor to clients. Unsaved values never pass through the Document Service, so Strapi's Content API sanitizer cannot check them per role or token, and a private field would reach clients that may not read it. Use Strapi's [Preview](https://docs.strapi.io/cms/features/preview), or turn off _Only published content_ and subscribe to the entry to receive saved drafts. |
 | Field-level diffs            | Not restored. A diff needs the previous version of every updated entry (one extra query per update) and has to be computed on each audience's sanitized data, or changed field names would reveal private fields. Compare the entry you receive with the one you have on the client.                                                                                                                                                  |
 | `GET /api/io`                | None (it answered 500)                                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -142,6 +146,35 @@ values, fills the form, and nothing is stored until _Save_.
 - `maxHttpBufferSize` defaults to 100 KB. Raise it in `socket.serverOptions` if clients send larger messages.
 - The `POST /io/presence/session` admin route keeps at most five unused tokens per admin and answers `429` when 10,000 are pending server-wide.
 - _Monitoring > Admins online_ and the _Admins online_ widget list only entries in content types the viewer may read; the rest are counted as "entries you cannot view".
+
+### 13. Several instances
+
+5.x kept presence tokens, settings, the lockout and the connection count in
+each process, so several replicas or a pm2 cluster disagreed with each other.
+6.0 shares them through the database and the Socket.IO adapter:
+
+- Set `socket.adapter` to `'postgres'` (install `@socket.io/postgres-adapter`
+  and `pg`) or `{ type: 'redis' }` (install `@socket.io/redis-adapter` and
+  `ioredis`). An adapter attached in `hooks.init` keeps working.
+- Without sticky sessions, set `socket.websocketOnly: true` and use
+  `transports: ['websocket']` in clients.
+- On first start with coordination on, the plugin creates
+  `plugin_io_presence_tokens`, `plugin_io_counters`, `plugin_io_nodes` and
+  `plugin_io_signals`. The Postgres adapter opens two extra connections per
+  process, so lower `database.connection.pool.max` if your database limits
+  connections (8 processes x (6 + 2) stay under 100).
+- Behind a proxy, set `server.proxy` (`koa: true`, `ipHeader`,
+  `maxIpsCount: 1`) so the lockout counts the client IP, not the proxy.
+- `joinRoom`, `leaveRoom`, `disconnectSocket` and the entity subscription
+  helpers return a Promise for a socket on another process; `await` them.
+  They act only on the socket with exactly the id you pass.
+- `presence.createSessionToken()`, `consumeSessionToken()` and `size()`
+  return Promises, and `monitoring.getConnectionStats()` returns the totals
+  of all processes.
+
+One plain process needs none of this: it keeps the in-memory behaviour,
+creates no tables and starts no timers. The full setup is in
+[Several instances](./multiple-instances).
 
 ## v2 (Strapi 4) to v5 (Strapi 5)
 
