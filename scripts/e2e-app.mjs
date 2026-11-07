@@ -14,14 +14,24 @@
  *   --port <n>       Port (default 1357).
  *   --overrides      Copy this package's npm `overrides` into the app, to
  *                    check that Strapi runs with the patched dependencies.
+ *   --update-lock    Resolve the app's dependencies afresh and write the
+ *                    result to tests/e2e/app/package-lock.json (run it after
+ *                    changing STRAPI_VERSION, the app's pins or the plugin's
+ *                    dependencies; not together with --overrides).
  *   --keep           Leave the app running after the tests.
+ *
+ * Installs are reproducible: the app installs from the committed lockfile
+ * with `npm ci --ignore-scripts`, and only better-sqlite3 (native SQLite
+ * binding) runs its install script, through `npm rebuild better-sqlite3`.
+ * With --overrides, `npm install --ignore-scripts` starts from the same
+ * lockfile and re-resolves only the overridden packages.
  *
  * Secrets, admin passwords and the API token are generated per run, passed
  * through the environment and never printed. Outgoing connections from the
  * app are limited to loopback.
  */
 import { spawn } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -38,8 +48,13 @@ const { values: args } = parseArgs({
     port: { type: 'string', default: '1357' },
     overrides: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },
+    'update-lock': { type: 'boolean', default: false },
   },
 });
+if (args['update-lock'] && args.overrides) {
+  console.error('--update-lock records the lockfile without overrides; do not combine it with --overrides.');
+  process.exit(2);
+}
 const port = Number(args.port);
 if (!Number.isInteger(port) || port < 1024 || RESERVED_PORTS.has(port)) {
   console.error(`Refusing port ${args.port}.`);
@@ -144,9 +159,47 @@ if (args.overrides) {
 }
 writeFileSync(join(app, 'package.json'), `${JSON.stringify(appPackage, null, 2)}\n`);
 
+// The committed lockfile names the tarball of the build that recorded it.
+// Point it at this run's tarball (name, version and integrity) so `npm ci`
+// accepts it; any other difference fails and asks for --update-lock.
+const LOCKFILE = join(ROOT, 'tests/e2e/app/package-lock.json');
+const appLock = join(app, 'package-lock.json');
+if (args['update-lock']) {
+  rmSync(appLock, { force: true });
+} else {
+  if (!existsSync(appLock)) fail('tests/e2e/app/package-lock.json is missing; run with --update-lock.');
+  const lock = JSON.parse(readFileSync(appLock, 'utf8'));
+  const entry = lock.packages?.['node_modules/@strapi-community/plugin-io'];
+  if (!entry || !lock.packages[''])
+    fail('tests/e2e/app/package-lock.json has no plugin entry; run with --update-lock.');
+  const digest = createHash('sha512')
+    .update(readFileSync(join(app, 'pkg', tarball)))
+    .digest('base64');
+  lock.packages[''].dependencies['@strapi-community/plugin-io'] = `file:./pkg/${tarball}`;
+  lock.packages[''].engines = plugin.engines;
+  entry.version = plugin.version;
+  entry.resolved = `file:pkg/${tarball}`;
+  entry.integrity = `sha512-${digest}`;
+  writeFileSync(appLock, `${JSON.stringify(lock, null, 2)}\n`);
+}
+
 step(`installing Strapi ${STRAPI_VERSION} and the plugin${args.overrides ? ' (with overrides)' : ''}`);
-if ((await run('npm', ['install', '--no-audit', '--no-fund'], { cwd: app, log: join(logs, 'install.log') })) !== 0) {
-  fail('npm install failed', join(logs, 'install.log'));
+const installArgs = [
+  args['update-lock'] || args.overrides ? 'install' : 'ci',
+  '--ignore-scripts',
+  '--no-audit',
+  '--no-fund',
+];
+if ((await run('npm', installArgs, { cwd: app, log: join(logs, 'install.log') })) !== 0) {
+  fail(`npm ${installArgs[0]} failed`, join(logs, 'install.log'));
+}
+// better-sqlite3 is the only dependency whose install script the app needs.
+if ((await run('npm', ['rebuild', 'better-sqlite3'], { cwd: app, log: join(logs, 'rebuild.log') })) !== 0) {
+  fail('npm rebuild better-sqlite3 failed', join(logs, 'rebuild.log'));
+}
+if (args['update-lock']) {
+  cpSync(appLock, LOCKFILE);
+  step('wrote tests/e2e/app/package-lock.json');
 }
 
 // 4. Per-run secrets and credentials (never printed).

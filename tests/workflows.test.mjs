@@ -27,6 +27,18 @@ test('CI is read-only and runs the e2e suites against a scaffolded Strapi app on
   assert.match(e2e, /npx playwright install --with-deps chromium/);
   assert.match(e2e, /node scripts\/e2e-app\.mjs/);
   assert.match(e2e, /persist-credentials: false/);
+  assert.match(e2e, /tests\/e2e\/app\/package-lock\.json/);
+});
+
+test('the e2e app installs from its committed lockfile with lifecycle scripts off', () => {
+  const source = readFileSync(script, 'utf8');
+  assert.match(source, /'ci',\s*'--ignore-scripts'/);
+  assert.match(source, /\['rebuild', 'better-sqlite3'\]/);
+  const lock = JSON.parse(readFileSync(new URL('../tests/e2e/app/package-lock.json', import.meta.url), 'utf8'));
+  assert.equal(lock.lockfileVersion, 3);
+  assert.equal(lock.packages[''].dependencies['@strapi/strapi'], '5.61.0');
+  assert.ok(lock.packages['node_modules/@strapi-community/plugin-io'], 'plugin entry');
+  assert.ok(lock.packages['node_modules/better-sqlite3'].hasInstallScript);
 });
 
 test('the e2e runner refuses reserved ports and app folders inside the repository', () => {

@@ -59,8 +59,10 @@ jobs:
     # Scaffolds a Strapi 5.61 app (SQLite, synthetic content types from
     # tests/e2e/app), installs the packed plugin and runs tests/e2e: the
     # Playwright admin suite and the socket/API suite. Secrets and admin
-    # passwords are generated per run and never printed. On Node 24 the app
-    # also uses this repo's npm overrides, to prove Strapi runs with them.
+    # passwords are generated per run and never printed. The app installs
+    # from tests/e2e/app/package-lock.json with lifecycle scripts off (only
+    # better-sqlite3 is rebuilt). On Node 24 the app also uses this repo's npm
+    # overrides, to prove Strapi runs with them.
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -78,10 +80,10 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-          # The app installs into the same npm cache, keyed on the scaffold script too.
+          # The app installs into the same npm cache, keyed on its lockfile too.
           cache-dependency-path: |
             package-lock.json
-            scripts/e2e-app.mjs
+            tests/e2e/app/package-lock.json
       - name: Install dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts
       # Playwright advises against caching browsers; install Chromium only.
