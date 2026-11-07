@@ -101,8 +101,9 @@ test('Settings: Save stays disabled until a valid change, guards navigation and 
   assert.equal(await save.isDisabled(), true, 'invalid value keeps Save disabled');
   await ping.fill(pingBefore);
 
-  const toggle = page.getByRole('switch', { name: 'Require authentication' });
-  const original = await toggle.getAttribute('aria-checked');
+  // Booleans are native Strapi boolean inputs: a DS Toggle, i.e. a labelled checkbox input.
+  const toggle = page.getByRole('checkbox', { name: 'Require authentication' });
+  const original = await toggle.isChecked();
   await toggle.click();
   assert.equal(await save.isDisabled(), false, 'a change enables Save');
 
@@ -125,7 +126,7 @@ test('Settings: Save stays disabled until a valid change, guards navigation and 
   await toggle.click();
   await save.click();
   await page.getByText('Settings saved.').first().waitFor();
-  assert.equal(await toggle.getAttribute('aria-checked'), original);
+  assert.equal(await toggle.isChecked(), original);
   assert.deepEqual(errors, []);
   await close();
 });
@@ -160,8 +161,8 @@ test(
     await dialog.getByRole('button', { name: 'Replace values' }).click();
     await page.getByText('Imported values are in the form. Save to apply them.').first().waitFor();
     assert.equal(
-      await page.getByRole('switch', { name: 'Show who is editing' }).getAttribute('aria-checked'),
-      String(!exported.presence.enabled)
+      await page.getByRole('checkbox', { name: 'Show who is editing' }).isChecked(),
+      !exported.presence.enabled
     );
     assert.equal(await page.getByRole('button', { name: 'Save' }).isDisabled(), false, 'imported values are unsaved');
 
@@ -184,21 +185,87 @@ test(
   }
 );
 
-test('Settings: a setting title is the label of its switch (larger click target)', { skip }, async () => {
+test('Settings: a setting title is the label of its toggle; Space toggles it', { skip }, async () => {
   const { page, errors, close } = await open(ADMIN);
   await page.goto(`${BASE}/admin/settings/io/settings`, { waitUntil: 'networkidle' });
-  const toggle = page.getByRole('switch', { name: 'Allow entry subscriptions' });
-  const before = await toggle.getAttribute('aria-checked');
+  const toggle = page.getByRole('checkbox', { name: 'Allow entry subscriptions' });
+  const before = await toggle.isChecked();
   await page.locator('label', { hasText: 'Allow entry subscriptions' }).click();
-  assert.notEqual(await toggle.getAttribute('aria-checked'), before, 'clicking the title toggles the switch');
+  assert.equal(await toggle.isChecked(), !before, 'clicking the title toggles the input');
   const limit = page.getByRole('textbox', { name: /Subscriptions per client/ });
-  assert.equal(await limit.isDisabled(), before === 'true', 'limit follows the switch');
-  await page.locator('label', { hasText: 'Allow entry subscriptions' }).click();
-  assert.equal(await toggle.getAttribute('aria-checked'), before);
+  assert.equal(await limit.isDisabled(), before, 'limit follows the toggle');
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  assert.equal(await toggle.isChecked(), before, 'Space toggles it back');
   assert.equal(await page.getByRole('button', { name: 'Save' }).isDisabled(), true, 'back to the saved state');
   assert.deepEqual(errors, []);
   await close();
 });
+
+test(
+  'Settings: a save after another admin saved shows the conflict dialog (two browser contexts)',
+  { skip },
+  async () => {
+    const a = await open(ADMIN);
+    const b = await open(ADMIN);
+    for (const { page } of [a, b]) {
+      await page.goto(`${BASE}/admin/settings/io/settings`, { waitUntil: 'networkidle' });
+      await page.getByRole('heading', { level: 1 }).first().waitFor();
+    }
+    const auth = (page) => page.getByRole('checkbox', { name: 'Require authentication' });
+    const save = (page) => page.getByRole('button', { name: 'Save' });
+    const original = await auth(a.page).isChecked();
+
+    // A saves first.
+    await auth(a.page).click();
+    await save(a.page).click();
+    await a.page.getByText('Settings saved.').first().waitFor();
+
+    // B still has the old revision: its save is refused with 409 and nothing is stored.
+    const statuses = [];
+    b.page.on('response', (r) => {
+      if (r.request().method() === 'PUT' && r.url().endsWith('/io/settings')) statuses.push(r.status());
+    });
+    const subs = b.page.getByRole('checkbox', { name: 'Allow entry subscriptions' });
+    const subsBefore = await subs.isChecked();
+    await subs.click();
+    await save(b.page).click();
+    const dialog = b.page.getByRole('alertdialog', { name: 'Settings changed in the meantime' });
+    await dialog.waitFor();
+    assert.deepEqual(statuses, [409]);
+
+    // "Keep editing" closes the dialog and keeps the draft; saving again shows it again.
+    await dialog.getByRole('button', { name: 'Keep editing' }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    assert.equal(await subs.isChecked(), !subsBefore, 'draft kept');
+    assert.equal(await save(b.page).isDisabled(), false, 'still unsaved');
+    await save(b.page).click();
+    await dialog.waitFor();
+    assert.deepEqual(statuses, [409, 409]);
+
+    // "Load latest settings" replaces the form with the values A stored.
+    await dialog.getByRole('button', { name: 'Load latest settings' }).click();
+    await dialog.waitFor({ state: 'hidden' });
+    await b.page.waitForFunction(
+      (want) =>
+        [...document.querySelectorAll('main input[type="checkbox"]')].find(
+          (el) => el.labels?.[0]?.textContent.trim() === 'Require authentication'
+        )?.checked === want,
+      !original
+    );
+    assert.equal(await subs.isChecked(), subsBefore, 'the refused draft is gone');
+    assert.equal(await save(b.page).isDisabled(), true, 'clean after loading');
+
+    // restore through B, which now has the current revision
+    await auth(b.page).click();
+    await save(b.page).click();
+    await b.page.getByText('Settings saved.').first().waitFor();
+    assert.equal(await auth(b.page).isChecked(), original);
+    assert.deepEqual([...a.errors, ...b.errors], []);
+    await a.close();
+    await b.close();
+  }
+);
 
 test('Monitoring: native page anatomy, four counters and the admins table', { skip }, async () => {
   const { page, errors, close } = await open(ADMIN);
@@ -259,7 +326,7 @@ test(
       'Save disabled without settings.update'
     );
     assert.equal(
-      await page.getByRole('switch', { name: 'Require authentication' }).isDisabled(),
+      await page.getByRole('checkbox', { name: 'Require authentication' }).isDisabled(),
       true,
       'fields read-only'
     );
