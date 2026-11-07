@@ -81,7 +81,9 @@ export const TestEventModal = ({ onSent }) => {
 	return (
 		<Modal.Root open={open} onOpenChange={(next) => !sending && setOpen(next)}>
 			<Modal.Trigger>
-				<Button startIcon={<PaperPlane />}>{t('monitoring.test.open', 'Send test event')}</Button>
+				<Button size="S" startIcon={<PaperPlane />}>
+					{t('monitoring.test.open', 'Send test event')}
+				</Button>
 			</Modal.Trigger>
 			<Modal.Content>
 				<Modal.Header>

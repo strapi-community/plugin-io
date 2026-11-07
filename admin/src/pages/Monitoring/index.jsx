@@ -29,7 +29,7 @@ import { contentManagerPath, displayName, initials } from '../../utils/content-m
 import { StatCards } from './StatCards';
 import { TestEventModal } from './TestEventModal';
 
-const RBAC = { read: PERMISSIONS.monitoring.read, manage: PERMISSIONS.monitoring.manage };
+const RBAC = [...PERMISSIONS.monitoring.read, ...PERMISSIONS.monitoring.manage];
 
 /**
  * Relative time with the absolute time as title.
@@ -112,11 +112,12 @@ const MonitoringPage = () => {
 			primaryAction={allowedActions.canManage ? <TestEventModal onSent={refreshAll} /> : undefined}
 			endActions={
 				<>
-					<Button variant="tertiary" startIcon={<ArrowClockwise />} onClick={refreshAll}>
+					<Button size="S" variant="tertiary" startIcon={<ArrowClockwise />} onClick={refreshAll}>
 						{t('monitoring.refresh', 'Refresh')}
 					</Button>
 					{allowedActions.canManage ? (
 						<ConfirmAction
+							size="S"
 							label={t('monitoring.reset', 'Reset statistics')}
 							startIcon={<Trash />}
 							title={t('monitoring.reset.title', 'Reset statistics?')}

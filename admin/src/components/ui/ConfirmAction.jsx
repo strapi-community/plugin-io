@@ -16,6 +16,8 @@ import { ConfirmDialog } from '@strapi/strapi/admin';
  * @param {() => Promise<void>} props.onConfirm - Action; throw to keep the dialog open.
  * @param {string} [props.variant] - Confirm variant (`danger`, `danger-light`, `default`).
  * @param {boolean} [props.disabled] - Disables the trigger.
+ * @param {'S' | 'M' | 'L'} [props.size] - Trigger size.
+ * @param {() => HTMLElement | null} [props.getFallbackFocus] - Focus target when the trigger is disabled after the action.
  * @returns {JSX.Element} Trigger and dialog.
  */
 export const ConfirmAction = ({
@@ -28,17 +30,28 @@ export const ConfirmAction = ({
 	onConfirm,
 	variant = 'danger',
 	disabled = false,
+	size = 'M',
+	getFallbackFocus,
 }) => {
 	const [open, setOpen] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const triggerRef = useRef(null);
 
+	// Runs after React has re-rendered the trigger (it may have become disabled).
 	const restoreFocus = () =>
-		requestAnimationFrame(() => {
+		setTimeout(() => {
 			const active = document.activeElement;
 			if (active && active !== document.body) return;
-			if (triggerRef.current?.isConnected && !triggerRef.current.disabled) triggerRef.current.focus();
-		});
+			if (triggerRef.current?.isConnected && !triggerRef.current.disabled) {
+				triggerRef.current.focus();
+				return;
+			}
+			const fallback = getFallbackFocus?.();
+			if (fallback) {
+				if (!fallback.hasAttribute('tabindex')) fallback.setAttribute('tabindex', '-1');
+				fallback.focus();
+			}
+		}, 50);
 
 	const onOpenChange = (next) => {
 		if (busy) return;
@@ -63,7 +76,7 @@ export const ConfirmAction = ({
 	return (
 		<Dialog.Root open={open} onOpenChange={onOpenChange}>
 			<Dialog.Trigger>
-				<Button ref={triggerRef} variant={triggerVariant} startIcon={startIcon} disabled={disabled}>
+				<Button ref={triggerRef} variant={triggerVariant} startIcon={startIcon} disabled={disabled} size={size}>
 					{label}
 				</Button>
 			</Dialog.Trigger>

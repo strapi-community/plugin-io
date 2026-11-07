@@ -13,7 +13,7 @@ import { RolesSection } from './sections/RolesSection';
 import { SecuritySection } from './sections/SecuritySection';
 import { useSettingsForm } from './useSettingsForm';
 
-const RBAC = { read: PERMISSIONS.settings.read, update: PERMISSIONS.settings.update };
+const RBAC = [...PERMISSIONS.settings.read, ...PERMISSIONS.settings.update];
 
 /** Mirrors the draft into Strapi's Form so the native Blocker sees unsaved changes. */
 const DraftSync = ({ values }) => {
@@ -81,6 +81,7 @@ const SettingsPage = () => {
 			primaryAction={
 				<Flex gap={2}>
 					<ConfirmAction
+						size="S"
 						label={t('settings.discard', 'Discard changes')}
 						triggerVariant="tertiary"
 						title={t('settings.discard.title', 'Discard changes?')}
@@ -89,8 +90,10 @@ const SettingsPage = () => {
 						variant="danger-light"
 						disabled={!form.dirty || form.saving}
 						onConfirm={form.discard}
+						getFallbackFocus={() => document.querySelector('main h1')}
 					/>
 					<Button
+						size="S"
 						startIcon={<Check />}
 						onClick={form.save}
 						loading={form.saving}

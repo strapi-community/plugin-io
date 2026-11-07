@@ -27,7 +27,7 @@ export const TagListField = ({ name, kind, label, hint, placeholder, error, valu
 	const [input, setInput] = useState('');
 	const [entryError, setEntryError] = useState(null);
 	const inputRef = useRef(null);
-	const tagRefs = useRef([]);
+	const listRef = useRef(null);
 
 	const messages = {
 		invalid: {
@@ -69,7 +69,8 @@ export const TagListField = ({ name, kind, label, hint, placeholder, error, valu
 	const remove = (index) => {
 		onChange(value.filter((_, i) => i !== index));
 		requestAnimationFrame(() => {
-			const target = tagRefs.current[index] ?? tagRefs.current[index - 1] ?? inputRef.current;
+			const buttons = listRef.current ? [...listRef.current.querySelectorAll('button')] : [];
+			const target = buttons[index] ?? buttons[index - 1] ?? inputRef.current;
 			target?.focus?.();
 		});
 	};
@@ -105,13 +106,10 @@ export const TagListField = ({ name, kind, label, hint, placeholder, error, valu
 				<Field.Error />
 			</Field.Root>
 			{value.length ? (
-				<Flex tag="ul" gap={2} wrap="wrap" aria-label={label}>
+				<Flex ref={listRef} tag="ul" gap={2} wrap="wrap" aria-label={label}>
 					{value.map((entry, index) => (
 						<li key={entry}>
 							<Tag
-								ref={(el) => {
-									tagRefs.current[index] = el;
-								}}
 								icon={<Cross aria-hidden />}
 								disabled={disabled}
 								label={formatMessage(
