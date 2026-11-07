@@ -4,7 +4,7 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ### Bug Fixes
 
-* **socket:** Strapi Data Transfer works again behind proxies. Engine.IO's `upgrade` listener stopped Node from passing `/admin/transfer/runner/*` upgrades to Strapi, so they timed out (504/524). Upgrades outside the Socket.IO path are now forwarded to Strapi. Closes #112.
+* **socket:** Strapi Data Transfer works again behind proxies. Engine.IO's `upgrade` listener stopped Node from passing `/admin/transfer/runner/*` upgrades to Strapi, so they timed out (504/524). On Node 22.21+ / 24.9+ the plugin wraps `shouldUpgradeCallback` so Node accepts upgrades only on the Socket.IO path and every other request (including `POST` with an `Upgrade: h2c` header and a body) reaches Strapi untouched; older Node versions forward bodyless upgrades and answer upgrades with a body with a clear `400`. Closes #112.
 * **lifecycle:** `destroy()` no longer closes Strapi's HTTP server and releases every timer, so shutdown and `strapi ts:generate-types` exit (#109).
 * **events:** content events use the Document Service middleware. Publishing emits `:publish` instead of `:delete` plus `:create`, populated refetches use the same locale and status, and delete emits one event per locale.
 * **security:** Content API sanitizing fails closed. If sanitizing an entry fails, that audience is skipped instead of receiving the raw entry (class of #111). Sensitive keys are matched exactly, so `tokenCount` or an upload `hash` are no longer dropped.
@@ -14,6 +14,14 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **security:** API-token handshakes reject admin-kind tokens, room names use the token id and the role type, `isReadScope` is defined, and failed handshakes return one generic message.
 * **security:** the handshake uses Strapi's proxy settings for the client IP, does not count anonymous connections as failures, and applies to custom namespaces.
 * **security:** authenticated sockets are re-checked and disconnected when the JWT expires, the user is blocked or changes role, the API token is deleted or the admin is deactivated.
+* **security:** `POST /io/presence/session` keeps at most five unused tokens per admin (the oldest is dropped) and answers `429` when 10,000 are pending. Tokens store the admin id and Strapi session id only, not the request's permission object, so one admin can no longer exhaust server memory.
+* **security:** admin presence sockets end when the admin logs out or the Strapi session expires or is revoked. Their permissions are reloaded on every re-check, and an admin who lost read access to an open entry is disconnected. In users-permissions refresh mode, sockets end when their session is revoked, and the JWT expiry is read from the token so sockets also end when it expires.
+* **security:** deleting a Strapi session (logout, revoke) re-checks that user's or admin's sockets right away instead of at the next five-minute check.
+* **security:** an empty "Allowed origins" list now refuses foreign browser origins for WebSocket as well as polling. Same-origin requests, the `server.url` / `admin.url` origins and clients without an `Origin` header stay allowed.
+* **security:** admin presence sockets keep their identity in `socket.data.admin` instead of `socket.data.user`, and `config.events` handlers skip them unless the event sets `admin: true`, so handlers written for Users & Permissions ids cannot act on an admin id.
+* **monitoring:** "Admins online" (page and widget) no longer names entries in content types the viewer may not read in the Content Manager; they are counted instead.
+* **hooks:** `hooks.init` runs before the plugin handshake again (as in 5.x) and receives `{ strapi, $io, io }`, so documented examples that use `io.server` work.
+* **performance:** content events skip rooms without sockets before sanitizing, and the delivered count only includes rooms with listeners. Socket re-checks run in one batch per kind (one query for all users, tokens or admins) instead of several queries per socket.
 * **performance:** a changed user, admin or API token re-checks only that identity's sockets, in every namespace. Role and permission changes only refresh the delivery cache, and the plugin's own `lastUsedAt` update no longer triggers a re-check. Measured with 200 sockets: 427 queries per unrelated user update before, 0 after.
 * **settings:** every admin setting is now enforced (origins, connection cap, ping and timeouts, required authentication, client event rate limit, IP allow and block lists, per-role connect permission, draft handling, excluded fields, presence, monitoring). Settings that were never implemented were removed.
 * **settings:** `PUT /io/settings` validates a strict schema and returns 400 with field paths. `@strapi/utils` is now a declared dependency, so the error is Strapi's own `ValidationError` instead of a bundled copy that produced 500s.
@@ -22,7 +30,9 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **admin:** the Live presence panel opens one socket per edit view. The Content Manager mounts side panels twice; the first mount used to spend a session token and close a connecting WebSocket, which logged a browser warning.
 * **admin:** the homepage widgets follow the native ones: "Socket.IO" is laid out like "Project statistics" (bordered grid of link cells with tinted icons) and "Admins online" like "Last edited entries" (rows open the entry, ghost edit button). The widget icon takes the native grey.
 * **api:** the scaffold route `GET /api/io`, which answered 500, is removed.
-* **types:** `types.d.ts` matches the runtime API and is published through `types` and the `strapi-server` export.
+* **types:** `types.d.ts` matches the runtime API and is published through `types` and the `strapi-server` export. New: `SocketData`, the `admin` flag on events and the `io` alias in `hooks.init`.
+* **admin:** the connected-clients breakdown uses plural forms ("1 user", "2 users") in all five languages.
+* **docs:** the examples, configuration reference, IO class reference and migration guide were rewritten against the 6.0 code: no `socket.data.userId`, non-existent services, `eventPrefix` or `entityService` calls.
 
 ### Features
 
@@ -35,6 +45,8 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * Dependencies updated to their latest versions: socket.io and socket.io-client 4.8.4, zod 4.6.7 (fixes GHSA-mrhx-c7xc-m3w5), @strapi/strapi and @strapi/utils 5.61.0, @strapi/sdk-plugin 6.1.1, Design System and icons 2.2.4, styled-components 6.6.0, ESLint 10, semantic-release 25. `date-fns` and the implicit `lodash` use were removed. TypeScript stays on 5.9 because react-intl 6 (Strapi's admin version) only accepts TypeScript up to 5.
 * Node.js engines follow Strapi 5.61 (`>=22.0.0 <=26.x.x`); peers are `@strapi/strapi ^5.13.0` and Design System/icons `^2.2.0`.
 * The legacy `server/` tree, the root `strapi-server.js`/`strapi-admin.js` shims, unreachable admin components and the manual root test scripts were removed. `dist/` is no longer tracked; `package-lock.json` is.
+* semantic-release folds this `[Unreleased]` section into the release notes and removes it from CHANGELOG.md (`scripts/release-unreleased.mjs`), so no stale block is left behind.
+* The development tree's `npm audit` reports advisories inside `@strapi/strapi` 5.61.0 (`koa-body`, `koa-session`, its bundled `zod` 3, `@strapi/core`/`@strapi/types`). They are dev-only and upstream; `npm audit --omit=dev` is clean.
 * ESLint 10 flat config, Prettier check, `node --test` suite and published-types check; CI on Node 22 and 24, hardened release workflow (SHA-pinned actions, lockfile install without scripts, npm OIDC with `NPM_TOKEN` fallback and provenance), Dependabot with verified auto-merge.
 
 ### Migration
@@ -47,7 +59,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **Permissions.** Grant the new plugin permissions to non-Super-Admin roles that need the Socket.IO pages.
 * **Removed APIs:** the `security` service, settings export and import, the entity subscription helpers (never part of the published 5.4 to 5.8 builds) and `GET /api/io`.
 * **Message size.** `maxHttpBufferSize` defaults to 100 KB; set it in `socket.serverOptions` if clients send larger messages.
-* **Node.js 22** or later is required.
+* **Node.js 22** or later is required; 22.21+ or 24.9+ is recommended (native upgrade routing, see #112).
+* **Allowed origins.** An empty list now means "same origin only" for WebSocket too. Add every browser frontend origin under Settings > Socket.IO > Allowed origins.
+* **Admin sockets.** Presence sockets carry `socket.data.admin` (not `socket.data.user`) and do not run `config.events` handlers unless the event sets `admin: true`. Check `socket.data.kind` in your handlers.
+* **hooks.init** runs before the plugin handshake and receives `{ strapi, $io, io }`. Middleware you add there runs before authentication, so `socket.data.kind` is not set yet; use a `connection` event for logic that needs the authenticated client.
+* **Presence tokens.** `POST /io/presence/session` can answer `429` when 10,000 tokens are pending server-wide.
 
 ## [5.8.3](https://github.com/strapi-community/plugin-io/compare/5.8.2...5.8.3) (2026-08-02)
 

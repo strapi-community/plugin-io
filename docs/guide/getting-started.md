@@ -1,20 +1,22 @@
-# Getting Started
+---
+description: Install the Strapi 5 Socket.IO plugin, watch a content type and receive your first live event in under a minute.
+---
 
-Get up and running with Socket.IO in your Strapi v5 application in less than 5 minutes.
+# Getting started
+
+From `npm install` to your first live event in about a minute.
 
 ## Requirements
 
-- **Node.js**: 18.0.0 - 22.x
-- **Strapi**: v5.x
-- **npm**: 6.0.0 or higher
+|                     | Version                                                                |
+| ------------------- | ---------------------------------------------------------------------- |
+| Strapi              | 5.13 or later (tested with 5.61)                                       |
+| Node.js             | 22 or 24 (`>=22 <=26`, like Strapi 5.61). 22.21+ or 24.9+ recommended. |
+| Users & Permissions | Optional. Needed for user JWTs and the Public role room.               |
 
-::: tip Compatibility
-This version (v5.x) is designed for **Strapi v5** only. For Strapi v4, use version 2.x of this plugin.
-:::
+For Strapi 4 use version 2.x of the plugin.
 
-## Installation
-
-Install the plugin in your Strapi project:
+## 1. Install
 
 ::: code-group
 
@@ -32,49 +34,27 @@ pnpm add @strapi-community/plugin-io
 
 :::
 
-## Basic Configuration
-
-Create or edit `config/plugins.js` (or `config/plugins.ts` for TypeScript):
+## 2. Watch a content type
 
 ::: code-group
 
-```javascript [JavaScript]
-module.exports = ({ env }) => ({
+```js [config/plugins.js]
+module.exports = () => ({
   io: {
     enabled: true,
     config: {
-      // Enable automatic events for content types
-      contentTypes: ['api::article.article', 'api::comment.comment'],
-
-      // Socket.IO server options
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: env('CLIENT_URL', 'http://localhost:3000'),
-            methods: ['GET', 'POST'],
-          },
-        },
-      },
+      contentTypes: ['api::article.article'],
     },
   },
 });
 ```
 
-```typescript [TypeScript]
-export default ({ env }) => ({
+```ts [config/plugins.ts]
+export default () => ({
   io: {
     enabled: true,
     config: {
-      contentTypes: ['api::article.article', 'api::comment.comment'],
-
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: env('CLIENT_URL', 'http://localhost:3000'),
-            methods: ['GET', 'POST'],
-          },
-        },
-      },
+      contentTypes: ['api::article.article'],
     },
   },
 });
@@ -82,237 +62,83 @@ export default ({ env }) => ({
 
 :::
 
-::: info
-The `plugins.js` file doesn't exist by default. Create it if this is a new project.
-:::
+Restart Strapi (`npm run develop`).
 
-## Start Your Server
+## 3. Allow reading
 
-```bash
-npm run develop
-```
+Clients receive what they may read through the REST API. For a quick test,
+give the **Public** role the **find** permission for Article in
+_Settings > Users & Permissions plugin > Roles > Public_.
 
-You should see in the console:
-
-```
-[io] ✅ Socket.IO initialized successfully
-[io] 🚀 Server listening on http://localhost:1337
-```
-
-## Client Connection
-
-### Frontend Setup
-
-Install Socket.IO client in your frontend project:
+## 4. Listen
 
 ```bash
 npm install socket.io-client
 ```
 
-### Connect to Strapi
-
-::: code-group
-
-```javascript [Public Connection]
+```js
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:1337');
 
-socket.on('connect', () => {
-  console.log('✅ Connected:', socket.id);
-});
-
-// Listen for article events
-socket.on('article:create', (data) => {
-  console.log('New article created:', data);
-});
-
-socket.on('article:update', (data) => {
-  console.log('Article updated:', data);
-});
-
-socket.on('article:delete', (data) => {
-  console.log('Article deleted:', data);
-});
+socket.on('connect', () => console.log('connected', socket.id));
+socket.on('article:publish', ({ data }) => console.log('published', data.attributes.title));
+socket.on('article:delete', ({ data }) => console.log('deleted', data.documentId));
 ```
 
-```javascript [JWT Authentication]
-import { io } from 'socket.io-client';
+Publish an article in the Content Manager and watch the event arrive.
 
-// Get JWT token after user login
-const jwtToken = 'your-jwt-token-here';
-
-const socket = io('http://localhost:1337', {
-  auth: {
-    strategy: 'jwt',
-    token: jwtToken,
-  },
-});
-
-socket.on('connect', () => {
-  console.log('✅ Authenticated connection:', socket.id);
-});
-
-// Listen for events based on user role permissions
-socket.on('article:create', (data) => {
-  console.log('New article:', data);
-});
-```
-
-```javascript [API Token]
-import { io } from 'socket.io-client';
-
-// API Token from Strapi Admin Panel
-// Settings -> Global Settings -> API Tokens
-const apiToken = 'your-api-token-here';
-
-const socket = io('http://localhost:1337', {
-  auth: {
-    strategy: 'api-token',
-    token: apiToken,
-  },
-});
-
-socket.on('connect', () => {
-  console.log('✅ API Token authenticated:', socket.id);
-});
-
-socket.on('article:create', (data) => {
-  console.log('New article:', data);
-});
-```
-
+::: tip Browser on another origin?
+A page served from another origin (for example `http://localhost:3000`) must be
+listed under _Settings > Socket.IO > Settings > Allowed origins_. Node scripts
+and mobile apps send no `Origin` header and are not affected.
 :::
 
-## Authentication Strategies
+## Authenticate clients
 
-The plugin automatically handles authentication and places connections in rooms based on their role or token:
+```js
+// Users & Permissions JWT: the client joins its role's room
+const socket = io(url, { auth: (cb) => cb({ strategy: 'jwt', token: getJwt() }) });
 
-| Strategy      | Use Case                | Room Assignment                          |
-| ------------- | ----------------------- | ---------------------------------------- |
-| **None**      | Public access           | `Public` role room                       |
-| **JWT**       | User-Permissions plugin | User's role room (e.g., `Authenticated`) |
-| **API Token** | Server-to-server        | Token's configured permissions           |
-
-::: tip Role-Based Events
-Users only receive events for content types their role has permission to access. This is enforced automatically!
-:::
-
-## Admin Panel Configuration
-
-After installation, configure the plugin visually:
-
-1. Navigate to **Settings** → **Socket.IO**
-2. Configure:
-   - ✅ **CORS Origins** - Add your frontend URLs
-   - ✅ **Content Types** - Enable real-time events
-   - ✅ **Role Permissions** - Control access per role
-   - ✅ **Security Settings** - Rate limiting, IP whitelisting
-   - ✅ **Monitoring** - View live connections
-
-![Socket.IO Settings Panel](/settings.png)
-
-_The visual settings panel makes configuration easy - no code required for most settings!_
-
----
-
-## Dashboard Widget
-
-After installation, you'll see a live statistics widget on your admin home page:
-
-![Socket.IO Dashboard Widget](/widget.png)
-
-**Widget Features:**
-
-- 🟢 Live connection status with pulsing indicator
-- 👥 Active connections count
-- 💬 Active rooms count
-- ⚡ Events per second
-- 📈 Total events processed
-- 🔄 Auto-updates every 5 seconds
-
----
-
-## Quick Test
-
-Test your setup with this simple HTML file:
-
-```html
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>Socket.IO Test</title>
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-  </head>
-  <body>
-    <h1>Socket.IO Test</h1>
-    <div id="status">Connecting...</div>
-    <div id="events"></div>
-
-    <script>
-      const socket = io('http://localhost:1337');
-
-      socket.on('connect', () => {
-        document.getElementById('status').innerHTML = '✅ Connected: ' + socket.id;
-      });
-
-      socket.on('article:create', (data) => {
-        const div = document.getElementById('events');
-        div.innerHTML += '<p>📝 New article: ' + JSON.stringify(data) + '</p>';
-      });
-
-      socket.on('disconnect', () => {
-        document.getElementById('status').innerHTML = '❌ Disconnected';
-      });
-    </script>
-  </body>
-</html>
+// Content API token (read-only, full-access or custom)
+const socket = io(url, { auth: { strategy: 'api-token', token: process.env.STRAPI_TOKEN } });
 ```
 
-Open this file in your browser, then create an article in your Strapi admin panel. You should see the event appear in real-time!
+A function for `auth` runs on every reconnect, so a refreshed JWT is picked up.
+Turn on _Require authentication_ to refuse clients without a token. Failed
+handshakes only ever see `Authentication failed`.
 
-## Next Steps
+## What you get in the admin
 
-- **[View Examples](/examples/)** - Learn common use cases
-- **[API Reference](/api/io-class)** - Explore all available methods
-- **[Configuration](/api/plugin-config)** - Advanced setup options
-- **[Helper Functions](/api/io-class#helper-functions)** - Utility methods
+- **Settings > Socket.IO > Settings**: origins, limits, security, content events, roles, presence and monitoring. Changes apply without a restart.
+- **Settings > Socket.IO > Monitoring**: connected clients, rooms, events per second, admins online and the recent event log.
+- **Homepage widgets**: _Socket.IO_ counters and _Admins online_ (Strapi 5.13+).
+- **Live presence** in the Content Manager edit view.
+
+Super Admins see everything. Grant the plugin's permissions to other roles in
+_Settings > Administration panel > Roles > Plugins > IO_.
+
+![Settings > Socket.IO > Settings](/settings.png)
 
 ## Troubleshooting
 
-### CORS Errors
+**Nothing arrives.** Check that the role or token has `find` on the content
+type, that the content type is watched, and, with Draft & Publish, that you
+listen to `:publish` (drafts are not sent while _Only published content_ is on).
 
-If you see CORS errors in the browser console:
+**`connect_error: Authentication failed`.** The JWT or token is invalid,
+expired or belongs to a blocked user. After 20 failures from one IP within a
+minute, that IP is locked out for the rest of the minute.
 
-```javascript
-config: {
-  socket: {
-    serverOptions: {
-      cors: {
-        origin: '*',  // For development only!
-        methods: ['GET', 'POST']
-      }
-    }
-  }
-}
-```
+**Browser shows a CORS error or a 400/403 on `/socket.io/`.** Add the page's
+origin under _Allowed origins_.
 
-### Events Not Received
+**`strapi transfer` stopped working.** Upgrade to 6.0; see the
+[README troubleshooting](https://github.com/strapi-community/plugin-io#troubleshooting) for #112.
 
-1. Check role permissions in **Settings** → **Socket.IO**
-2. Verify content type is enabled in config
-3. Ensure user has permission to access the content type
+## Next steps
 
-### Connection Fails
-
-1. Verify Strapi is running
-2. Check the URL (default: `http://localhost:1337`)
-3. Look for firewall/network issues
-
-### Migrating from Strapi v4?
-
-See our [Migration Guide](/guide/migration) for step-by-step instructions to upgrade from Strapi v4 to v5.
-
-::: warning Data Transfer
-`strapi transfer` shares the Strapi HTTP server's WebSocket upgrade channel. From plugin `5.8.3` onward, Engine.IO is configured with `destroyUpgrade: false` so transfer upgrades to `/admin/transfer/*` are no longer torn down after 1s (see [issue #112](https://github.com/strapi-community/plugin-io/issues/112)). If you override `socket.serverOptions`, keep `destroyUpgrade: false` unless you intentionally isolate Socket.IO on another port.
-:::
+- [Content types](/examples/content-types): actions, populate, payloads
+- [Custom events](/examples/events): handle client events safely
+- [Plugin configuration](/api/plugin-config): every option
+- [Migration guide](/guide/migration): upgrading from 5.x

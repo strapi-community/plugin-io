@@ -1,670 +1,146 @@
-# Migration Guide
+---
+description: Upgrade the Strapi Socket.IO plugin from 5.x to 6.0 - read-permission delivery, publish events, drafts, rooms, admin sockets, hooks order, origins and removed APIs.
+---
+
+# Migration guide
+
+## Compatibility
+
+| Plugin | Strapi        | Node.js                | Status   |
+| ------ | ------------- | ---------------------- | -------- |
+| 6.x    | 5.13 or later | 22 or 24 (`>=22 <=26`) | Current  |
+| 5.x    | 5.x           | 18 to 22               | Previous |
+| 2.x    | 4.x           | 14 to 20               | Legacy   |
+
+Node.js 22.21 or 24.9 (or newer) is recommended: on these versions the plugin
+leaves every non-Socket.IO request, including upgrade requests with a body,
+to Strapi exactly as Node would without the plugin.
 
 ## 5.x to 6.0
 
-6.0 makes delivery follow Strapi's read permissions and enforces the admin settings. Check these points after upgrading:
+6.0 makes delivery follow Strapi's read permissions and enforces the admin
+settings. Work through the list below after upgrading.
 
-1. **Read permission decides delivery.** Roles and API tokens receive events for content types they may `find` or `findOne`. Create or update permissions alone no longer deliver events.
-2. **Publish events.** Publishing emits `:publish` (it used to emit `:delete` and `:create`). Unpublish and discard draft emit `:unpublish` and `:discardDraft`. If `config.contentTypes[].actions` limits actions, add the new ones.
-3. **Drafts** are not sent by default. Turn off _Only published content_ to send them.
-4. **Delete events** go only to readers and include `locale`.
-5. **Room names:** API-token rooms are `io-token-<id>`, custom role rooms `io-role-<role type>`.
-6. **Settings** stored by 5.x are migrated and are now enforced. Review _Settings > Socket.IO_.
-7. **Admin permissions:** grant `Read settings`, `Update settings`, `Read monitoring` and `Reset statistics and send test events` (Settings > Administration Panel > Roles > Plugins > IO) to roles other than Super Admin.
-8. **Removed:** the `security` service, settings export and import, entity subscription helpers and `GET /api/io`.
-9. **Node.js 22** or later is required; `maxHttpBufferSize` defaults to 100 KB.
+### 1. Read permission decides delivery
 
-| Plugin Version | Strapi Version | Node.js | Status   |
-| -------------- | -------------- | ------- | -------- |
-| **v6.x**       | v5.13+         | 22-24   | Current  |
-| v5.x           | v5.x           | 18-22   | Previous |
-| v2.x           | v4.x           | 14-20   | Legacy   |
+Roles and API tokens receive events for content types they may `find` or
+`findOne`. Create or update permissions alone no longer deliver anything.
 
----
+**Do:** in _Settings > Users & Permissions > Roles_ (and for custom API
+tokens), grant `find` on every content type a client should receive.
 
-## v2 (Strapi v4) to v5 (Strapi v5)
+### 2. Publish has its own events
 
-Complete guide for migrating from `@strapi-community/plugin-io` v2.x (Strapi v4) to v5.x (Strapi v5).
+Publishing used to emit `:delete` followed by `:create`. It now emits
+`:publish`. Unpublish and discard draft emit `:unpublish` and `:discardDraft`.
 
----
+```js
+// before
+socket.on('article:create', add);
+socket.on('article:delete', remove);
 
-## Overview
-
-The Socket.IO plugin has been updated for Strapi v5 with minimal breaking changes. Most of your existing code will continue to work with minor adjustments.
-
-**Good News:** ✅ The core API remains the same!
-
----
-
-## Version Compatibility
-
-| Plugin Version | Strapi Version | Node.js | Status     |
-| -------------- | -------------- | ------- | ---------- |
-| **v5.x**       | v5.x           | 18-22   | ✅ Current |
-| v2.x           | v4.x           | 14-20   | 🔒 Legacy  |
-
----
-
-## Before You Start
-
-### 1. Backup Your Project
-
-```bash
-# Create a backup of your entire project
-cp -r my-strapi-project my-strapi-project-backup
-
-# Or use git
-git commit -am "Backup before Strapi v5 migration"
-git tag v4-backup
+// after
+socket.on('article:publish', add);
+socket.on('article:unpublish', ({ data }) => remove(data.documentId));
+socket.on('article:delete', ({ data }) => remove(data.documentId));
 ```
 
-### 2. Review Strapi v5 Changes
+If `config.contentTypes[].actions` lists actions, add the new ones you need.
 
-Read the official Strapi v5 migration guide:
+### 3. Drafts are not sent by default
 
-- [Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
-- [Breaking Changes Overview](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
+With Draft & Publish, only published versions are sent. Turn off
+_Only published content_ in the settings to also send drafts to the roles
+that may read them.
 
-### 3. Test Environment
+### 4. Delete events go to readers only
 
-Migrate in a development environment first!
+`:delete` and `:unpublish` are sent only to roles and tokens that may read the
+content type, as `{ data: { documentId, locale? } }`, one event per locale.
 
----
+### 5. Room names
 
-## Step-by-Step Migration
+| Room                   | 5.x                                       | 6.0                   |
+| ---------------------- | ----------------------------------------- | --------------------- |
+| Public / Authenticated | `io-role-public`, `io-role-authenticated` | unchanged             |
+| Custom role            | `io-role-<role name in lower case>`       | `io-role-<role type>` |
+| API token              | `io-token-<token name in lower case>`     | `io-token-<token id>` |
 
-### Step 1: Update Strapi to v5
+Names are now stable when a role or token is renamed, and two tokens with the
+same name no longer share a room.
 
-```bash
-# Update Strapi core to v5
-npm install @strapi/strapi@5 @strapi/plugin-users-permissions@5
+### 6. `socket.data` for your handlers
 
-# Update all Strapi dependencies
-npm install @strapi/plugin-i18n@5 @strapi/plugin-graphql@5
-```
+The handshake fills `socket.data`. Check `socket.data.kind` before you use an id:
 
-### Step 2: Update Socket.IO Plugin
+| `kind`   | Keys                                            |
+| -------- | ----------------------------------------------- |
+| `user`   | `user.id`, `user.role`, `role`, `expiresAt`     |
+| `token`  | `token.id`, `token.type`, `expiresAt`           |
+| `public` | `role`                                          |
+| `admin`  | `admin.id`, `admin.firstname`, `admin.lastname` |
 
-```bash
-# Remove old version
-npm uninstall strapi-plugin-io
+Admin presence sockets (from the Content Manager) keep their identity under
+`socket.data.admin`, never under `socket.data.user`, and your `config.events`
+handlers do not run on them unless the event sets `admin: true`. Keys that
+older docs mentioned, such as `socket.data.userId` or
+`socket.data.user.username`, were never set by the plugin.
 
-# Install new version
-npm install @strapi-community/plugin-io@latest
-```
+### 7. `hooks.init`
 
-### Step 3: Update Configuration
+- The context is `{ strapi, $io, io }`; `$io` and `io` are the same object, so both old and new examples work.
+- `init` runs **before** the plugin handshake is added, as in 5.x. Middleware from `$io.server.use()` therefore runs before authentication, and `socket.data.kind` is not set yet inside it. Use a `connection` handler in `config.events` for logic that needs the authenticated client.
+- Do not overwrite `socket.data.user` or `socket.data.kind` in middleware; the handshake sets them afterwards.
 
-**No changes needed!** Your `config/plugins.js` works as-is:
+### 8. Allowed origins are enforced for WebSocket too
 
-```javascript
-// config/plugins.js - Works in both v2 and v5! ✅
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: ['api::article.article'],
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: process.env.CLIENT_URL || 'http://localhost:3000',
-            methods: ['GET', 'POST'],
-          },
-        },
-      },
-    },
-  },
-};
-```
+With an empty _Allowed origins_ list, browsers may only connect from the
+Strapi host itself or from the origins of `server.url` / `admin.url`. 5.x
+accepted WebSocket connections from any origin. Clients without an `Origin`
+header (Node, mobile apps) are not affected.
 
-### Step 4: Update Entity Service Calls (If Any)
+**Do:** add every frontend origin, for example `https://app.example.com`,
+under _Settings > Socket.IO > Allowed origins_.
 
-**Strapi v5 Change:** Entity Service API has minor updates.
+### 9. Sockets end with their session
 
-**Old (v4):**
+- User sockets are disconnected when the JWT expires, the user is blocked or changes role, and (refresh mode) when the Strapi session behind the access token is revoked or the user logs out.
+- API-token sockets end when the token is deleted or expires.
+- Admin presence sockets end when the admin logs out, the admin session expires, the account is deactivated, or the admin loses read access to an entry the panel has open.
 
-```javascript
-// In custom event handlers
-await strapi.entityService.create('api::article.article', {
-  data: { title: 'Test' },
-});
-```
+### 10. Settings and permissions
 
-**New (v5):**
+- Stored 5.x settings are migrated on the first start and are now enforced. Keys that were never implemented (Redis, namespaces, entity subscriptions, live preview, field-level changes) are dropped. The old default origin `http://localhost:3000` and the old default limit of 1000 connections are reset.
+- Only Super Admins see the plugin pages until you grant `Read settings`, `Update settings`, `Read monitoring` and `Reset statistics and send test events` under _Settings > Administration panel > Roles > Plugins > IO_.
 
-```javascript
-// Same syntax! No changes needed ✅
-await strapi.entityService.create('api::article.article', {
-  data: { title: 'Test' },
-});
-```
+### 11. Removed
 
-### Step 5: Update Database Queries (If Any)
+| Removed                         | Replacement                                                                      |
+| ------------------------------- | -------------------------------------------------------------------------------- |
+| `security` service              | The settings _Allowed/blocked IPs_, _Limit client events_, _Maximum connections_ |
+| Settings export and import      | Copy the settings by hand or with Strapi's data transfer                         |
+| Redis toggle in the settings    | Attach `@socket.io/redis-adapter` in `hooks.init`                                |
+| Entity subscription helpers     | Content events by role or token, or your own rooms                               |
+| Live preview, field-level diffs | None                                                                             |
+| `GET /api/io`                   | None (it answered 500)                                                           |
 
-**Strapi v5 Change:** Query Engine updates.
+### 12. Smaller changes
 
-**Old (v4):**
+- `maxHttpBufferSize` defaults to 100 KB. Raise it in `socket.serverOptions` if clients send larger messages.
+- The `POST /io/presence/session` admin route keeps at most five unused tokens per admin and answers `429` when 10,000 are pending server-wide.
+- _Monitoring > Admins online_ and the _Admins online_ widget list only entries in content types the viewer may read; the rest are counted as "entries you cannot view".
 
-```javascript
-await strapi.db.query('api::article.article').findMany({
-  where: { publishedAt: { $notNull: true } },
-});
-```
+## v2 (Strapi 4) to v5 (Strapi 5)
 
-**New (v5):**
+1. Upgrade Strapi itself first with the [official upgrade tool](https://docs.strapi.io/cms/upgrade-tool):
+   `npx @strapi/upgrade major`.
+2. Install the plugin version for Strapi 5: `npm install @strapi-community/plugin-io@latest`.
+3. Keep `config/plugins.js`; the `contentTypes`, `events`, `hooks` and `socket` keys have the same shape.
+4. Replace `strapi.entityService` calls in your event handlers with the [Document Service](https://docs.strapi.io/cms/api/document-service) (`strapi.documents(uid)`), which identifies entries by `documentId`.
+5. Then follow the 5.x to 6.0 steps above.
 
-```javascript
-// Same syntax! ✅
-await strapi.db.query('api::article.article').findMany({
-  where: { publishedAt: { $notNull: true } },
-});
-```
+## Getting help
 
-### Step 6: Test Your Application
-
-```bash
-# Start development server
-npm run develop
-
-# Check console for errors
-# Test Socket.IO connections
-# Verify all features work
-```
-
----
-
-## Breaking Changes
-
-### ✅ No Breaking Changes in Plugin API
-
-Good news! The plugin API is 100% compatible:
-
-- ✅ `strapi.$io.emit()` - Works the same
-- ✅ `strapi.$io.raw()` - Works the same
-- ✅ Helper functions - All work the same
-- ✅ Configuration - No changes needed
-- ✅ Events - Same format
-- ✅ Hooks - Same structure
-
-### ⚠️ Strapi v5 Breaking Changes (Core)
-
-These are Strapi core changes, not plugin-specific:
-
-#### 1. Plugin Structure
-
-**Change:** Strapi v5 uses new plugin SDK
-
-**Impact:** None for users, only for plugin development
-
-**Action Required:** None ✅
-
-#### 2. TypeScript
-
-**Change:** Strapi v5 is TypeScript-first
-
-**Impact:** Better type support available
-
-**Action Required:** Optional - add types if desired
-
-```typescript
-// types/strapi.d.ts
-import type { SocketIO } from '@strapi-community/plugin-io/types';
-
-declare module '@strapi/strapi' {
-  export interface Strapi {
-    $io: SocketIO;
-  }
-}
-```
-
-#### 3. Dependencies
-
-**Change:** Updated peer dependencies
-
-**Impact:** Must use Strapi v5 packages
-
-**Action Required:** Update all @strapi/* packages
-
-```bash
-npm install @strapi/strapi@5 @strapi/plugin-users-permissions@5
-```
-
----
-
-## Configuration Migration
-
-### Content Types
-
-**✅ No changes needed**
-
-```javascript
-// Works in both v2 and v5
-contentTypes: [
-  'api::article.article',
-  {
-    uid: 'api::product.product',
-    actions: ['create', 'update'],
-  },
-];
-```
-
-### Events
-
-**✅ No changes needed**
-
-```javascript
-// Works in both v2 and v5
-events: [
-  {
-    name: 'connection',
-    handler({ strapi, io }, socket) {
-      console.log('Connected:', socket.id);
-    },
-  },
-];
-```
-
-### Hooks
-
-**✅ No changes needed**
-
-```javascript
-// Works in both v2 and v5
-hooks: {
-  async init({ strapi, io }) {
-    // Redis adapter setup
-  }
-}
-```
-
----
-
-## Code Migration Examples
-
-### Example 1: Custom Event Handler
-
-**Before (v2):**
-
-```javascript
-events: [
-  {
-    name: 'chat:send',
-    async handler({ strapi, io }, socket, message) {
-      await strapi.entityService.create('api::message.message', {
-        data: { text: message, author: socket.data.user.id },
-      });
-
-      io.server.to('chat-room').emit('chat:message', message);
-    },
-  },
-];
-```
-
-**After (v3):**
-
-```javascript
-// Exactly the same! ✅
-events: [
-  {
-    name: 'chat:send',
-    async handler({ strapi, io }, socket, message) {
-      await strapi.entityService.create('api::message.message', {
-        data: { text: message, author: socket.data.user.id },
-      });
-
-      io.server.to('chat-room').emit('chat:message', message);
-    },
-  },
-];
-```
-
-### Example 2: Helper Functions
-
-**Before (v2):**
-
-```javascript
-strapi.$io.joinRoom(socketId, 'premium-users');
-strapi.$io.sendPrivateMessage(socketId, 'notification', data);
-```
-
-**After (v3):**
-
-```javascript
-// Exactly the same! ✅
-strapi.$io.joinRoom(socketId, 'premium-users');
-strapi.$io.sendPrivateMessage(socketId, 'notification', data);
-```
-
-### Example 3: Client Connection
-
-**Before (v2):**
-
-```javascript
-import { io } from 'socket.io-client';
-
-const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken },
-});
-
-socket.on('article:create', (data) => {
-  console.log('New article:', data);
-});
-```
-
-**After (v3):**
-
-```javascript
-// Exactly the same! ✅
-import { io } from 'socket.io-client';
-
-const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken },
-});
-
-socket.on('article:create', (data) => {
-  console.log('New article:', data);
-});
-```
-
----
-
-## Admin Panel Migration
-
-### Settings Access
-
-**✅ No changes needed**
-
-Navigate to: **Settings → Socket.IO**
-
-All settings work the same:
-
-- CORS configuration
-- Role permissions
-- Content type management
-- Monitoring dashboard
-
----
-
-## Common Issues & Solutions
-
-### Issue 1: Plugin Not Loading
-
-**Symptoms:**
-
-```
-Error: Cannot find module '@strapi-community/plugin-io'
-```
-
-**Solution:**
-
-```bash
-# Clear node_modules and reinstall
-rm -rf node_modules package-lock.json
-npm install
-npm install strapi-plugin-io@latest
-```
-
-### Issue 2: TypeScript Errors
-
-**Symptoms:**
-
-```
-Property '$io' does not exist on type 'Strapi'
-```
-
-**Solution:**
-
-```typescript
-// Create types/strapi.d.ts
-import type { SocketIO } from '@strapi-community/plugin-io/types';
-
-declare module '@strapi/strapi' {
-  export interface Strapi {
-    $io: SocketIO;
-    $ioSettings: any;
-  }
-}
-```
-
-### Issue 3: Events Not Firing
-
-**Symptoms:** Socket.IO events don't fire after migration
-
-**Solution:**
-
-```bash
-# Rebuild the plugin
-npm run build
-
-# Clear Strapi cache
-rm -rf .cache build
-
-# Restart Strapi
-npm run develop
-```
-
-### Issue 4: CORS Errors
-
-**Symptoms:** Connection blocked by CORS after migration
-
-**Solution:**
-
-```javascript
-// Update CORS settings for Strapi v5
-// config/plugins.js
-io: {
-  enabled: true,
-  config: {
-    socket: {
-      serverOptions: {
-        cors: {
-          origin: process.env.CLIENT_URL || '*',
-          methods: ['GET', 'POST'],
-          credentials: true
-        }
-      }
-    }
-  }
-}
-```
-
----
-
-## Testing After Migration
-
-### Checklist
-
-- [ ] Plugin loads without errors
-- [ ] Socket.IO connections work
-- [ ] Authentication works (JWT/API Token)
-- [ ] Content type events fire
-- [ ] Custom events work
-- [ ] Room management works
-- [ ] Admin panel accessible
-- [ ] Monitoring dashboard shows data
-- [ ] Client connections successful
-- [ ] No console errors
-
-### Test Script
-
-```javascript
-// test-socket-io.js
-const { io } = require('socket.io-client');
-
-const socket = io('http://localhost:1337');
-
-socket.on('connect', () => {
-  console.log('✅ Connected:', socket.id);
-});
-
-socket.on('article:create', (data) => {
-  console.log('✅ Event received:', data);
-});
-
-socket.on('connect_error', (error) => {
-  console.error('❌ Connection failed:', error.message);
-});
-
-// Keep script running
-setTimeout(() => {
-  console.log('Test complete');
-  process.exit(0);
-}, 5000);
-```
-
-Run it:
-
-```bash
-node test-socket-io.js
-```
-
----
-
-## Performance Improvements in v3
-
-### New in v3.0
-
-- ✅ **Better Caching**: 90% reduction in DB queries
-- ✅ **Parallel Processing**: Faster event emissions
-- ✅ **Optimized Bundle**: Smaller package size
-- ✅ **Updated Dependencies**: Latest Socket.IO 4.8.1
-- ✅ **TypeScript Support**: Full type definitions
-
----
-
-## Rollback Plan
-
-If migration fails, here's how to rollback:
-
-### Option 1: Restore from Backup
-
-```bash
-# Remove new version
-rm -rf my-strapi-project
-
-# Restore backup
-cp -r my-strapi-project-backup my-strapi-project
-cd my-strapi-project
-npm install
-```
-
-### Option 2: Git Revert
-
-```bash
-# Revert to v4-backup tag
-git reset --hard v4-backup
-
-# Reinstall dependencies
-npm install
-```
-
-### Option 3: Downgrade
-
-```bash
-# Downgrade Strapi
-npm install @strapi/strapi@4
-
-# Downgrade plugin
-npm install @strapi-community/plugin-io@2
-```
-
----
-
-## Migration Timeline
-
-**Recommended approach:**
-
-### Week 1: Preparation
-
-- Read [Strapi v5 migration guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
-- Read this guide
-- Backup project
-- Set up test environment
-
-### Week 2: Development Migration
-
-- Migrate development environment
-- Test all features
-- Fix any issues
-- Update tests
-
-### Week 3: Staging Migration
-
-- Migrate staging environment
-- Run full test suite
-- Performance testing
-- User acceptance testing
-
-### Week 4: Production Migration
-
-- Migrate production
-- Monitor closely
-- Be ready to rollback
-- Document any issues
-
----
-
-## Getting Help
-
-### Resources
-
-- 📖 [Official Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
-- 📖 [Strapi v5 Breaking Changes](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
-- 🔗 [Plugin GitHub Repository](https://github.com/strapi-community/plugin-io)
-- 💬 [GitHub Discussions](https://github.com/strapi-community/plugin-io/discussions)
-- 🐛 [Report Issues](https://github.com/strapi-community/plugin-io/issues)
-
-### Support
-
-If you encounter issues during migration:
-
-1. Check this guide
-2. Search existing GitHub issues
-3. Ask in GitHub Discussions
-4. Create a new issue with:
-   - Strapi version
-   - Plugin version
-   - Error messages
-   - Steps to reproduce
-
----
-
-## Success Stories
-
-> "Migrated in 30 minutes, zero breaking changes!" - [@user1]
-
-> "Plugin works exactly the same in v5. Easy migration!" - [@user2]
-
-> "Best migration experience. No issues at all." - [@user3]
-
----
-
-## Summary
-
-### ✅ What Works Without Changes
-
-- All API methods (`emit()`, `raw()`, helpers)
-- Configuration file
-- Event handlers
-- Hooks
-- Client connections
-- Admin panel
-- Authentication
-
-### ⚠️ What to Update
-
-- Strapi core to v5
-- All @strapi/* packages
-- Plugin to v5.x
-- Dependencies (npm install)
-
-### 🎯 Migration Difficulty
-
-**Easy** - Most projects migrate in under 1 hour!
-
----
-
-**Migration Guide Version**: 1.0  
-**Last Updated**: November 2025  
-**Plugin Version**: v4 → v5 (current: 5.8.2)  
-**Maintained by**: [@Schero94](https://github.com/Schero94)
+Search or open an issue on [GitHub](https://github.com/strapi-community/plugin-io/issues).
+Include your Strapi version, plugin version, Node.js version and the
+smallest config that reproduces the problem.

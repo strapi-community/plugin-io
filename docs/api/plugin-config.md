@@ -1,676 +1,189 @@
-# Plugin Configuration
-
-Complete reference for all Socket.IO plugin configuration options in `config/plugins.js`.
-
+---
+description: Every option of the Strapi Socket.IO plugin - contentTypes, events, hooks, socket.serverOptions, sensitiveFields - plus the admin settings and their defaults.
 ---
 
-## Configuration Structure
+# Plugin configuration
 
-```javascript
+The plugin reads `config/plugins.js` (or `.ts`) once at startup. Everything an
+editor may change at runtime lives in the admin settings instead, see
+[Admin settings](#admin-settings).
+
+```js
+// config/plugins.js
 module.exports = ({ env }) => ({
   io: {
     enabled: true,
     config: {
-      // Content type monitoring
-      contentTypes: [],
-
-      // Server socket options
-      socket: {},
-
-      // Custom server events
+      contentTypes: ['api::article.article'],
+      sensitiveFields: [],
       events: [],
-
-      // Lifecycle hooks
       hooks: {},
-
-      // Admin settings (configured via admin panel)
-      // cors, security, monitoring, etc.
+      socket: { serverOptions: {} },
     },
   },
 });
 ```
 
----
+The config is validated at startup. An unknown shape (for example a handler
+that is not a function) stops Strapi with a validation error.
+
+## Options
+
+| Option                 | Type                                       | Default | Description                                                                                    |
+| ---------------------- | ------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
+| `contentTypes`         | `Array<string \| ContentTypeConfig>`       | `[]`    | Content types whose changes are sent. More can be added in the admin settings.                 |
+| `sensitiveFields`      | `string[]`                                 | `[]`    | Extra field names that are never sent, on top of the built-in list.                            |
+| `events`               | `Array<{ name, handler, admin? }>`         | `[]`    | Handlers for events your clients send. See [Custom events](/examples/events).                  |
+| `hooks.init`           | `({ strapi, $io, io }) => void \| Promise` | none    | Runs once during bootstrap, before the handshake. See [Hooks](/examples/hooks).                |
+| `socket.serverOptions` | Socket.IO `ServerOptions`                  | `{}`    | Passed to `new Server()`. Values set here win over the plugin defaults and the admin settings. |
 
 ## `contentTypes`
 
-**Type:** `Array<string | ContentTypeConfig>`  
-**Default:** `[]`
+A string watches every action. An object narrows the actions or adds
+relations.
 
-Defines which content types should automatically emit real-time events on CRUD operations.
-
-### Simple Format
-
-```javascript
-contentTypes: ['api::article.article', 'api::comment.comment', 'api::product.product'];
-```
-
-All CRUD events (`create`, `update`, `delete`) are emitted for these content types.
-
-### Advanced Format
-
-Control which specific actions trigger events:
-
-```javascript
+```js
 contentTypes: [
-  // All actions
   'api::article.article',
-
-  // Specific actions only
-  {
-    uid: 'api::product.product',
-    actions: ['create', 'update'], // No delete events
-  },
-
-  // Custom event names
-  {
-    uid: 'api::comment.comment',
-    actions: ['create'],
-    eventPrefix: 'new-comment', // Emits as 'new-comment:create'
-  },
-
-  // Include relations
-  {
-    uid: 'api::article.article',
-    actions: ['create', 'update'],
-    populate: ['author', 'category', 'tags'],
-  },
-];
+  { uid: 'api::page.page', actions: ['publish', 'unpublish', 'delete'] },
+  { uid: 'api::product.product', populate: ['category', 'images'] },
+],
 ```
 
-### Options
+| Key        | Type                                                                                    | Default  | Description                                                                                                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uid`      | `string`                                                                                | required | Content type uid, e.g. `api::article.article`.                                                                                                                                  |
+| `actions`  | `Array<'create' \| 'update' \| 'delete' \| 'publish' \| 'unpublish' \| 'discardDraft'>` | all six  | Actions that send an event.                                                                                                                                                     |
+| `populate` | `'*' \| true \| string[] \| object`                                                     | none     | Relations to load before `create`, `update`, `publish` and `discardDraft` are sent. `'*'` and `true` load one level of every relation. An object uses Strapi's populate syntax. |
 
-| Option        | Type       | Description                                           |
-| ------------- | ---------- | ----------------------------------------------------- |
-| `uid`         | `string`   | Content type UID (e.g., `'api::article.article'`)     |
-| `actions`     | `string[]` | Actions to monitor: `['create', 'update', 'delete']`  |
-| `eventPrefix` | `string`   | Custom event name prefix (default: content type name) |
-| `populate`    | `string[]` | Relations to populate in emitted data                 |
+Events are named `<singularName>:<action>`, for example `article:publish`.
+Content types set here appear as read-only rows in the admin settings.
 
-### Event Format
+### Payloads
 
-Events are emitted as: `{contentType}:{action}`
+| Action                                        | Payload                                  |
+| --------------------------------------------- | ---------------------------------------- |
+| `create`, `update`, `publish`, `discardDraft` | `{ data: { id, attributes }, meta: {} }` |
+| `unpublish`, `delete`                         | `{ data: { documentId, locale? } }`      |
 
-```javascript
-// With contentTypes: ['api::article.article']
-socket.on('article:create', (data) => {
-  /* ... */
-});
-socket.on('article:update', (data) => {
-  /* ... */
-});
-socket.on('article:delete', (data) => {
-  /* ... */
-});
+Each role and API token receives the entry sanitized with its own Content API
+permissions. Populated relations it cannot read are removed. Keep `populate`
+small: every relation is loaded once per event and sanitized once per
+listening role or token.
+
+## `sensitiveFields`
+
+Field names removed from every content event and from `strapi.$io.raw()`
+payloads, at any depth. The built-in list already covers `password`,
+`resetPasswordToken`, `confirmationToken`, `apiKey`, `secret` and similar keys,
+as well as fields marked `private` in the schema.
+
+```js
+sensitiveFields: ['internalNotes', 'costPrice'],
 ```
 
----
-
-## `socket`
-
-**Type:** `object`  
-**Default:**
-
-```javascript
-{
-  serverOptions: {
-    cors: {
-      origin: 'http://localhost:1337',
-      methods: ['GET']
-		}
-	}
-}
-```
-
-### Properties
-
-#### `serverOptions`
-
-Direct pass-through to [Socket.IO Server Options](https://socket.io/docs/v4/server-options/).
-
-```javascript
-socket: {
-  serverOptions: {
-    // Keep Strapi transfer / other WS upgrades alive (default since 5.8.3, issue #112)
-    destroyUpgrade: false,
-
-    // CORS configuration
-    cors: {
-      origin: env('CLIENT_URL', 'http://localhost:3000'),
-      methods: ['GET', 'POST'],
-      credentials: true
-    },
-
-    // Connection settings
-    pingTimeout: 60000,
-    pingInterval: 25000,
-    upgradeTimeout: 10000,
-    maxHttpBufferSize: 1e6,
-
-    // Transports
-    transports: ['websocket', 'polling'],
-
-    // Path (default: /socket.io)
-    path: '/socket.io'
-  }
-}
-```
-
-::: tip Strapi Transfer
-Engine.IO's default `destroyUpgrade: true` ends non-`/socket.io` upgrades after ~1s. That breaks `strapi transfer` behind reverse proxies (HTTP 504). This plugin forces `destroyUpgrade: false` unless you override it explicitly.
-:::
-
-### Common Configurations
-
-::: code-group
-
-```javascript [Development]
-socket: {
-  serverOptions: {
-    cors: {
-      origin: '*',  // Allow all origins
-      methods: ['GET', 'POST']
-    }
-  }
-}
-```
-
-```javascript [Production]
-			socket: {
-				serverOptions: {
-    cors: {
-      origin: [
-        'https://example.com',
-        'https://www.example.com',
-        'https://app.example.com'
-      ],
-      methods: ['GET', 'POST'],
-      credentials: true
-    },
-    transports: ['websocket']  // Faster, disable polling
-  }
-}
-```
-
-```javascript [Custom Path]
-socket: {
-  serverOptions: {
-    path: '/api/realtime',  // Access at /api/realtime instead of /socket.io
-    cors: {
-      origin: env('CLIENT_URL')
-    }
-  }
-}
-```
-
-:::
-
----
+Editors can add more under _Settings > Socket.IO > Content events > Excluded fields_.
 
 ## `events`
 
-**Type:** `Array<EventConfig>`  
-**Default:** `[]`
-
-Define custom server-side Socket.IO event handlers.
-
-### Event Structure
-
-```javascript
+```js
 events: [
-  {
-    name: 'event-name',
-    handler: ({ strapi, io }, socket, ...args) => {
-      // Handle event
-    },
-  },
-];
+  { name: 'connection', handler: ({ strapi }, socket) => strapi.log.debug(`[io] ${socket.id} connected`) },
+  { name: 'ping', handler: (_ctx, socket, ...args) => args.at(-1)?.('pong') },
+],
 ```
 
-### Handler Signature
+| Key       | Type                                           | Description                                               |
+| --------- | ---------------------------------------------- | --------------------------------------------------------- |
+| `name`    | `string`                                       | Client event name. `connection` runs once per new socket. |
+| `handler` | `({ strapi, io }, socket, ...args) => unknown` | `io` is `strapi.$io`. Errors are caught and logged.       |
+| `admin`   | `boolean`                                      | Also run on admin presence sockets. Default `false`.      |
 
-```typescript
-handler(
-  context: {
-    strapi: Strapi;  // Global Strapi instance
-    io: SocketIO;    // Socket.IO plugin instance
+Check `socket.data.kind` (`public`, `user`, `token` or `admin`) before you use
+an id. Full guide: [Custom events](/examples/events).
+
+## `hooks.init`
+
+```js
+hooks: {
+  async init({ strapi, $io }) {
+    $io.server.use((socket, next) => next());
   },
-  socket: Socket,    // Client socket that emitted event
-  ...args: any[]     // Arguments sent with the event
-): void | Promise<void>
+},
 ```
 
-### Examples
+- Awaited during bootstrap. The HTTP server is not listening yet.
+- Middleware added with `$io.server.use()` runs before the plugin handshake.
+- `$io` and `io` are the same object (`io` is kept for configs written for older versions).
+- An error is logged as `[io] hooks.init failed` and Strapi keeps starting.
 
-::: code-group
+Full guide with the Redis adapter: [Hooks](/examples/hooks).
 
-```javascript [Connection Event]
-events: [
-  {
-    name: 'connection',
-    handler({ strapi, io }, socket) {
-      strapi.log.info(`[io] Socket connected: ${socket.id}`);
+## `socket.serverOptions`
 
-      // Send welcome message
-      socket.emit('welcome', {
-        message: 'Connected to Strapi!',
-        timestamp: Date.now(),
-      });
-    },
+Passed to Socket.IO's [`new Server(httpServer, options)`](https://socket.io/docs/v4/server-options/).
+The plugin sets these defaults; anything you set wins.
+
+| Option                                          | Plugin default          | Why                                                                                                     |
+| ----------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `destroyUpgrade`                                | `false`                 | Other WebSocket upgrades on Strapi's server (Data Transfer) are left to Strapi instead of being closed. |
+| `maxHttpBufferSize`                             | `1e5` (100 KB)          | Caps the size of a client message. Socket.IO's own default is 1 MB.                                     |
+| `cors`                                          | from _Allowed origins_  | CORS headers for listed origins only.                                                                   |
+| `allowRequest`                                  | from _Allowed origins_  | Refuses polling and WebSocket requests from browser origins that are not allowed.                       |
+| `pingInterval`, `pingTimeout`, `connectTimeout` | from the admin settings | Applied to new connections without a restart.                                                           |
+
+Setting `cors` or `allowRequest` yourself turns off the admin setting
+_Allowed origins_ for that option.
+
+```js
+socket: {
+  serverOptions: {
+    path: '/realtime', // clients then connect with io(url, { path: '/realtime' })
+    maxHttpBufferSize: 1e6,
   },
-];
+},
 ```
 
-```javascript [Disconnect Event]
-events: [
-  {
-    name: 'disconnect',
-    handler({ strapi }, socket, reason) {
-      strapi.log.info(`[io] Socket ${socket.id} disconnected: ${reason}`);
+## Admin settings
 
-      // Clean up user session
-      // Update last seen, etc.
-    },
-  },
-];
-```
+_Settings > Socket.IO > Settings_. Changes apply to new connections without a
+restart. Stored in Strapi's plugin store and validated with a strict schema.
 
-```javascript [Custom Event]
-events: [
-  {
-    name: 'chat:message',
-    handler({ strapi, io }, socket, message) {
-      // Validate message
-      if (!message.text || message.text.length > 500) {
-        socket.emit('error', { message: 'Invalid message' });
-        return;
-      }
+| Setting                      | Default              | Description                                                                                                                                                                                                               |
+| ---------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Allowed origins              | none                 | Browser origins that may connect. With an empty list only the Strapi host itself and the origins of `server.url` / `admin.url` are allowed. Clients without an `Origin` header (servers, mobile apps) are always allowed. |
+| Maximum connections          | `0` (no limit)       | Refuses new connections above this number.                                                                                                                                                                                |
+| Ping interval / timeout      | `25000` / `20000` ms | Socket.IO heartbeat.                                                                                                                                                                                                      |
+| Connection timeout           | `45000` ms           | Time a client has to finish the handshake.                                                                                                                                                                                |
+| Require authentication       | off                  | Refuse clients without a JWT or API token.                                                                                                                                                                                |
+| Limit client events          | off, `10`/s          | Per-client event limit.                                                                                                                                                                                                   |
+| Allowed / blocked IPs        | none                 | IPv4/IPv6 addresses and CIDR blocks. The client IP follows Strapi's `server.proxy` settings.                                                                                                                              |
+| Only published content       | on                   | Do not send draft versions.                                                                                                                                                                                               |
+| Excluded fields              | none                 | Field names never sent.                                                                                                                                                                                                   |
+| Content types and actions    | none                 | Watch more API content types without a deploy.                                                                                                                                                                            |
+| Roles: allow connection      | all allowed          | Refuse sockets of a Users & Permissions role. What a role receives follows its permissions.                                                                                                                               |
+| Show who is editing / typing | on / on              | Live presence in the Content Manager.                                                                                                                                                                                     |
+| Log connections              | off                  | Info log line per connect and disconnect (no IPs or tokens).                                                                                                                                                              |
+| Event log, size              | off, `100`           | In-memory list of recent events for _Monitoring_.                                                                                                                                                                         |
 
-      // Broadcast to room
-      io.server.to(message.room).emit('chat:message', {
-        id: socket.id,
-        text: message.text,
-        timestamp: Date.now(),
-      });
-    },
-  },
-];
-```
+## Environment variables
 
-```javascript [Typing Indicator]
-events: [
-  {
-    name: 'typing:start',
-    handler({ strapi, io }, socket, { roomId }) {
-      // Notify others in room
-      socket.to(roomId).emit('user:typing', {
-        userId: socket.data.userId,
-        roomId,
-      });
-    },
-  },
-  {
-    name: 'typing:stop',
-    handler({ strapi, io }, socket, { roomId }) {
-      socket.to(roomId).emit('user:stopped-typing', {
-        userId: socket.data.userId,
-        roomId,
-      });
-    },
-  },
-];
-```
+The plugin reads none itself. Use Strapi's `env()` helper in your config:
 
-```javascript [Room Management]
-events: [
-  {
-    name: 'room:join',
-    async handler({ strapi, io }, socket, { roomId }) {
-      // Check permission
-      const hasAccess = await strapi.plugin('io').service('permissions').canAccessRoom(socket.data.userId, roomId);
-
-      if (!hasAccess) {
-        socket.emit('error', { message: 'Access denied' });
-        return;
-      }
-
-      // Join room
-      socket.join(roomId);
-
-      // Notify others
-      socket.to(roomId).emit('user:joined', {
-        userId: socket.data.userId,
-        roomId,
-      });
-
-      // Send room history
-      const history = await fetchRoomHistory(roomId);
-      socket.emit('room:history', history);
-    },
-  },
-];
-```
-
-:::
-
-### Built-in Events
-
-These events are automatically handled by Socket.IO:
-
-- `connection` - New socket connected
-- `disconnect` - Socket disconnected
-- `error` - Error occurred
-- `connect_error` - Connection error
-
----
-
-## `hooks`
-
-**Type:** `object`  
-**Default:** `{}`
-
-Lifecycle hooks called at specific points in the plugin lifecycle.
-
-### `init`
-
-Called immediately after the Socket.IO server instance is created. Perfect for adding adapters or middleware.
-
-**Signature:**
-
-```typescript
-init(context: {
-  strapi: Strapi;
-  io: SocketIO;
-}): void | Promise<void>
-```
-
-### Examples
-
-::: code-group
-
-```javascript [Redis Adapter]
-const { createClient } = require('redis');
-const { createAdapter } = require('@socket.io/redis-adapter');
-
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      hooks: {
-        async init({ strapi, io }) {
-          // Setup Redis adapter for scaling
-          const pubClient = createClient({
-            url: process.env.REDIS_URL,
-          });
-
-          const subClient = pubClient.duplicate();
-
-          await Promise.all([pubClient.connect(), subClient.connect()]);
-
-          io.server.adapter(createAdapter(pubClient, subClient));
-
-          strapi.log.info('[io] Redis adapter initialized');
-        },
-      },
-    },
-  },
-};
-```
-
-```javascript [MongoDB Adapter]
-const { MongoClient } = require('mongodb');
-const { createAdapter } = require('@socket.io/mongo-adapter');
-
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      hooks: {
-        async init({ strapi, io }) {
-          const mongoClient = new MongoClient(process.env.MONGO_URL);
-          await mongoClient.connect();
-
-          const mongoCollection = mongoClient.db('mydb').collection('socket.io-adapter-events');
-
-          io.server.adapter(createAdapter(mongoCollection));
-
-          strapi.log.info('[io] MongoDB adapter initialized');
-        },
-      },
-    },
-  },
-};
-```
-
-```javascript [Custom Middleware]
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      hooks: {
-        init({ strapi, io }) {
-          // Add custom middleware
-          io.server.use((socket, next) => {
-            // Log all connections
-            strapi.log.info(`Connection attempt from ${socket.handshake.address}`);
-
-            // Add custom data
-            socket.data.connectedAt = Date.now();
-
-            next();
-          });
-
-          strapi.log.info('[io] Custom middleware registered');
-        },
-      },
-    },
-  },
-};
-```
-
-```javascript [Rate Limiting]
-const rateLimit = require('socket.io-rate-limit');
-
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      hooks: {
-        init({ strapi, io }) {
-          // Apply rate limiting
-          io.server.use(
-            rateLimit({
-              tokensPerInterval: 100,
-              interval: 60000, // 100 requests per minute
-              fireImmediately: true,
-            })
-          );
-
-          strapi.log.info('[io] Rate limiting enabled');
-        },
-      },
-    },
-  },
-};
-```
-
-:::
-
----
-
-## Complete Example
-
-Here's a comprehensive configuration example:
-
-```javascript
-const { createClient } = require('redis');
-const { createAdapter } = require('@socket.io/redis-adapter');
-
+```js
 module.exports = ({ env }) => ({
   io: {
-    enabled: true,
+    enabled: env.bool('IO_ENABLED', true),
     config: {
-      // Monitor content types
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment',
-        {
-          uid: 'api::product.product',
-          actions: ['create', 'update'],
-          populate: ['category', 'images'],
-        },
-      ],
-
-      // Socket.IO server options
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: env('CLIENT_URL', 'http://localhost:3000'),
-            methods: ['GET', 'POST'],
-            credentials: true,
-          },
-          transports: ['websocket', 'polling'],
-          pingTimeout: 60000,
-          pingInterval: 25000,
-        },
-      },
-
-      // Custom events
-      events: [
-        {
-          name: 'connection',
-          handler({ strapi }, socket) {
-            strapi.log.info(`[io] Connected: ${socket.id}`);
-            socket.emit('welcome', { serverTime: Date.now() });
-          },
-        },
-        {
-          name: 'disconnect',
-          handler({ strapi }, socket, reason) {
-            strapi.log.info(`[io] Disconnected: ${socket.id} (${reason})`);
-          },
-        },
-        {
-          name: 'chat:message',
-          async handler({ strapi, io }, socket, data) {
-            // Validate & save message
-            const message = await strapi.entityService.create('api::message.message', {
-              data: { text: data.text, user: socket.data.userId },
-            });
-
-            // Broadcast to room
-            io.server.to(data.room).emit('chat:message', message);
-          },
-        },
-      ],
-
-      // Lifecycle hooks
-      hooks: {
-        async init({ strapi, io }) {
-          // Setup Redis adapter for horizontal scaling
-          if (env('REDIS_URL')) {
-            const pubClient = createClient({ url: env('REDIS_URL') });
-            const subClient = pubClient.duplicate();
-
-            await Promise.all([pubClient.connect(), subClient.connect()]);
-
-            io.server.adapter(createAdapter(pubClient, subClient));
-            strapi.log.info('[io] Redis adapter initialized');
-          }
-
-          // Custom middleware
-          io.server.use((socket, next) => {
-            socket.data.connectedAt = Date.now();
-            next();
-          });
-        },
-      },
+      contentTypes: ['api::article.article'],
+      socket: { serverOptions: { path: env('IO_PATH', '/socket.io') } },
     },
   },
 });
 ```
 
----
+## See also
 
-## Environment Variables
-
-Recommended `.env` configuration:
-
-```bash
-# Client URL for CORS
-CLIENT_URL=http://localhost:3000
-
-# Production client URLs (comma-separated)
-CLIENT_URLS=https://example.com,https://www.example.com
-
-# Redis URL for adapter (optional)
-REDIS_URL=redis://localhost:6379
-
-# Socket.IO configuration
-SOCKET_IO_PATH=/socket.io
-SOCKET_IO_PING_TIMEOUT=60000
-SOCKET_IO_PING_INTERVAL=25000
-```
-
-Use in config:
-
-```javascript
-socket: {
-  serverOptions: {
-    cors: {
-      origin: env.array('CLIENT_URLS', ['http://localhost:3000'])
-    },
-    path: env('SOCKET_IO_PATH', '/socket.io'),
-    pingTimeout: env.int('SOCKET_IO_PING_TIMEOUT', 60000),
-    pingInterval: env.int('SOCKET_IO_PING_INTERVAL', 25000)
-  }
-}
-```
-
----
-
-## Admin Panel Settings
-
-Additional settings configured via the admin panel:
-
-**Settings → Socket.IO**
-
-![Admin Panel Settings](/settings.png)
-
-Configure visually:
-
-- **Security**
-  - Rate limiting
-  - IP whitelisting
-  - Authentication requirements
-
-- **Monitoring**
-  - Connection logs
-  - Event tracking
-  - Performance metrics
-
-![Monitoring Dashboard](/monitoringSettings.png)
-
-The monitoring dashboard provides:
-
-- Real-time connection list
-- Active user details
-- Event logs with timestamps
-- Performance statistics
-- Connection history
-
-- **Namespaces**
-  - Create isolated channels
-  - Separate admin/public connections
-
-- **Role Permissions**
-  - Control content type access per role
-  - Custom event permissions
-
----
-
-## See Also
-
-- **[IO Class API](/api/io-class)** - Available methods and properties
-- **[Examples](/examples/)** - Real-world configurations
-- **[Socket.IO Documentation](https://socket.io/docs/v4/)** - Official Socket.IO docs
+- [IO class](/api/io-class): `strapi.$io` methods
+- [Custom events](/examples/events) and [Hooks](/examples/hooks)
+- [Socket.IO server options](https://socket.io/docs/v4/server-options/)

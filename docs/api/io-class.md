@@ -1,560 +1,180 @@
-# IO Class API Reference
-
-The `$io` class is the main Socket.IO instance available globally on the Strapi object (`strapi.$io`).
-
-**Version:** 5.x for Strapi v5  
-**TypeScript:** Full type definitions included
-
+---
+description: Reference for strapi.$io in the Strapi Socket.IO plugin - emit, emitIdentifier, raw, room helpers, revalidateSockets, server and namespaces, with TypeScript types.
 ---
 
-## Quick Reference
+# IO class (`strapi.$io`)
 
-```typescript
-// Access the Socket.IO instance
-const io = strapi.$io;
+The plugin creates one `SocketIO` instance during bootstrap and exposes it as
+`strapi.$io`. Use it from services, controllers, lifecycles or cron jobs.
 
-// Core methods
-io.emit({ event, schema, data });
-io.raw({ event, rooms, data });
+## Quick reference
 
-// Room management
-io.joinRoom(socketId, roomName);
-io.leaveRoom(socketId, roomName);
-io.getSocketsInRoom(roomName);
+```js
+await strapi.$io.emit({ event, schema, data }); // content event, sanitized per audience
+await strapi.$io.emitIdentifier({ event, schema, data: { documentId, locale } });
+await strapi.$io.raw({ event, data, rooms }); // custom event, sensitive keys removed
 
-// Messaging
-io.sendPrivateMessage(socketId, event, data);
-io.broadcast(socketId, event, data);
-io.emitToNamespace(namespace, event, data);
+strapi.$io.joinRoom(socketId, room); // false for plugin rooms
+strapi.$io.leaveRoom(socketId, room);
+await strapi.$io.getSocketsInRoom(room); // socket ids
+strapi.$io.sendPrivateMessage(socketId, event, data);
+strapi.$io.broadcast(socketId, event, data); // everyone except socketId
+strapi.$io.emitToNamespace('chat', event, data);
+strapi.$io.disconnectSocket(socketId);
+await strapi.$io.revalidateSockets(kinds?, { ids? });
 
-// Connection management
-io.disconnectSocket(socketId);
-io.revalidateSockets(); // re-check JWTs, API tokens and admin accounts
-io.revalidateSockets(['token'], { ids: [tokenId] }); // only the sockets of these ids
-
-// Properties
-io.server; // Raw Socket.IO server
-io.namespaces; // All namespaces
+strapi.$io.server; // Socket.IO Server
+strapi.$io.namespaces; // { '': Namespace, chat: Namespace }
 ```
 
----
+## `emit()`
 
-## Core Properties
+Sends a content event to every role and API token that may read the content
+type (`find` or `findOne`). Each audience receives the entry sanitized with its
+own permissions. If sanitizing fails for an audience, that audience is skipped.
 
-### `strapi.$io.server`
-
-Direct access to the Socket.IO server instance.
-
-**Type:** `Server` from `socket.io`
-
-```javascript
-// Get all connected sockets
-const sockets = strapi.$io.server.sockets.sockets;
-console.log(`Connected clients: ${sockets.size}`);
-
-// Broadcast to everyone
-strapi.$io.server.emit('announcement', {
-  message: 'Server maintenance in 10 minutes',
-});
-
-// Access adapter and rooms
-const rooms = strapi.$io.server.sockets.adapter.rooms;
-console.log('Active rooms:', Array.from(rooms.keys()));
+```ts
+emit(options: { event: string; schema: string | { uid: string; singularName?: string }; data: object }): Promise<number>
 ```
 
-### `strapi.$io.namespaces`
+- The event name is `<singularName>:<event>`, for example `article:update`.
+- Returns the number of rooms that received the event. With the default in-memory adapter, rooms without sockets are skipped before sanitizing and not counted.
+- The payload is `{ data: { id, attributes }, meta: {} }`.
 
-All namespaces created on the server, keyed by name without the leading slash (`''` is the default namespace). Namespaces created with `strapi.$io.server.of('/name')` use the same handshake as the default namespace.
-
-**Type:** `Record<string, Namespace>`
-
-```javascript
-// Emit to specific namespace
-if (strapi.$io.namespaces.admin) {
-  strapi.$io.namespaces.admin.emit('dashboard:update', {
-    users: 1234,
-    activeNow: 56,
-  });
-}
-
-// List all namespaces
-Object.keys(strapi.$io.namespaces).forEach((ns) => {
-  console.log(`Namespace: ${ns}`);
-});
+```js
+const entry = await strapi.documents('api::article.article').findOne({ documentId, populate: ['author'] });
+await strapi.$io.emit({ event: 'update', schema: 'api::article.article', data: entry });
 ```
 
----
+The plugin calls `emit()` itself for watched content types, so you only need
+it for content you do not watch or events you build yourself.
 
-## Core Methods
+## `emitIdentifier()`
 
-### `emit()`
+Sends `{ data: { documentId, locale? } }` to the audiences that may read the
+type. The plugin uses it for `delete` and `unpublish`.
 
-Sends data to every role and API token that may **read** the content type (`find` or `findOne` permission). Each audience receives the entry sanitized with its own permissions; if sanitizing fails for an audience, that audience is skipped and nothing raw is sent.
-
-**Signature:**
-
-```typescript
-emit(options: EmitOptions): Promise<number> // number of rooms reached
-
-interface EmitOptions {
-  event: string;                        // 'create' | 'update' | 'publish' | 'discardDraft' | custom
-  schema: string | { uid: string };     // Content type uid or schema
-  data: any;                            // Entry from the Document Service
-}
-```
-
-**Built-in actions:** `create`, `update`, `delete`, `publish`, `unpublish`, `discardDraft` (or custom actions)
-
-**Event Format:** `{contentType}:{action}` (e.g., `article:create`)
-
-**Features:**
-
-- ✅ Automatic permission checking
-- ✅ Data sanitization per role
-- ✅ Relation population (if configured)
-- ✅ Transform output
-
-::: code-group
-
-```javascript [Built-in Action]
-// Emit article creation event
-strapi.$io.emit({
-  event: 'create',
+```js
+await strapi.$io.emitIdentifier({
+  event: 'delete',
   schema: 'api::article.article',
-  data: articleData,
-});
-
-// Only roles and tokens with find/findOne permission on articles receive this
-```
-
-```javascript [Custom Action]
-// Emit custom event with schema
-strapi.$io.emit({
-  event: 'publish',
-  schema: 'api::article.article',
-  data: { id: 123, status: 'published' },
-});
-
-// Receives as: socket.on('article:publish', ...)
-```
-
-```javascript [Controller Integration]
-// In your controller
-async create(ctx) {
-  const entry = await strapi.documents('api::article.article').create({
-    data: ctx.request.body,
-  });
-
-  // Emit to all permitted users
-  await strapi.$io.emit({
-    event: 'create',
-    schema: 'api::article.article',
-    data: entry
-  });
-
-  return entry;
-}
-```
-
-:::
-
-### `raw()`
-
-Emit events without permission checks or data sanitization. Use for custom events that don't relate to content types.
-
-**Signature:**
-
-```typescript
-raw(options: RawEmitOptions): Promise<void>
-
-interface RawEmitOptions {
-  event: string;           // Any event name
-  rooms?: string[];        // Optional: specific rooms
-  data: any;              // Data to emit (not sanitized!)
-}
-```
-
-::: warning
-Data is **NOT** sanitized or transformed. Only send safe, pre-validated data!
-:::
-
-::: code-group
-
-```javascript [Broadcast to All]
-// Send to all connected clients
-strapi.$io.raw({
-  event: 'notification',
-  data: {
-    type: 'info',
-    message: 'System maintenance completed',
-  },
+  data: { documentId, locale: 'en' },
 });
 ```
 
-```javascript [Specific Rooms]
-// Send only to premium users
-strapi.$io.raw({
-  event: 'exclusive-offer',
-  rooms: ['premium', 'vip'],
-  data: {
-    discount: 50,
-    expiresIn: '24h',
-  },
-});
+## `raw()`
+
+Sends a custom event as `{ data }`. Keys from the sensitive field list are
+removed first. Without `rooms` the event goes to every connected client of the
+default namespace.
+
+```ts
+raw(options: { event: string; data: unknown; rooms?: string[] }): Promise<void>
 ```
 
-```javascript [Custom Event]
-// Send custom analytics event
-strapi.$io.raw({
-  event: 'analytics:pageview',
-  data: {
-    page: '/products',
-    timestamp: Date.now(),
-    visitors: 42,
-  },
-});
+```js
+await strapi.$io.raw({ event: 'maintenance', data: { startsAt: '22:00 UTC' } });
+await strapi.$io.raw({ event: 'report:ready', data: { id }, rooms: [`user-${userId}`] });
 ```
 
-:::
+`raw()` does not check permissions. Choose the rooms yourself.
 
----
+## Room helpers
 
-## Helper Functions
+| Method                                      | Returns             | Notes                                                                   |
+| ------------------------------------------- | ------------------- | ----------------------------------------------------------------------- |
+| `joinRoom(socketId, room)`                  | `boolean`           | `false` when the socket is unknown or the room belongs to the plugin.   |
+| `leaveRoom(socketId, room)`                 | `boolean`           | `false` when the socket is unknown.                                     |
+| `getSocketsInRoom(room)`                    | `Promise<string[]>` | Socket ids, across instances when an adapter such as Redis is attached. |
+| `sendPrivateMessage(socketId, event, data)` | `void`              | Sends `data` as is (no sanitizing).                                     |
+| `broadcast(socketId, event, data)`          | `void`              | Everyone except `socketId`.                                             |
+| `emitToNamespace(namespace, event, data)`   | `void`              | `namespace` with or without the leading slash.                          |
+| `disconnectSocket(socketId)`                | `boolean`           | Closes the connection.                                                  |
 
-### `joinRoom()`
+Plugin rooms (`io-role-`, `io-token-`, `io-admin-`, `presence:`) cannot be
+joined with `joinRoom()`.
 
-Add a socket to a room.
+## `revalidateSockets()`
 
-**Signature:**
+Re-checks authenticated sockets and disconnects those whose credentials are no
+longer valid: expired or invalid JWT, blocked user, changed role, revoked
+Strapi session, deleted or expired API token, deactivated admin, or an admin
+who lost read access to an entry the presence panel has open.
 
-```typescript
-joinRoom(socketId: string, roomName: string): boolean
+```ts
+revalidateSockets(kinds?: Array<'user' | 'token' | 'admin'>, options?: { ids?: Iterable<number | string> }): Promise<number>
 ```
 
-**Returns:** `true` if successful, `false` if socket not found
-
-```javascript
-// Add user to premium room after purchase
-strapi.$io.joinRoom(socket.id, 'premium-users');
-
-// Add to multiple rooms
-['notifications', 'chat', 'updates'].forEach((room) => {
-  strapi.$io.joinRoom(socket.id, room);
-});
+```js
+await strapi.$io.revalidateSockets(); // everything
+await strapi.$io.revalidateSockets(['user'], { ids: [userId] }); // one user's sockets
 ```
 
-### `leaveRoom()`
+Returns the number of disconnected sockets. Sockets are checked in one batch
+per kind (one query for all users, one for all tokens, one for all admins).
+The plugin already runs this every five minutes and right after users, admins,
+API tokens or Strapi sessions change, so you rarely need to call it.
 
-Remove a socket from a room.
+## `server` and `namespaces`
 
-**Signature:**
-
-```typescript
-leaveRoom(socketId: string, roomName: string): boolean
+```js
+strapi.$io.server.emit('hello', { ok: true }); // the Socket.IO Server, no sanitizing
+strapi.$io.server.to('io-role-authenticated').emit('notice', { text: 'Hi' });
+Object.keys(strapi.$io.namespaces); // ['', 'chat']
 ```
 
-**Returns:** `true` if successful, `false` if socket not found
+Namespaces created with `strapi.$io.server.of('/name')` get the plugin
+handshake. Content events go to the default namespace only.
 
-```javascript
-// Remove from room on subscription end
-strapi.$io.leaveRoom(socket.id, 'premium-users');
+## Monitoring service
 
-// Leave all custom rooms
-const socket = strapi.$io.server.sockets.sockets.get(socketId);
-if (socket) {
-  socket.rooms.forEach((room) => {
-    if (room !== socket.id) {
-      // Don't leave own room
-      strapi.$io.leaveRoom(socket.id, room);
-    }
-  });
-}
+Counts only, never IP addresses, emails, tokens or socket ids:
+
+```js
+const monitoring = strapi.plugin('io').service('monitoring');
+await monitoring.getConnectionStats(); // { connected, rooms, byKind: { admin, user, token, public } }
+monitoring.getEventStats(); // { totalEvents, eventsPerSecond, lastEventAt, totalConnections, since }
+monitoring.getEventLog(50); // newest first, when the event log is on
 ```
 
-### `getSocketsInRoom()`
+## Client payloads
 
-Get all sockets in a specific room.
-
-**Signature:**
-
-```typescript
-getSocketsInRoom(roomName: string): Promise<SocketInfo[]>
-
-interface SocketInfo {
-  id: string;
-  userId?: number;
-  role?: string;
-  rooms: string[];
-}
+```js
+socket.on('article:update', ({ data }) => render(data.attributes)); // emit()
+socket.on('article:delete', ({ data }) => remove(data.documentId)); // emitIdentifier()
+socket.on('maintenance', ({ data }) => banner(data.startsAt)); // raw()
 ```
 
-```javascript
-// Check who's in a chat room
-const sockets = await strapi.$io.getSocketsInRoom('chat-lobby');
-console.log(`${sockets.length} users in lobby`);
+## TypeScript
 
-sockets.forEach((socket) => {
-  console.log(`Socket ${socket.id}, User: ${socket.userId}`);
-});
+The package ships `types.d.ts` and adds `$io` to `Core.Strapi`:
 
-// Check if room is empty before closing it
-if (sockets.length === 0) {
-  console.log('Chat room is empty, closing...');
-}
+```ts
+import type { SocketIOConfig, SocketData } from '@strapi-community/plugin-io/strapi-server';
+
+const config: SocketIOConfig = { contentTypes: ['api::article.article'] };
+
+const handler = (_ctx: unknown, socket: { data: SocketData }) => {
+  if (socket.data.kind === 'user') console.log(socket.data.user?.id);
+};
 ```
 
-### `sendPrivateMessage()`
+## Removed in 6.0
 
-Send a message to a specific socket only.
+`subscribeToEntity`, `unsubscribeFromEntity`, `getEntitySubscriptions`,
+`emitToEntity`, `getEntityRoomSockets` and the client events
+`subscribe-entity` / `unsubscribe-entity` were only in an unpublished source
+tree; the npm builds 5.4.0 to 5.8.3 did not contain them. Filter content
+events by `documentId` on the client instead:
 
-**Signature:**
-
-```typescript
-sendPrivateMessage(
-  socketId: string,
-  event: string,
-  data: any
-): void
-```
-
-```javascript
-// Send private notification
-strapi.$io.sendPrivateMessage(socket.id, 'private-notification', {
-  type: 'success',
-  message: 'Your payment was processed',
-});
-
-// Send user-specific data
-strapi.$io.sendPrivateMessage(socket.id, 'user-stats', {
-  points: 1250,
-  level: 15,
-  achievements: ['first-post', 'verified'],
-});
-```
-
-### `broadcast()`
-
-Emit to all sockets except the sender.
-
-**Signature:**
-
-```typescript
-broadcast(
-  socketId: string,
-  event: string,
-  data: any
-): void
-```
-
-**Use Case:** Notify others about a user's action without notifying the user themselves.
-
-```javascript
-// User joined - notify others
-strapi.$io.broadcast(socket.id, 'user-joined', {
-  username: 'john_doe',
-  avatar: '/avatars/john.png',
-});
-
-// User typing indicator
-strapi.$io.broadcast(socket.id, 'typing', {
-  userId: 123,
-  chatRoom: 'general',
-});
-
-// Collaborative editing - sync changes to others
-strapi.$io.broadcast(socket.id, 'document:update', {
-  documentId: 456,
-  changes: [{ op: 'insert', pos: 10, text: 'Hello' }],
-});
-```
-
-### `emitToNamespace()`
-
-Emit event to all sockets in a specific namespace.
-
-**Signature:**
-
-```typescript
-emitToNamespace(
-  namespace: string,
-  event: string,
-  data: any
-): void
-```
-
-```javascript
-// Update admin dashboard
-strapi.$io.emitToNamespace('admin', 'dashboard:stats', {
-  onlineUsers: 1234,
-  revenue: 56789,
-  orders: 42,
-});
-
-// Send to chat namespace
-strapi.$io.emitToNamespace('chat', 'announcement', {
-  message: 'New features available!',
-});
-```
-
-### `disconnectSocket()`
-
-Forcefully disconnect a socket with optional reason.
-
-**Signature:**
-
-```typescript
-disconnectSocket(
-  socketId: string,
-  reason?: string
-): boolean
-```
-
-**Returns:** `true` if socket was found and disconnected
-
-```javascript
-// Kick abusive user
-strapi.$io.disconnectSocket(socket.id, 'Violation of terms of service');
-
-// Disconnect on account deletion
-strapi.$io.disconnectSocket(socket.id, 'Account deleted');
-
-// Session timeout
-strapi.$io.disconnectSocket(socket.id, 'Session expired');
-```
-
----
-
-## Entity Subscriptions (removed in 6.0)
-
-`subscribeToEntity`, `unsubscribeFromEntity`, `getEntitySubscriptions`, `emitToEntity`, `getEntityRoomSockets` and the client events `subscribe-entity` / `unsubscribe-entity` were only part of an unpublished source tree; the npm builds 5.4.0 to 5.8.3 did not contain them. They are not part of 6.0. Filter content events by `documentId` on the client instead:
-
-```javascript
+```js
 socket.on('article:update', ({ data }) => {
   if (data.attributes.documentId === currentDocumentId) render(data);
 });
 ```
 
----
+## See also
 
-## Event Format
-
-All events follow a consistent format for easy handling.
-
-### Server to Client
-
-```typescript
-// Content type events (from emit())
-socket.on('article:create', (data) => {
-  // data is sanitized based on user permissions
-  console.log(data);
-});
-
-// Custom events (from raw())
-socket.on('notification', (data) => {
-  // data is exactly what was sent
-  console.log(data);
-});
-```
-
-### Client to Server
-
-```javascript
-// Emit custom event from client
-socket.emit('custom-event', { foo: 'bar' });
-
-// Listen on server (config in plugins.js)
-events: [
-  {
-    name: 'custom-event',
-    handler({ strapi, io }, socket, data) {
-      console.log('Received:', data);
-    },
-  },
-];
-```
-
----
-
-## TypeScript Support
-
-Full TypeScript definitions are included:
-
-```typescript
-import type { SocketIO, EmitOptions, RawEmitOptions } from '@strapi-community/plugin-io/types';
-
-// Access with IntelliSense
-const io: SocketIO = strapi.$io;
-
-// Type-safe emit
-const options: EmitOptions = {
-  event: 'create',
-  schema: 'api::article.article',
-  data: articleData,
-};
-
-await io.emit(options);
-```
-
----
-
-## Best Practices
-
-### 1. Use `emit()` for Content Types
-
-```javascript
-// ✅ Good - automatic permissions
-strapi.$io.emit({
-  event: 'update',
-  schema: 'api::article.article',
-  data: updatedArticle,
-});
-
-// ❌ Bad - no permission checking
-strapi.$io.raw({
-  event: 'article:update',
-  data: updatedArticle,
-});
-```
-
-### 2. Use `raw()` for Custom Events
-
-```javascript
-// ✅ Good - doesn't relate to content type
-strapi.$io.raw({
-  event: 'server:status',
-  data: { uptime: process.uptime() },
-});
-```
-
-### 3. Clean Up Rooms
-
-```javascript
-// Remove from room when done
-socket.on('disconnect', () => {
-  strapi.$io.leaveRoom(socket.id, 'temporary-room');
-});
-```
-
-### 4. Check Room Occupancy
-
-```javascript
-// Before sending expensive data
-const sockets = await strapi.$io.getSocketsInRoom('dashboard');
-if (sockets.length > 0) {
-  // Only calculate if someone is watching
-  const stats = await calculateExpensiveStats();
-  strapi.$io.raw({
-    event: 'stats:update',
-    rooms: ['dashboard'],
-    data: stats,
-  });
-}
-```
-
----
-
-## See Also
-
-- **[Plugin Configuration](/api/plugin-config)** - Configure events, hooks, and more
-- **[Examples](/examples/)** - Real-world implementation patterns
-- **[Helper Functions Guide](/examples/hooks#helper-functions)** - Detailed usage examples
+- [Plugin configuration](/api/plugin-config)
+- [Custom events](/examples/events)
+- [Socket.IO server API](https://socket.io/docs/v4/server-api/)

@@ -23,9 +23,11 @@ The widget refreshes every 15 seconds.
 
 ## Admins online
 
+![Admins online homepage widget](/admins-online-widget.png)
+
 Laid out like the native _Last edited entries_ widget: one row per other admin with the Content Manager open, the content type they are editing and when they connected. Click a row or the edit button to open the same entry. Your own session is not listed. The widget refreshes every 15 seconds.
 
-The list contains names only. Emails, IP addresses and socket ids are never sent to the browser.
+The list contains names only. Emails, IP addresses and socket ids are never sent to the browser. Entries in content types you may not read in the Content Manager are not named: the row says _An entry you cannot view_ instead (Monitoring shows a count).
 
 ---
 
@@ -59,5 +61,5 @@ socket.on('connect', () => console.log('connected', socket.id));
 ## See also
 
 - [Getting Started](/guide/getting-started)
-- [Monitoring service](/api/io-class#monitoring-service)
+- [IO class](/api/io-class)
 - [Configuration](/api/plugin-config)

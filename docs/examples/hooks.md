@@ -1,42 +1,51 @@
-# Hooks Examples
-
-Learn how to use lifecycle hooks for initialization, adapters, and custom middleware.
-
+---
+description: Use hooks.init to attach the Redis adapter, add Socket.IO middleware, create namespaces and clean up on shutdown in the Strapi Socket.IO plugin.
 ---
 
-## Overview
+# Hooks
 
-Hooks are similar to Strapi model lifecycles. They are functions called at specific points in the Socket.IO plugin lifecycle.
+`hooks.init` runs once during Strapi's bootstrap, before the server accepts
+connections. Use it to attach an adapter, add middleware or create namespaces.
 
----
-
-## Init Hook
-
-The `init` hook is triggered immediately after the Socket.IO server instance is constructed. It's perfect for:
-
-- Adding server adapters (Redis, MongoDB)
-- Registering middleware
-- Configuring namespaces
-- Setting up custom logic
-
-### Signature
-
-```typescript
-init(context: {
-  strapi: Strapi;
-  io: SocketIOInstance;
-}): void | Promise<void>
+```js
+// config/plugins.js
+module.exports = ({ env }) => ({
+  io: {
+    enabled: true,
+    config: {
+      contentTypes: ['api::article.article'],
+      hooks: {
+        async init({ strapi, $io }) {
+          strapi.log.info(`[io] Socket.IO path: ${$io.server.path()}`);
+        },
+      },
+    },
+  },
+});
 ```
 
----
+## Signature
 
-## Redis Adapter
+```ts
+init(context: { strapi; $io; io }): void | Promise<void>
+```
 
-Scale your Socket.IO server across multiple instances using Redis:
+- `$io` and `io` are the same object: the plugin wrapper (`strapi.$io`). `$io.server` is the Socket.IO `Server`.
+- The hook is awaited. If it throws, the error is logged as `[io] hooks.init failed` and Strapi keeps starting without whatever the hook would have set up, so check your logs after a deploy.
+- **Order:** middleware you add here with `$io.server.use()` runs **before** the plugin's handshake (authentication, IP rules, origin and connection limits). At that point `socket.data.kind` is not set yet. To act on the authenticated client, use a `connection` handler in [`config.events`](/examples/events) instead.
 
-```javascript
-const { createClient } = require('redis');
+## Redis adapter (several Strapi instances)
+
+Behind a load balancer, every instance needs the same rooms. Install the
+official adapter in your project:
+
+```bash
+npm install @socket.io/redis-adapter redis
+```
+
+```js
 const { createAdapter } = require('@socket.io/redis-adapter');
+const { createClient } = require('redis');
 
 module.exports = ({ env }) => ({
   io: {
@@ -44,27 +53,12 @@ module.exports = ({ env }) => ({
     config: {
       contentTypes: ['api::article.article'],
       hooks: {
-        async init({ strapi, io }) {
-          const pubClient = createClient({
-            url: env('REDIS_URL', 'redis://localhost:6379'),
-          });
-
+        async init({ strapi, $io }) {
+          const pubClient = createClient({ url: env('REDIS_URL') });
           const subClient = pubClient.duplicate();
-
           await Promise.all([pubClient.connect(), subClient.connect()]);
-
-          io.server.adapter(createAdapter(pubClient, subClient));
-
-          strapi.log.info('[io] ✅ Redis adapter initialized');
-
-          // Handle errors
-          pubClient.on('error', (err) => {
-            strapi.log.error('[io] Redis pub client error:', err);
-          });
-
-          subClient.on('error', (err) => {
-            strapi.log.error('[io] Redis sub client error:', err);
-          });
+          $io.server.adapter(createAdapter(pubClient, subClient));
+          strapi.log.info('[io] Redis adapter ready');
         },
       },
     },
@@ -72,559 +66,142 @@ module.exports = ({ env }) => ({
 });
 ```
 
-**Benefits:**
+Keep the URL in an environment variable. The admin settings do not store it.
+Your load balancer also needs sticky sessions when clients may use HTTP
+long-polling (see the [Socket.IO docs on multiple nodes](https://socket.io/docs/v4/using-multiple-nodes/)).
 
-- ✅ Horizontal scaling across multiple servers
-- ✅ Load balancing
-- ✅ Session persistence
-- ✅ High availability
+With a cluster adapter, content events are sanitized for every audience room,
+because rooms on other instances are not visible locally. With the default
+in-memory adapter, rooms without sockets are skipped.
 
----
+## Middleware
 
-## MongoDB Adapter
+Middleware added in `init` sees every handshake before the plugin does. Good
+uses are request logging and cheap pre-checks. Do not overwrite
+`socket.data.user`, `socket.data.admin` or `socket.data.kind`; the plugin's
+handshake sets them right after your middleware.
 
-Use MongoDB as the adapter for distributed Socket.IO:
+### Log handshakes
 
-```javascript
-const { MongoClient } = require('mongodb');
-const { createAdapter } = require('@socket.io/mongo-adapter');
-
-module.exports = ({ env }) => ({
-  io: {
-    enabled: true,
-    config: {
-      hooks: {
-        async init({ strapi, io }) {
-          const mongoClient = new MongoClient(env('MONGO_URL'));
-          await mongoClient.connect();
-
-          const mongoCollection = mongoClient.db('mydb').collection('socket.io-adapter-events');
-
-          io.server.adapter(
-            createAdapter(mongoCollection, {
-              addCreatedAtField: true,
-            })
-          );
-
-          strapi.log.info('[io] ✅ MongoDB adapter initialized');
-        },
-      },
-    },
+```js
+hooks: {
+  init({ strapi, $io }) {
+    $io.server.use((socket, next) => {
+      strapi.log.debug(`[io] handshake via ${socket.conn.transport.name}`);
+      next();
+    });
   },
-});
+},
 ```
 
----
+### Require a client version
 
-## Custom Middleware
+```js
+hooks: {
+  init({ $io }) {
+    $io.server.use((socket, next) => {
+      const version = Number(socket.handshake.auth?.clientVersion ?? 0);
+      if (version < 3) return next(new Error('Please update the app'));
+      next();
+    });
+  },
+},
+```
 
-Add authentication, logging, or rate limiting middleware:
+The plugin already covers IP allow and block lists, a connection cap,
+required authentication, origins and a per-client event limit. Configure them
+in _Settings > Socket.IO_ instead of writing middleware for them.
 
-### Authentication Middleware
+## Namespaces
 
-```javascript
+Namespaces you create with `$io.server.of()` get the plugin handshake
+automatically, so `socket.data` is filled in the same way as on the default
+namespace.
+
+```js
+hooks: {
+  init({ $io }) {
+    const chat = $io.server.of('/chat');
+    chat.on('connection', (socket) => {
+      if (socket.data.kind !== 'user') return socket.disconnect(true);
+      socket.join(`chat-user-${socket.data.user.id}`);
+    });
+  },
+},
+```
+
+Client:
+
+```js
+const chat = io('https://cms.example.com/chat', { auth: { strategy: 'jwt', token } });
+```
+
+Content events are only sent on the default namespace. Use
+`strapi.$io.emitToNamespace('chat', 'event', data)` to send to a namespace.
+
+## Join rooms for your own features
+
+Use a `connection` handler, which runs after the handshake, to put clients in
+your own rooms:
+
+```js
+events: [
+  {
+    name: 'connection',
+    handler(_ctx, socket) {
+      if (socket.data.kind === 'user') socket.join(`user-${socket.data.user.id}`);
+    },
+  },
+],
+```
+
+Then notify one user from anywhere in Strapi:
+
+```js
+strapi.$io.server.to(`user-${userId}`).emit('notification', { text: 'Your export is ready' });
+```
+
+Room names starting with `io-role-`, `io-token-`, `io-admin-` or `presence:`
+belong to the plugin. `strapi.$io.joinRoom()` refuses them.
+
+## Clean up on shutdown
+
+The plugin closes its own sockets, timers and adapters when Strapi stops. If
+your hook opened connections (for example Redis clients), close them in your
+app's `destroy` lifecycle:
+
+```js
+// src/index.js
+let redisClients = [];
+
 module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      hooks: {
-        init({ strapi, io }) {
-          io.server.use(async (socket, next) => {
-            try {
-              const token = socket.handshake.auth.token;
-
-              if (!token) {
-                return next(new Error('Authentication required'));
-              }
-
-              // Verify JWT token
-              const user = await strapi.plugins['users-permissions'].services.jwt.verify(token);
-
-              if (!user) {
-                return next(new Error('Invalid token'));
-              }
-
-              // Attach user to socket
-              socket.data.user = user;
-
-              next();
-            } catch (error) {
-              next(new Error('Authentication failed'));
-            }
-          });
-
-          strapi.log.info('[io] Authentication middleware registered');
-        },
-      },
-    },
+  register() {},
+  bootstrap() {},
+  async destroy() {
+    await Promise.allSettled(redisClients.map((client) => client.quit()));
   },
 };
 ```
 
-### Logging Middleware
+Fill `redisClients` from your hook, for example by exporting a small module
+that both files require.
 
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    io.server.use((socket, next) => {
-      strapi.log.info('[io] Connection attempt:', {
-        socketId: socket.id,
-        ip: socket.handshake.address,
-        userAgent: socket.handshake.headers['user-agent'],
-        timestamp: new Date().toISOString()
-      });
+## Test a hook
 
-      // Add connection timestamp
-      socket.data.connectedAt = Date.now();
+```js
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const { init } = require('../config/plugins.js')({ env: () => '' }).io.config.hooks;
 
-      next();
-    });
-  }
-}
-```
-
-### IP Whitelisting Middleware
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    const allowedIPs = [
-      '127.0.0.1',
-      '::1',
-      '192.168.1.0/24'
-    ];
-
-    io.server.use((socket, next) => {
-      const clientIP = socket.handshake.address;
-
-      if (!isIPAllowed(clientIP, allowedIPs)) {
-        strapi.log.warn(`[io] Blocked connection from ${clientIP}`);
-        return next(new Error('IP not whitelisted'));
-      }
-
-      next();
-    });
-  }
-}
-```
-
-### Rate Limiting Middleware
-
-```javascript
-const rateLimit = require('socket.io-rate-limit');
-
-hooks: {
-  init({ strapi, io }) {
-    io.server.use(rateLimit({
-      tokensPerInterval: 100,
-      interval: 60000, // 100 requests per minute
-      fireImmediately: true,
-      onLimitReached: (socket) => {
-        strapi.log.warn(`[io] Rate limit exceeded: ${socket.id}`);
-        socket.emit('error', {
-          message: 'Too many requests. Please slow down.'
-        });
-      }
-    }));
-
-    strapi.log.info('[io] Rate limiting enabled');
-  }
-}
-```
-
----
-
-## Namespaces
-
-Create separate communication channels:
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    // Admin namespace
-    const adminNamespace = io.server.of('/admin');
-
-    adminNamespace.use(async (socket, next) => {
-      // Admin-only authentication
-      const token = socket.handshake.auth.token;
-      const user = await verifyAdminToken(token);
-
-      if (!user || user.role.type !== 'admin') {
-        return next(new Error('Admin access required'));
-      }
-
-      socket.data.user = user;
-      next();
-    });
-
-    adminNamespace.on('connection', (socket) => {
-      strapi.log.info(`[io] Admin connected: ${socket.data.user.username}`);
-
-      socket.on('broadcast', (data) => {
-        // Broadcast to all users
-        io.server.emit('admin:announcement', data);
-      });
-    });
-
-    // Chat namespace
-    const chatNamespace = io.server.of('/chat');
-
-    chatNamespace.on('connection', (socket) => {
-      strapi.log.info('[io] Chat user connected');
-
-      socket.on('message', (data) => {
-        chatNamespace.emit('message', data);
-      });
-    });
-
-    strapi.log.info('[io] Namespaces configured: /admin, /chat');
-  }
-}
-```
-
-**Client usage:**
-
-```javascript
-// Connect to admin namespace
-const adminSocket = io('http://localhost:1337/admin', {
-  auth: { token: adminToken },
-});
-
-// Connect to chat namespace
-const chatSocket = io('http://localhost:1337/chat', {
-  auth: { token: userToken },
+test('init adds one middleware', async () => {
+  const added = [];
+  await init({ strapi: { log: { info() {}, debug() {} } }, $io: { server: { use: (fn) => added.push(fn) } } });
+  assert.equal(added.length, 1);
 });
 ```
 
----
-
-## Monitoring & Analytics
-
-### Connection Tracking
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    const connections = new Map();
-
-    io.server.on('connection', (socket) => {
-      const connectionInfo = {
-        socketId: socket.id,
-        ip: socket.handshake.address,
-        userAgent: socket.handshake.headers['user-agent'],
-        connectedAt: new Date(),
-        userId: socket.data.user?.id
-      };
-
-      connections.set(socket.id, connectionInfo);
-
-      // Log to database
-      strapi.entityService.create('api::connection-log.connection-log', {
-        data: connectionInfo
-      });
-
-      socket.on('disconnect', () => {
-        const info = connections.get(socket.id);
-        const duration = Date.now() - info.connectedAt.getTime();
-
-        strapi.log.info(`[io] Session ended: ${socket.id} (${duration}ms)`);
-
-        // Update log
-        strapi.entityService.update('api::connection-log.connection-log', {
-          where: { socketId: socket.id },
-          data: {
-            disconnectedAt: new Date(),
-            duration
-          }
-        });
-
-        connections.delete(socket.id);
-      });
-    });
-
-    // Periodic stats logging
-    setInterval(() => {
-      strapi.log.info(`[io] Active connections: ${connections.size}`);
-    }, 60000); // Every minute
-  }
-}
-```
-
-### Event Analytics
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    const eventStats = new Map();
-
-    // Intercept all events
-    io.server.use((socket, next) => {
-      socket.use((packet, next) => {
-        const [eventName] = packet;
-
-        // Track event
-        const count = eventStats.get(eventName) || 0;
-        eventStats.set(eventName, count + 1);
-
-        next();
-      });
-
-      next();
-    });
-
-    // Report stats every 5 minutes
-    setInterval(() => {
-      const stats = Array.from(eventStats.entries())
-        .map(([event, count]) => ({ event, count }))
-        .sort((a, b) => b.count - a.count);
-
-      strapi.log.info('[io] Event statistics:', stats);
-
-      // Reset stats
-      eventStats.clear();
-    }, 300000);
-  }
-}
-```
-
----
-
-## Auto-Join Rooms
-
-Automatically join users to rooms based on their role or properties:
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    io.server.on('connection', async (socket) => {
-      if (!socket.data.user) return;
-
-      const user = socket.data.user;
-
-      // Join user-specific room
-      socket.join(`user-${user.id}`);
-
-      // Join role-based room
-      socket.join(`role-${user.role.type}`);
-
-      // Join premium room
-      if (user.isPremium) {
-        socket.join('premium');
-      }
-
-      // Join location-based rooms
-      if (user.country) {
-        socket.join(`country-${user.country}`);
-      }
-
-      strapi.log.info(`[io] User ${user.username} joined rooms:`,
-        Array.from(socket.rooms)
-      );
-    });
-  }
-}
-```
-
----
-
-## Graceful Shutdown
-
-Handle server shutdown gracefully:
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    const shutdown = async (signal) => {
-      strapi.log.info(`[io] Received ${signal}, closing connections...`);
-
-      // Notify all clients
-      io.server.emit('server:shutdown', {
-        message: 'Server is restarting',
-        reconnectIn: 5000
-      });
-
-      // Wait for messages to be sent
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Close all connections
-      const sockets = await io.server.fetchSockets();
-      sockets.forEach(socket => {
-        socket.disconnect(true);
-      });
-
-      strapi.log.info(`[io] Closed ${sockets.length} connections`);
-    };
-
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
-  }
-}
-```
-
----
-
-## Custom Room Logic
-
-Implement complex room joining logic:
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    io.server.on('connection', (socket) => {
-      socket.on('join-channel', async ({ channelId, password }) => {
-        try {
-          // Fetch channel
-          const channel = await strapi.entityService.findOne(
-            'api::channel.channel',
-            channelId
-          );
-
-          if (!channel) {
-            socket.emit('error', { message: 'Channel not found' });
-            return;
-          }
-
-          // Check password if private
-          if (channel.isPrivate && channel.password !== password) {
-            socket.emit('error', { message: 'Invalid password' });
-            return;
-          }
-
-          // Check member limit
-          const roomSize = (await io.server.in(`channel-${channelId}`).fetchSockets()).length;
-          if (channel.maxMembers && roomSize >= channel.maxMembers) {
-            socket.emit('error', { message: 'Channel is full' });
-            return;
-          }
-
-          // Join room
-          socket.join(`channel-${channelId}`);
-
-          // Notify others
-          socket.to(`channel-${channelId}`).emit('user:joined', {
-            userId: socket.data.user?.id,
-            username: socket.data.user?.username
-          });
-
-          socket.emit('channel:joined', {
-            channelId,
-            members: roomSize + 1
-          });
-        } catch (error) {
-          strapi.log.error('[io] Join channel error:', error);
-          socket.emit('error', { message: 'Failed to join channel' });
-        }
-      });
-    });
-  }
-}
-```
-
----
-
-## Helper Functions Integration
-
-Add custom helper functions to the IO instance:
-
-```javascript
-hooks: {
-  init({ strapi, io }) {
-    // Add custom helper
-    io.kickUser = async (userId, reason) => {
-      const sockets = await strapi.$io.server.fetchSockets();
-      const userSocket = sockets.find((s) => s.data.user?.id === userId);
-
-      if (userSocket) {
-        io.server.to(userSocket.id).emit('kicked', { reason });
-        io.disconnectSocket(userSocket.id, reason);
-        return true;
-      }
-
-      return false;
-    };
-
-    // Add broadcast to role
-    io.broadcastToRole = (roleName, event, data) => {
-      io.server.to(`role-${roleName}`).emit(event, data);
-    };
-
-    strapi.log.info('[io] Custom helpers registered');
-  }
-}
-```
-
-**Usage:**
-
-```javascript
-// Kick abusive user
-await strapi.$io.kickUser(123, 'Violation of terms');
-
-// Broadcast to all admins
-strapi.$io.broadcastToRole('admin', 'system:alert', {
-  level: 'critical',
-  message: 'Database backup required',
-});
-```
-
----
-
-## Testing
-
-```javascript
-// test/hooks.test.js
-describe('Socket.IO Hooks', () => {
-  test('should have Redis adapter', async () => {
-    const adapter = strapi.$io.server.adapter;
-    expect(adapter.constructor.name).toBe('RedisAdapter');
-  });
-
-  test('should have custom helpers', () => {
-    expect(typeof strapi.$io.kickUser).toBe('function');
-    expect(typeof strapi.$io.broadcastToRole).toBe('function');
-  });
-
-  test('should auto-join user room', (done) => {
-    const socket = io('http://localhost:1337', {
-      auth: { token: userToken },
-    });
-
-    socket.on('connect', () => {
-      // Verify user joined their room
-      socket.emit('get-rooms', (rooms) => {
-        expect(rooms).toContain(`user-${userId}`);
-        done();
-      });
-    });
-  });
-});
-```
-
----
-
-## Best Practices
-
-### ✅ Do
-
-- Use adapters for production scaling
-- Implement rate limiting
-- Log important events
-- Handle errors gracefully
-- Clean up resources on disconnect
-- Use TypeScript for complex logic
-
-### ❌ Don't
-
-- Block the event loop
-- Store large objects in socket.data
-- Forget to handle adapter errors
-- Skip authentication middleware
-- Leave connections open unnecessarily
-
----
-
-## See Also
-
-- **[Events](/examples/events)** - Custom event handlers
-- **[Content Types](/examples/content-types)** - Automatic content events
-- **[API Reference](/api/io-class)** - Core API methods
-- **[Socket.IO Adapters](https://socket.io/docs/v4/adapter/)** - Official adapter docs
+## See also
+
+- [Custom events](/examples/events)
+- [Plugin configuration](/api/plugin-config)
+- [Socket.IO middleware](https://socket.io/docs/v4/middlewares/)
