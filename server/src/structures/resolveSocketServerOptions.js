@@ -1,42 +1,67 @@
 /**
- * Default Socket.IO / Engine.IO options that keep Strapi's own WebSocket
- * endpoints (notably Data Transfer at `/admin/transfer/*`) usable on the
- * same HTTP server.
- *
- * Engine.IO defaults to `destroyUpgrade: true`, which ends any non-matching
- * upgrade after ~1s if no bytes were written. Behind reverse proxies
- * (e.g. DigitalOcean App Platform) Strapi transfer handshakes often exceed
- * that window and surface as HTTP 504. See GitHub issue #112.
+ * Defaults that keep other upgrade handlers on Strapi's HTTP server working.
+ * Engine.IO's `destroyUpgrade: true` ends foreign upgrades after one second;
+ * the plugin forwards them to Strapi instead (#112).
  *
  * @typedef {import('socket.io').ServerOptions & { destroyUpgrade?: boolean, destroyUpgradeTimeout?: number }} SocketServerOptions
  */
 
 /** @type {Readonly<Partial<SocketServerOptions>>} */
 const SAFE_DEFAULTS = Object.freeze({
-	/**
-	 * Do not tear down upgrades destined for other handlers on this server
-	 * (Strapi transfer, custom WS, etc.).
-	 */
 	destroyUpgrade: false,
+	maxHttpBufferSize: 1e5,
 });
 
 /**
- * Merges user-provided Socket.IO server options with plugin-safe defaults.
- * Explicit user values always win.
+ * Checks an Origin against the allowed origins from the admin settings.
+ * Requests without an Origin header (server-to-server clients) and
+ * same-origin requests (the Strapi admin itself) are always allowed.
  *
- * @param {SocketServerOptions | null | undefined} userOptions - Options from plugin config `socket.serverOptions`.
- * @returns {SocketServerOptions} Options safe to pass to `new Server(httpServer, options)`.
- * @example
- * resolveSocketServerOptions({ cors: { origin: '*' } })
- * // => { destroyUpgrade: false, cors: { origin: '*' } }
+ * @param {string | undefined} origin - Request Origin header.
+ * @param {string[]} allowed - Allowed origins; empty means no restriction.
+ * @param {string} [host] - Request Host header.
+ * @returns {boolean} True when allowed.
  */
-function resolveSocketServerOptions(userOptions) {
-	const options = userOptions && typeof userOptions === 'object' ? userOptions : {};
-
-	return {
-		...SAFE_DEFAULTS,
-		...options,
-	};
+function isOriginAllowed(origin, allowed, host) {
+	if (!origin || !allowed?.length) return true;
+	if (allowed.includes(origin)) return true;
+	try {
+		return Boolean(host) && new URL(origin).host === host;
+	} catch {
+		return false;
+	}
 }
 
-export { resolveSocketServerOptions, SAFE_DEFAULTS };
+/**
+ * Merges `config.socket.serverOptions` with the plugin defaults. `cors` and
+ * `allowRequest` follow the admin setting "Allowed origins" unless set in the
+ * config, which always wins.
+ *
+ * @param {SocketServerOptions | null | undefined} userOptions - Options from the plugin config.
+ * @param {() => { cors: { origins: string[] } }} [getSettings] - Current admin settings.
+ * @returns {SocketServerOptions} Options for `new Server(httpServer, options)`.
+ * @see https://socket.io/docs/v4/server-options/
+ */
+function resolveSocketServerOptions(userOptions, getSettings) {
+	const options = userOptions && typeof userOptions === 'object' ? { ...userOptions } : {};
+	const resolved = { ...SAFE_DEFAULTS, ...options };
+
+	if (getSettings && options.cors === undefined) {
+		resolved.cors = {
+			origin(origin, callback) {
+				const allowed = getSettings().cors.origins;
+				// An empty list keeps the previous behaviour: no cross-origin polling.
+				callback(null, Boolean(origin) && allowed.length > 0 && allowed.includes(origin));
+			},
+			methods: ['GET', 'POST'],
+		};
+	}
+	if (getSettings && options.allowRequest === undefined) {
+		resolved.allowRequest = (req, callback) => {
+			callback(null, isOriginAllowed(req.headers.origin, getSettings().cors.origins, req.headers.host));
+		};
+	}
+	return resolved;
+}
+
+export { isOriginAllowed, resolveSocketServerOptions, SAFE_DEFAULTS };

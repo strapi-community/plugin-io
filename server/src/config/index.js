@@ -6,12 +6,10 @@ export default {
 			events: [],
 			hooks: {},
 			contentTypes: [],
+			sensitiveFields: [],
 			socket: {
-				serverOptions: {
-					// Keep Strapi transfer / other WS upgrades alive on the same HTTP server (#112).
-					destroyUpgrade: false,
-					cors: { origin: 'http://127.0.0.1:8080', methods: ['GET', 'POST'] },
-				},
+				// `cors` and `allowRequest` are filled from the admin settings unless set here.
+				serverOptions: {},
 			},
 		};
 	},

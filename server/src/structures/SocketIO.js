@@ -1,107 +1,359 @@
 import { Server } from 'socket.io';
-import { handshake } from '../middleware/index.js';
-import { getService } from '../utils/getService.js';
+import { createHandshake } from '../middleware/handshake.js';
 import { pluginId } from '../utils/pluginId.js';
-import { API_TOKEN_TYPE } from '../utils/constants.js';
 import { resolveSocketServerOptions } from './resolveSocketServerOptions.js';
+import { attachUpgradeForwarder } from './upgrade-forwarder.js';
 
+const REVALIDATE_MS = 5 * 60 * 1000;
+
+/**
+ * The plugin's Socket.IO wrapper, exposed as `strapi.$io`.
+ *
+ * - Attaches Socket.IO to Strapi's HTTP server and forwards foreign upgrades
+ *   (Data Transfer) back to Strapi (#112).
+ * - Authenticates every namespace with the plugin handshake.
+ * - Delivers content events only to role/token rooms with read permission,
+ *   sanitized per audience; a room is skipped if sanitizing fails.
+ * - Applies live admin settings (ping, timeouts) and re-validates
+ *   authenticated sockets.
+ */
 class SocketIO {
 	/**
-	 * @param {import('socket.io').ServerOptions | undefined} options - Plugin `socket.serverOptions`.
+	 * @param {import('socket.io').ServerOptions | undefined} options - `config.socket.serverOptions`.
+	 * @param {{ strapi?: import('@strapi/types').Core.Strapi }} [deps] - Strapi instance (defaults to the global).
 	 */
-	constructor(options) {
-		const serverOptions = resolveSocketServerOptions(options);
-		this._socket = new Server(strapi.server.httpServer, serverOptions);
-		const { hooks } = strapi.config.get(`plugin::${pluginId}`);
-		hooks.init?.({ strapi, $io: this });
-		this._socket.use(handshake);
-	}
+	constructor(options, deps = {}) {
+		const strapiInstance = deps.strapi ?? globalThis.strapi;
+		this.strapi = strapiInstance;
+		const settingsService = strapiInstance.plugin(pluginId).service('settings');
+		const httpServer = strapiInstance.server.httpServer;
 
-	// eslint-disable-next-line no-unused-vars
-	async emit({ event, schema, data: rawData }) {
-		const sanitizeService = getService({ name: 'sanitize' });
-		const strategyService = getService({ name: 'strategy' });
-		const transformService = getService({ name: 'transform' });
+		const serverOptions = resolveSocketServerOptions(options, () => settingsService.current());
+		const before = httpServer.listeners('upgrade');
+		this._socket = new Server(httpServer, serverOptions);
+		const engineListeners = httpServer.listeners('upgrade').filter((l) => !before.includes(l));
+		const path = this._socket.path();
+		const enginePath = serverOptions.addTrailingSlash === false ? path : `${path.replace(/\/$/, '')}/`;
+		this._removeUpgradeForwarder = attachUpgradeForwarder({
+			httpServer,
+			enginePath,
+			ownListeners: engineListeners,
+		});
 
-		if (!rawData) {
-			return;
-		}
+		this._handshake = createHandshake({ strapi: strapiInstance });
+		this._socket.use(this._handshake);
+		this._socket.on('new_namespace', (namespace) => {
+			if (namespace.name !== '/') namespace.use(this._handshake);
+		});
 
-		const eventName = `${schema.singularName}:${event}`;
+		this._applySettings(settingsService.current(), serverOptions);
+		this._unsubscribeSettings = settingsService.onChange((next) => this._applySettings(next, serverOptions));
 
-		for (const strategyType in strategyService) {
-			if (!Object.hasOwnProperty.call(strategyService, strategyType)) continue;
-
-			const strategy = strategyService[strategyType];
-
-			if (typeof strategy.getRooms !== 'function') continue;
-
-			let rooms;
-			try {
-				rooms = await strategy.getRooms();
-			} catch (err) {
-				strapi.log.debug(`[socket.io] getRooms failed for ${strategyType}: ${err.message}`);
-				continue;
-			}
-
-			for (const room of rooms) {
-				const permissions = (room.permissions || []).map(({ action }) => ({ action }));
-				const ability = await strapi.contentAPI.permissions.engine.generateAbility(permissions);
-
-				if (room.type === API_TOKEN_TYPE.FULL_ACCESS || ability.can(schema.uid + '.' + event)) {
-					try {
-						const sanitizedData = await sanitizeService.output({
-							data: rawData,
-							schema,
-							options: {
-								auth: {
-									name: strategy.name,
-									ability,
-									strategy: {
-										verify: strategy.verify,
-									},
-									credentials: strategy.credentials?.(room),
-								},
-							},
-						});
-
-						const roomName = strategy.getRoomName(room);
-						const data = transformService.response({ data: sanitizedData, schema });
-						this._socket.to(roomName.replace(/\s+/g, '-')).emit(eventName, { ...data });
-					} catch (err) {
-						strapi.log.debug(`[socket.io] emit failed for room ${room.name || room.id}: ${err.message}`);
-					}
-				}
-			}
-		}
+		this._revalidateTimer = setInterval(() => {
+			this.revalidateSockets().catch(() => {});
+		}, REVALIDATE_MS);
+		this._revalidateTimer.unref?.();
+		this._expiryTimers = new Map();
 	}
 
 	/**
-	 * Emit a raw event without schema-based sanitization.
-	 * Still removes sensitive fields for security.
-	 * @param {object} options - Emit options
-	 * @param {string} options.event - Event name
-	 * @param {any} options.data - Data to emit
-	 * @param {string[]} options.rooms - Optional rooms to emit to
+	 * Applies ping and timeout settings to new connections. Values set in
+	 * `config.socket.serverOptions` take precedence.
+	 *
+	 * @param {object} settings - Current admin settings.
+	 * @param {object} configured - Resolved server options.
 	 */
-	async raw({ event, data, rooms }) {
-		const sanitizeService = getService({ name: 'sanitize' });
-		
-		let emitter = this._socket;
-
-		if (rooms && rooms.length) {
-			rooms.forEach((r) => {
-				emitter = emitter.to(r);
-			});
+	_applySettings(settings, configured) {
+		const { pingInterval, pingTimeout, connectionTimeout } = settings.connection;
+		const engineOpts = this._socket.engine?.opts;
+		if (engineOpts) {
+			if (configured.pingInterval === undefined) engineOpts.pingInterval = pingInterval;
+			if (configured.pingTimeout === undefined) engineOpts.pingTimeout = pingTimeout;
 		}
-
-		const sanitizedData = sanitizeService.sanitizeRaw(data);
-		emitter.emit(event, { data: sanitizedData });
+		if (configured.connectTimeout === undefined) this._socket.connectTimeout(connectionTimeout);
 	}
 
+	/**
+	 * Schedules a disconnect when a socket's credentials expire.
+	 *
+	 * @param {import('socket.io').Socket} socket - Connected socket.
+	 */
+	trackExpiry(socket) {
+		const expiresAt = socket.data.expiresAt;
+		if (!expiresAt) return;
+		const delay = Math.min(Math.max(expiresAt - Date.now(), 0), 2 ** 31 - 1);
+		const timer = setTimeout(() => socket.disconnect(true), delay);
+		timer.unref?.();
+		this._expiryTimers.set(socket.id, timer);
+		socket.once('disconnect', () => {
+			clearTimeout(timer);
+			this._expiryTimers.delete(socket.id);
+		});
+	}
+
+	/**
+	 * Re-checks authenticated sockets and disconnects the ones whose user,
+	 * role, admin account or API token is no longer valid.
+	 *
+	 * @param {('user'|'token'|'admin')[]} [kinds] - Kinds to check; all by default.
+	 * @returns {Promise<number>} Number of disconnected sockets.
+	 */
+	async revalidateSockets(kinds = ['user', 'token', 'admin']) {
+		const strategies = this.strapi.plugin(pluginId).service('strategy');
+		const byKind = { user: strategies.role, token: strategies.token, admin: strategies.admin };
+		let dropped = 0;
+		for (const socket of this._socket.of('/').sockets.values()) {
+			const kind = socket.data.kind;
+			if (!kinds.includes(kind)) continue;
+			let ok;
+			try {
+				ok = await byKind[kind].revalidate(socket);
+			} catch {
+				ok = false;
+			}
+			if (!ok) {
+				socket.disconnect(true);
+				dropped += 1;
+			}
+		}
+		return dropped;
+	}
+
+	/**
+	 * Emits a content event to every audience that may read the content type.
+	 * Each audience receives data sanitized with its own permissions.
+	 *
+	 * @param {object} params - Parameters.
+	 * @param {string} params.event - Action (`create`, `update`, `publish`, ...).
+	 * @param {{ uid: string, singularName: string }} params.schema - Content type.
+	 * @param {object} params.data - Entry from the Document Service.
+	 * @returns {Promise<number>} Number of rooms the event was sent to.
+	 */
+	async emit({ event, schema: schemaInput, data }) {
+		const schema = this._resolveSchema(schemaInput);
+		if (!data || !schema?.uid) return 0;
+		const plugin = this.strapi.plugin(pluginId);
+		const sanitize = plugin.service('sanitize');
+		const transform = plugin.service('transform');
+		const rooms = plugin.service('rooms');
+		const eventName = `${schema.singularName}:${event}`;
+		let delivered = 0;
+
+		for (const audience of await rooms.getAudiences()) {
+			if (!rooms.canRead(audience, schema.uid)) continue;
+			try {
+				const sanitized = await sanitize.output({
+					data,
+					schema,
+					options: {
+						auth: {
+							name: audience.strategy.name,
+							ability: audience.ability,
+							strategy: { verify: audience.strategy.verify },
+							credentials: audience.strategy.credentials(audience.entry),
+						},
+					},
+				});
+				this._socket.to(audience.name).emit(eventName, { ...transform.response({ data: sanitized, schema }) });
+				delivered += 1;
+			} catch (error) {
+				this.strapi.log.warn(
+					`[io] Skipped "${eventName}" for room ${audience.name}: ${error?.name === 'SanitizeError' ? error.message : 'emit failed'}`
+				);
+			}
+		}
+		plugin.service('monitoring').recordEvent(eventName, { audiences: delivered });
+		return delivered;
+	}
+
+	/**
+	 * Emits a minimal event (`{ data: { documentId, locale } }`) to the
+	 * audiences that may read the content type. Used for delete and unpublish.
+	 *
+	 * @param {object} params - Parameters.
+	 * @param {string} params.event - Action name.
+	 * @param {{ uid: string, singularName: string }} params.schema - Content type.
+	 * @param {{ documentId: string, locale?: string | null }} params.data - Identifiers.
+	 * @returns {Promise<number>} Number of rooms reached.
+	 */
+	async emitIdentifier({ event, schema: schemaInput, data }) {
+		const schema = this._resolveSchema(schemaInput);
+		if (!schema?.uid || !data?.documentId) return 0;
+		const plugin = this.strapi.plugin(pluginId);
+		const rooms = plugin.service('rooms');
+		const eventName = `${schema.singularName}:${event}`;
+		const payload = { documentId: data.documentId };
+		if (data.locale) payload.locale = data.locale;
+		const names = (await rooms.getAudiences()).filter((a) => rooms.canRead(a, schema.uid)).map((a) => a.name);
+		if (names.length) this._socket.to(names).emit(eventName, { data: payload });
+		plugin.service('monitoring').recordEvent(eventName, { audiences: names.length });
+		return names.length;
+	}
+
+	/**
+	 * Accepts a content type uid or an object with at least `uid`.
+	 *
+	 * @param {string | { uid: string, singularName?: string }} schema - Content type.
+	 * @returns {{ uid: string, singularName: string } | null} Resolved schema.
+	 */
+	_resolveSchema(schema) {
+		const uid = typeof schema === 'string' ? schema : schema?.uid;
+		const contentType = uid ? this.strapi.contentTypes?.[uid] : undefined;
+		if (!uid) return null;
+		return { uid, singularName: schema?.singularName ?? contentType?.info?.singularName ?? uid.split('.').pop() };
+	}
+
+	/**
+	 * Emits a custom event. Sensitive fields are removed from `data`.
+	 * Without `rooms` the event goes to every connected client.
+	 *
+	 * @param {object} params - Parameters.
+	 * @param {string} params.event - Event name.
+	 * @param {any} params.data - Payload (sent as `{ data }`).
+	 * @param {string[]} [params.rooms] - Target rooms.
+	 */
+	async raw({ event, data, rooms }) {
+		const plugin = this.strapi.plugin(pluginId);
+		const target = rooms?.length ? this._socket.to(rooms) : this._socket;
+		target.emit(event, { data: plugin.service('sanitize').sanitizeRaw(data) });
+		plugin.service('monitoring').recordEvent(event, { source: 'raw', audiences: rooms?.length ?? null });
+	}
+
+	/**
+	 * Adds a socket to a room. Plugin-managed rooms cannot be joined.
+	 *
+	 * @param {string} socketId - Socket id.
+	 * @param {string} room - Room name.
+	 * @returns {boolean} True when the socket exists and joined.
+	 */
+	joinRoom(socketId, room) {
+		const socket = this._socket.of('/').sockets.get(socketId);
+		if (!socket || isReservedRoom(room)) return false;
+		socket.join(room);
+		return true;
+	}
+
+	/**
+	 * Removes a socket from a room.
+	 *
+	 * @param {string} socketId - Socket id.
+	 * @param {string} room - Room name.
+	 * @returns {boolean} True when the socket exists.
+	 */
+	leaveRoom(socketId, room) {
+		const socket = this._socket.of('/').sockets.get(socketId);
+		if (!socket) return false;
+		socket.leave(room);
+		return true;
+	}
+
+	/**
+	 * Lists the socket ids in a room of the default namespace.
+	 *
+	 * @param {string} room - Room name.
+	 * @returns {Promise<string[]>} Socket ids.
+	 */
+	async getSocketsInRoom(room) {
+		const sockets = await this._socket.in(room).fetchSockets();
+		return sockets.map((s) => s.id);
+	}
+
+	/**
+	 * Sends an event to one socket.
+	 *
+	 * @param {string} socketId - Target socket id.
+	 * @param {string} event - Event name.
+	 * @param {any} data - Payload.
+	 */
+	sendPrivateMessage(socketId, event, data) {
+		this._socket.to(socketId).emit(event, data);
+	}
+
+	/**
+	 * Sends an event to every socket except the sender.
+	 *
+	 * @param {string} socketId - Sender socket id.
+	 * @param {string} event - Event name.
+	 * @param {any} data - Payload.
+	 */
+	broadcast(socketId, event, data) {
+		this._socket.except(socketId).emit(event, data);
+	}
+
+	/**
+	 * Sends an event to every socket of a namespace.
+	 *
+	 * @param {string} namespace - Namespace name, with or without leading slash.
+	 * @param {string} event - Event name.
+	 * @param {any} data - Payload.
+	 */
+	emitToNamespace(namespace, event, data) {
+		const name = namespace.startsWith('/') ? namespace : `/${namespace}`;
+		this._socket.of(name).emit(event, data);
+	}
+
+	/**
+	 * Disconnects a socket.
+	 *
+	 * @param {string} socketId - Socket id.
+	 * @returns {boolean} True when the socket existed.
+	 */
+	disconnectSocket(socketId) {
+		const socket = this._socket.of('/').sockets.get(socketId);
+		if (!socket) return false;
+		socket.disconnect(true);
+		return true;
+	}
+
+	/**
+	 * Releases every handle without closing Strapi's HTTP server, which Strapi
+	 * closes itself after plugin destroy (#109).
+	 *
+	 * @returns {Promise<void>}
+	 */
+	async destroy() {
+		clearInterval(this._revalidateTimer);
+		for (const timer of this._expiryTimers.values()) clearTimeout(timer);
+		this._expiryTimers.clear();
+		this._unsubscribeSettings?.();
+		this._removeUpgradeForwarder?.();
+		this._socket.disconnectSockets(true);
+		// `_nsps` is what Socket.IO's own close() iterates; there is no public list.
+		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [];
+		await Promise.allSettled(namespaces.map((nsp) => nsp.adapter?.close?.()));
+		this._socket.engine?.close?.();
+	}
+
+	/**
+	 * Namespaces by name without the leading slash (`''` is the default one).
+	 *
+	 * @returns {Record<string, import('socket.io').Namespace>} Namespaces.
+	 */
+	get namespaces() {
+		const entries = this._socket._nsps ? [...this._socket._nsps.entries()] : [];
+		return Object.fromEntries(entries.map(([name, nsp]) => [name.replace(/^\//, ''), nsp]));
+	}
+
+	/** @returns {import('socket.io').Server} The Socket.IO server. */
 	get server() {
 		return this._socket;
 	}
 }
 
-export { SocketIO };
+/**
+ * Checks whether a room is managed by the plugin.
+ *
+ * @param {string} room - Room name.
+ * @returns {boolean} True for role, token, admin and presence rooms.
+ */
+function isReservedRoom(room) {
+	return (
+		typeof room !== 'string' ||
+		room.startsWith('io-role-') ||
+		room.startsWith('io-token-') ||
+		room.startsWith('io-admin-') ||
+		room.startsWith('presence:')
+	);
+}
+
+export { isReservedRoom, SocketIO };

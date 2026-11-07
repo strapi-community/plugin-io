@@ -1,372 +1,160 @@
 /// <reference types="node" />
-import { Server as SocketIOServer, Socket, Namespace } from 'socket.io';
-import type { Core } from '@strapi/strapi';
+import type { Server as SocketIOServer, ServerOptions, Socket } from 'socket.io';
+import type { Core } from '@strapi/types';
 
-declare module '@strapi/strapi' {
-  export interface Strapi {
-    /**
-     * Global Socket.IO instance with helper functions
-     * @example
-     * strapi.$io.server.emit('notification', data);
-     * strapi.$io.joinRoom(socketId, 'premium-users');
-     */
-    $io: SocketIO;
-    
-    /**
-     * Current plugin settings (read-only)
-     * @example
-     * const maxConnections = strapi.$ioSettings.connection.maxConnections;
-     */
-    $ioSettings?: PluginSettings;
-  }
+declare module '@strapi/types/dist/core/strapi.js' {
+	interface Strapi {
+		/**
+		 * The plugin's Socket.IO wrapper.
+		 * @example strapi.$io.server.emit('notification', { message: 'Hello' });
+		 */
+		$io: SocketIO;
+	}
 }
 
-export interface SocketIOConfig {
-  events?: SocketEvent[];
-  hooks?: {
-    init?: (context: { strapi: Core.Strapi; $io: SocketIO }) => void | Promise<void>;
-  };
-  contentTypes?: Array<string | ContentTypeConfig>;
-  socket?: {
-    /**
-     * Options forwarded to the Socket.IO / Engine.IO server.
-     * The plugin defaults `destroyUpgrade` to `false` so Strapi Data Transfer
-     * WebSocket upgrades (`/admin/transfer/*`) are not torn down (#112).
-     */
-    serverOptions?: Record<string, unknown> & {
-      destroyUpgrade?: boolean;
-      destroyUpgradeTimeout?: number;
-      path?: string;
-      cors?: unknown;
-    };
-  };
-  /**
-   * Additional sensitive field names to exclude from emitted data.
-   * These are added to the default list which includes:
-   * password, resetPasswordToken, confirmationToken, refreshToken,
-   * accessToken, secret, apiKey, privateKey, token, salt, hash
-   * 
-   * @example
-   * sensitiveFields: ['creditCard', 'ssn', 'socialSecurityNumber']
-   */
-  sensitiveFields?: string[];
+/** Content events the plugin emits as `<singularName>:<action>`. */
+export type ContentTypeAction = 'create' | 'update' | 'delete' | 'publish' | 'unpublish' | 'discardDraft';
+
+/** Populate configuration for content type events. */
+export type PopulateConfig = '*' | true | string[] | Record<string, unknown>;
+
+export interface ContentTypeConfig {
+	/** Content type uid, e.g. `api::article.article`. */
+	uid: string;
+	/** Actions that emit events. Defaults to all actions. */
+	actions?: ContentTypeAction[];
+	/** Relations to populate in create, update, publish and discardDraft events. */
+	populate?: PopulateConfig;
 }
 
 export interface SocketEvent {
-  name: string;
-  handler: (
-    context: { strapi: Core.Strapi; io: SocketIO },
-    socket: Socket,
-    ...args: any[]
-  ) => void | Promise<void>;
+	/** Client event name, or `connection` to run once per new socket. */
+	name: string;
+	handler: (context: { strapi: Core.Strapi; io: SocketIO }, socket: Socket, ...args: any[]) => void | Promise<void>;
 }
 
-/**
- * Populate configuration for content type events.
- * Supports multiple formats for flexibility.
- */
-export type PopulateConfig = 
-  | '*'                              // Populate all relations (1 level deep)
-  | true                             // Alias for '*'
-  | string[]                         // Specific relations: ['author', 'category']
-  | Record<string, any>;             // Strapi populate syntax: { author: { fields: ['name'] } }
+/** `config/plugins` > `io.config`. */
+export interface SocketIOConfig {
+	events?: SocketEvent[];
+	hooks?: {
+		/** Awaited during bootstrap, e.g. to attach a Redis adapter. */
+		init?: (context: { strapi: Core.Strapi; $io: SocketIO }) => void | Promise<void>;
+	};
+	contentTypes: Array<string | ContentTypeConfig>;
+	socket?: {
+		/**
+		 * Socket.IO server options. `cors` and `allowRequest` default to the admin
+		 * setting "Allowed origins"; values set here win.
+		 */
+		serverOptions?: Partial<ServerOptions> & { destroyUpgrade?: boolean; destroyUpgradeTimeout?: number };
+	};
+	/** Extra field names that are never emitted. */
+	sensitiveFields?: string[];
+}
 
-export interface ContentTypeConfig {
-  /** Content type UID (e.g., 'api::article.article') */
-  uid: string;
-  /** Actions to emit events for. Defaults to all: ['create', 'update', 'delete'] */
-  actions?: Array<'create' | 'update' | 'delete'>;
-  /**
-   * Populate relations when emitting events.
-   * When configured, the plugin will refetch the entity with populated relations
-   * after create/update operations before emitting the event.
-   * 
-   * @example
-   * // Populate all relations
-   * populate: '*'
-   * 
-   * @example
-   * // Populate specific relations
-   * populate: ['author', 'category']
-   * 
-   * @example
-   * // Strapi populate syntax with field selection
-   * populate: { 
-   *   author: { fields: ['username', 'email'] },
-   *   category: true 
-   * }
-   */
-  populate?: PopulateConfig;
+/** Payload of create, update, publish and discardDraft events. */
+export interface EntryEventPayload {
+	data: { id: number; attributes: Record<string, unknown> };
+	meta: Record<string, never>;
+}
+
+/** Payload of delete and unpublish events. */
+export interface IdentifierEventPayload {
+	data: { documentId: string; locale?: string };
 }
 
 export interface EmitOptions {
-  event: 'create' | 'update' | 'delete';
-  schema: any;
-  data: any;
+	event: ContentTypeAction;
+	/** Content type uid or an object with `uid` (and optionally `singularName`). */
+	schema: string | { uid: string; singularName?: string };
+	data: Record<string, unknown>;
 }
 
 export interface RawEmitOptions {
-  event: string;
-  data: any;
-  rooms?: string[];
+	event: string;
+	data: unknown;
+	rooms?: string[];
 }
 
-export interface SocketIOMetrics {
-  totalEmits: number;
-  cachedLookups: number;
-  connectedSockets: number;
-  errors: number;
-  cacheSize: {
-    rooms: number;
-    abilities: number;
-  };
+export declare class SocketIO {
+	constructor(
+		options?: SocketIOConfig['socket'] extends infer S ? (S extends { serverOptions?: infer O } ? O : never) : never,
+		deps?: { strapi?: Core.Strapi }
+	);
+	/** Emits a content event to every audience with read permission. Resolves with the number of rooms reached. */
+	emit(options: EmitOptions): Promise<number>;
+	/** Emits `{ data: { documentId, locale } }` to every audience with read permission. */
+	emitIdentifier(options: {
+		event: ContentTypeAction;
+		schema: string | { uid: string; singularName?: string };
+		data: { documentId: string; locale?: string | null };
+	}): Promise<number>;
+	/** Emits a custom event; sensitive fields are removed. Without rooms it goes to every client. */
+	raw(options: RawEmitOptions): Promise<void>;
+	/** Adds a socket to a room. Plugin-managed rooms (io-role-, io-token-, io-admin-, presence:) are refused. */
+	joinRoom(socketId: string, room: string): boolean;
+	leaveRoom(socketId: string, room: string): boolean;
+	getSocketsInRoom(room: string): Promise<string[]>;
+	sendPrivateMessage(socketId: string, event: string, data: unknown): void;
+	broadcast(socketId: string, event: string, data: unknown): void;
+	emitToNamespace(namespace: string, event: string, data: unknown): void;
+	disconnectSocket(socketId: string): boolean;
+	/** Re-checks authenticated sockets and disconnects invalid ones. */
+	revalidateSockets(kinds?: Array<'user' | 'token' | 'admin'>): Promise<number>;
+	destroy(): Promise<void>;
+	/** Namespaces by name without the leading slash. */
+	readonly namespaces: Record<string, import('socket.io').Namespace>;
+	readonly server: SocketIOServer;
 }
 
-export class SocketIO {
-  constructor(options?: any);
-  
-  /**
-   * Emit a content type event with sanitization and permission checking
-   */
-  emit(options: EmitOptions): Promise<void>;
-  
-  /**
-   * Emit a raw event to specified rooms
-   */
-  raw(options: RawEmitOptions): Promise<void>;
-  
-  /**
-   * Invalidate the internal cache
-   */
-  invalidateCache(): void;
-  
-  /**
-   * Get current metrics
-   */
-  getMetrics(): SocketIOMetrics;
-  
-  /**
-   * Get the underlying Socket.IO server instance
-   */
-  readonly server: SocketIOServer;
-  
-  /**
-   * All configured namespaces
-   */
-  namespaces?: Record<string, Namespace>;
-  
-  /**
-   * Join socket to room
-   */
-  joinRoom?(socketId: string, roomName: string): boolean;
-  
-  /**
-   * Remove socket from room
-   */
-  leaveRoom?(socketId: string, roomName: string): boolean;
-  
-  /**
-   * Get all sockets in room
-   */
-  getSocketsInRoom?(roomName: string): Promise<Array<{ id: string; user: any }>>;
-  
-  /**
-   * Send private message to specific socket
-   */
-  sendPrivateMessage?(socketId: string, event: string, data: any): void;
-  
-  /**
-   * Broadcast from socket to all others
-   */
-  broadcast?(socketId: string, event: string, data: any): void;
-  
-  /**
-   * Emit to namespace
-   */
-  emitToNamespace?(namespace: string, event: string, data: any): void;
-  
-  /**
-   * Force disconnect socket
-   */
-  disconnectSocket?(socketId: string, reason?: string): boolean;
-  
-  /**
-   * Subscribe a socket to a specific entity (server-side)
-   */
-  subscribeToEntity?(socketId: string, uid: string, id: string | number): Promise<EntitySubscriptionResult>;
-  
-  /**
-   * Unsubscribe a socket from a specific entity
-   */
-  unsubscribeFromEntity?(socketId: string, uid: string, id: string | number): EntitySubscriptionResult;
-  
-  /**
-   * Get all entity subscriptions for a socket
-   */
-  getEntitySubscriptions?(socketId: string): EntitySubscriptionsResult;
-  
-  /**
-   * Emit an event to all clients subscribed to a specific entity
-   */
-  emitToEntity?(uid: string, id: string | number, event: string, data: any): void;
-  
-  /**
-   * Get all sockets subscribed to a specific entity
-   */
-  getEntityRoomSockets?(uid: string, id: string | number): Promise<Array<{ id: string; user: any }>>;
-  
-  /**
-   * Cleanup and destroy the Socket.IO instance
-   */
-  destroy(): Promise<void>;
-}
-
-export interface EntitySubscriptionResult {
-  success: boolean;
-  room?: string;
-  uid?: string;
-  id?: string | number;
-  error?: string;
-}
-
-export interface EntitySubscriptionsResult {
-  success: boolean;
-  subscriptions?: Array<{ uid: string; id: string; room: string }>;
-  error?: string;
-}
-
-/**
- * Plugin Settings
- */
 export interface PluginSettings {
-  enabled: boolean;
-  cors: { origins: string[] };
-  connection: {
-    maxConnections: number;
-    pingTimeout: number;
-    pingInterval: number;
-    connectionTimeout: number;
-  };
-  security: {
-    requireAuthentication: boolean;
-    rateLimiting: {
-      enabled: boolean;
-      maxEventsPerSecond: number;
-    };
-    ipWhitelist: string[];
-    ipBlacklist: string[];
-  };
-  events: {
-    customEventNames: boolean;
-    includeRelations: boolean;
-    excludeFields: string[];
-    onlyPublished: boolean;
-  };
-  rooms: {
-    autoJoinByRole: Record<string, string[]>;
-    enablePrivateRooms: boolean;
-  };
-  rolePermissions: Record<string, RolePermission>;
-  redis: {
-    enabled: boolean;
-    url: string;
-  };
-  namespaces: {
-    enabled: boolean;
-    list: Record<string, { requireAuth: boolean }>;
-  };
-  monitoring: {
-    enableConnectionLogging: boolean;
-    enableEventLogging: boolean;
-    maxEventLogSize: number;
-  };
+	version: 2;
+	cors: { origins: string[] };
+	connection: { maxConnections: number; pingTimeout: number; pingInterval: number; connectionTimeout: number };
+	security: {
+		requireAuthentication: boolean;
+		rateLimiting: { enabled: boolean; maxEventsPerSecond: number };
+		ipWhitelist: string[];
+		ipBlacklist: string[];
+	};
+	events: { onlyPublished: boolean; excludeFields: string[]; contentTypes: Record<string, ContentTypeAction[]> };
+	rolePermissions: Record<string, { canConnect: boolean }>;
+	presence: { enabled: boolean; showTypingIndicator: boolean };
+	monitoring: { enableConnectionLogging: boolean; enableEventLogging: boolean; maxEventLogSize: number };
 }
 
-export interface RolePermission {
-  canConnect: boolean;
-  allowCredentials: boolean;
-  allowedMethods: string[];
-  contentTypes: Record<string, {
-    create: boolean;
-    update: boolean;
-    delete: boolean;
-  }>;
-}
-
-/**
- * Settings Service
- */
 export interface SettingsService {
-  getSettings(): Promise<PluginSettings>;
-  setSettings(newSettings: Partial<PluginSettings>): Promise<PluginSettings>;
-  getDefaultSettings(): PluginSettings;
+	load(): Promise<PluginSettings>;
+	current(): PluginSettings;
+	getSettings(): Promise<PluginSettings>;
+	setSettings(update: Partial<PluginSettings>): Promise<PluginSettings>;
+	onChange(listener: (settings: PluginSettings) => void): () => void;
 }
 
-/**
- * Monitoring Service
- */
 export interface MonitoringService {
-  getConnectionStats(): ConnectionStats;
-  getEventStats(): EventStats;
-  getEventLog(limit?: number): EventLogEntry[];
-  logEvent(eventType: string, data?: any): void;
-  resetStats(): void;
-  sendTestEvent(eventName?: string, data?: any): TestEventResult;
+	recordEvent(event: string, meta?: { audiences?: number | null; source?: 'content' | 'raw' | 'test' }): void;
+	recordConnection(): void;
+	getEventStats(): {
+		totalEvents: number;
+		eventsPerSecond: number;
+		lastEventAt: string | null;
+		totalConnections: number;
+		since: string;
+	};
+	getConnectionStats(): Promise<{
+		connected: number;
+		rooms: number;
+		byKind: Record<'admin' | 'user' | 'token' | 'public', number>;
+	}>;
+	getEventLog(
+		limit?: number
+	): Array<{ id: number; timestamp: string; event: string; source: string; audiences: number | null }>;
+	reset(): void;
 }
 
-export interface ConnectionStats {
-  connected: number;
-  rooms: Array<{ name: string; members: number; isEntityRoom?: boolean }>;
-  sockets: Array<{
-    id: string;
-    connected: boolean;
-    rooms: string[];
-    entitySubscriptions?: Array<{ uid: string; id: string; room: string }>;
-    handshake: {
-      address: string;
-      time: string;
-      query: Record<string, string>;
-    };
-    user: any;
-  }>;
-  entitySubscriptions?: {
-    total: number;
-    byContentType: Record<string, number>;
-    rooms: string[];
-  };
+export interface SanitizeService {
+	output(params: { schema: { uid: string }; data: unknown; options: unknown }): Promise<unknown>;
+	sanitizeRaw<T>(data: T): T;
+	getSensitiveFields(): string[];
+	DEFAULT_SENSITIVE_FIELDS: readonly string[];
 }
-
-export interface EventStats {
-  totalEvents: number;
-  eventsByType: Record<string, number>;
-  lastReset: number;
-  eventsPerSecond: string | number;
-}
-
-export interface EventLogEntry {
-  timestamp: number;
-  type: string;
-  data: any;
-}
-
-export interface TestEventResult {
-  success: boolean;
-  eventName: string;
-  data: any;
-  recipients: number;
-}
-
-/**
- * Extend Strapi plugin services
- */
-declare module '@strapi/strapi' {
-  export interface PluginServices {
-    io?: {
-      settings: SettingsService;
-      monitoring: MonitoringService;
-    };
-  }
-}
-
-export default SocketIO;
-
