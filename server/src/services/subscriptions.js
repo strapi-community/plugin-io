@@ -74,7 +74,73 @@ export default ({ strapi }) => {
 	const counts = new Map();
 	/** Subscribe requests per socket that passed the limit check and still run their async checks. */
 	const pending = new WeakMap();
+	/**
+	 * The same for sockets on other servers, keyed by socket id: every
+	 * `$io.subscribeToEntity()` call builds a new wrapper for a remote socket,
+	 * so the wrapper cannot be the key.
+	 */
+	const pendingRemote = new Map();
+	/**
+	 * Entity rooms this process asked another server to join, per socket id,
+	 * with the time after which the remote socket's own room list is trusted
+	 * again. A remote join travels through the adapter, so a parallel call
+	 * that re-reads the rooms right after it would not see it yet.
+	 */
+	const remoteJoins = new Map();
+	const REMOTE_JOIN_GRACE_MS = 10_000;
 	let trackedAdapter = null;
+
+	const slot = {
+		get: (socket) => (socket.remote === true ? pendingRemote.get(socket.id) : pending.get(socket)) || 0,
+		set(socket, value) {
+			const map = socket.remote === true ? pendingRemote : pending;
+			const k = socket.remote === true ? socket.id : socket;
+			if (value > 0) map.set(k, value);
+			else map.delete(k);
+		},
+	};
+
+	/**
+	 * Subscriptions counted against the limit: the socket's entity rooms plus,
+	 * for a socket on another server, joins this process sent in the last few
+	 * seconds that its room list may not show yet.
+	 *
+	 * @param {{ id: string, rooms: Set<string>, remote?: boolean }} socket - Socket or remote wrapper.
+	 * @returns {number} Count.
+	 */
+	const usedSlots = (socket) => {
+		const rooms = new Set();
+		for (const room of socket.rooms) if (parseEntityRoom(room)) rooms.add(room);
+		if (socket.remote === true) {
+			const recent = remoteJoins.get(socket.id);
+			const now = Date.now();
+			for (const [room, until] of recent ?? []) {
+				if (until > now) rooms.add(room);
+				else recent.delete(room);
+			}
+			if (recent && !recent.size) remoteJoins.delete(socket.id);
+		}
+		return rooms.size;
+	};
+
+	/**
+	 * Remembers a join sent to another server (see `remoteJoins`).
+	 *
+	 * @param {string} socketId - Remote socket id.
+	 * @param {string} room - Entity room.
+	 */
+	const rememberRemoteJoin = (socketId, room) => {
+		const now = Date.now();
+		if (remoteJoins.size > 1000) {
+			for (const [id, recent] of remoteJoins) {
+				for (const [r, until] of recent) if (until <= now) recent.delete(r);
+				if (!recent.size) remoteJoins.delete(id);
+			}
+		}
+		const recent = remoteJoins.get(socketId) ?? new Map();
+		recent.set(room, now + REMOTE_JOIN_GRACE_MS);
+		remoteJoins.set(socketId, recent);
+	};
 
 	const settings = () => strapi.plugin('io').service('settings').current().subscriptions;
 	const key = (uid, documentId) => `${uid}${SEPARATOR}${documentId}`;
@@ -221,9 +287,10 @@ export default ({ strapi }) => {
 			const limitReached = { success: false, error: `Maximum subscriptions (${maxPerSocket}) reached` };
 			// Requests that run at the same time each reserve a slot before the
 			// first await, so parallel subscribes cannot pass the check together.
-			const inFlight = pending.get(socket) || 0;
-			if (list(socket).length + inFlight >= maxPerSocket) return limitReached;
-			pending.set(socket, inFlight + 1);
+			// Sockets on other servers are reserved by id (see `pendingRemote`).
+			const inFlight = slot.get(socket);
+			if (usedSlots(socket) + inFlight >= maxPerSocket) return limitReached;
+			slot.set(socket, inFlight + 1);
 
 			try {
 				const rooms = strapi.plugin('io').service('rooms');
@@ -236,16 +303,23 @@ export default ({ strapi }) => {
 					strapi.log.warn(`[io] Entity subscription check failed: ${error?.name || 'Error'}`);
 					return { success: false, error: ERRORS.FAILED };
 				}
+				// A socket on another server: re-read its rooms right before the
+				// join, which also tells whether it is still connected.
+				if (socket.remote === true && typeof socket.refresh === 'function') await socket.refresh();
 				// The socket may have disconnected while the checks ran.
 				if (!socket.connected) return { success: false, error: ERRORS.FAILED };
-				// Joining is synchronous, so this second check is the hard cap.
-				if (!socket.rooms.has(room) && list(socket).length >= maxPerSocket) return limitReached;
+				// Nothing awaits between this check and the join (a remote join is
+				// recorded in the same tick), so this second check is the hard cap
+				// for every call that runs on this process. Calls for one remote
+				// socket made on several processes at the same moment are bounded
+				// only by the first check (see docs/api/io-class.md).
+				const joined = socket.rooms.has(room) || (socket.remote === true && remoteJoins.get(socket.id)?.has(room));
+				if (!joined && usedSlots(socket) >= maxPerSocket) return limitReached;
 				socket.join(room);
+				if (socket.remote === true) rememberRemoteJoin(socket.id, room);
 				return { success: true, uid, documentId, id: documentId };
 			} finally {
-				const left = (pending.get(socket) || 1) - 1;
-				if (left > 0) pending.set(socket, left);
-				else pending.delete(socket);
+				slot.set(socket, slot.get(socket) - 1);
 			}
 		},
 
@@ -260,7 +334,11 @@ export default ({ strapi }) => {
 			const target = parseTarget(data);
 			if (!target) return { success: false, error: ERRORS.INVALID };
 			const audience = audienceOf(socket);
-			if (audience) socket.leave(entityRoom(audience, target.uid, target.documentId));
+			if (audience) {
+				const room = entityRoom(audience, target.uid, target.documentId);
+				socket.leave(room);
+				if (socket.remote === true) remoteJoins.get(socket.id)?.delete(room);
+			}
 			return { success: true, uid: target.uid, documentId: target.documentId, id: target.documentId };
 		},
 

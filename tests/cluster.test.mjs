@@ -111,6 +111,7 @@ async function startCluster(count, { adapter = true } = {}) {
   return {
     nodes,
     shared,
+    channelPrefix,
     async close() {
       for (const node of nodes) await node.close();
       for (const node of nodes) await node.knex.destroy();
@@ -331,7 +332,7 @@ if (!PG_URL) {
     const [a, b, c] = cluster.nodes;
     const { socket } = await c.connect();
     await until(() => socket.id);
-    assert.equal(a.strapi.$io.joinRoom(socket.id, 'chat-1'), true);
+    assert.equal(await a.strapi.$io.joinRoom(socket.id, 'chat-1'), true);
     await sleep(200);
     const message = nextEvent(socket, 'chat', 3000);
     await b.strapi.$io.raw({ event: 'chat', data: { text: 'hello' }, rooms: ['chat-1'] });
@@ -340,7 +341,7 @@ if (!PG_URL) {
     const subs = await a.strapi.$io.getEntitySubscriptions(socket.id);
     assert.deepEqual(subs, { success: true, subscriptions: [] });
     const gone = new Promise((resolve) => socket.once('disconnect', resolve));
-    assert.equal(a.strapi.$io.disconnectSocket(socket.id), true);
+    assert.equal(await a.strapi.$io.disconnectSocket(socket.id), true);
     assert.notEqual(await Promise.race([gone, sleep(3000).then(() => 'timeout')]), 'timeout');
     await cluster.close();
   });
@@ -456,6 +457,106 @@ if (!PG_URL) {
     const stored = await cluster.nodes[1].strapi.plugin('io').service('settings').getSettings();
     for (const [key, value] of Object.entries(edits)) assert.deepEqual(stored[key], value, key);
     assert.equal(cluster.nodes[1].strapi.plugin('io').service('settings').revision(), 8);
+    await cluster.close();
+  });
+
+  test('IO-RA-01: losing the adapter LISTEN connection neither crashes the process nor stops cross-node delivery', async () => {
+    const cluster = await startCluster(2);
+    const [a, b] = cluster.nodes;
+    const admin = knexFactory({ client: 'pg', connection: PG_URL, pool: { min: 0, max: 1 } });
+    const listeners = async () =>
+      (
+        await admin.raw(
+          `SELECT pid FROM pg_stat_activity WHERE application_name = 'strapi-plugin-io' AND query LIKE ?`,
+          [`LISTEN "${cluster.channelPrefix}#%`]
+        )
+      ).rows.map((r) => r.pid);
+    const before = await until(async () => {
+      const pids = await listeners();
+      return pids.length === 2 && pids;
+    });
+    // What a Postgres restart, failover or idle_session_timeout does to the connection.
+    await admin.raw('SELECT pg_terminate_backend(pid) FROM unnest(?::int[]) AS pid', [before]);
+    // Both adapters reconnect after 1-3 s with new backends.
+    await until(async () => {
+      const pids = await listeners();
+      return pids.length === 2 && pids.every((pid) => !before.includes(pid));
+    }, 8000);
+    assert.ok(
+      [...a.strapi.logs.warn, ...b.strapi.logs.warn].some((m) => m.includes('postgres adapter error')),
+      'the error reached the handler'
+    );
+    // Delivery and the control channel work again.
+    const { socket } = await b.connect();
+    const received = nextEvent(socket, 'after-restart', 4000);
+    await a.strapi.$io.raw({ event: 'after-restart', data: { ok: true } });
+    assert.equal((await received)?.data?.ok, true);
+    const replies = await a.strapi
+      .plugin('io')
+      .service('cluster')
+      .askPeers(a.strapi.plugin('io').service('cluster').EVENT_LOG_REQUEST, 1);
+    assert.equal(replies.length, 1, 'serverSideEmit with ack is answered by the other node');
+    await admin.destroy();
+    await cluster.close();
+  });
+
+  test('IO-RA-02: a room name passed as socket id joins, leaves and disconnects nobody on any node', async () => {
+    const cluster = await startCluster(2);
+    const [a, b] = cluster.nodes;
+    const clients = [];
+    for (let i = 0; i < 3; i += 1) clients.push((await b.connect()).socket);
+    assert.equal(await a.strapi.$io.joinRoom('io-role-public', 'chat-private'), false);
+    let leaked = 0;
+    for (const c of clients) c.on('secret', () => (leaked += 1));
+    await a.strapi.$io.raw({ event: 'secret', data: {}, rooms: ['chat-private'] });
+    assert.equal(await a.strapi.$io.disconnectSocket('io-role-public'), false);
+    assert.equal(await a.strapi.$io.disconnectSocket('io-role-authenticated'), false);
+    assert.equal(await a.strapi.$io._remoteSocket('io-role-public'), null);
+    assert.deepEqual(await a.strapi.$io.subscribeToEntity('io-role-public', 'api::article.article', 'doc1'), {
+      success: false,
+      error: 'Socket not found',
+    });
+    await sleep(500);
+    assert.equal(leaked, 0, 'the private room reached nobody');
+    assert.equal(
+      clients.every((c) => c.connected),
+      true,
+      'nobody was disconnected'
+    );
+    // The exact id of a socket on node B still works from node A.
+    const target = clients[1];
+    const gone = new Promise((resolve) => target.once('disconnect', resolve));
+    assert.equal(await a.strapi.$io.disconnectSocket(target.id), true);
+    assert.notEqual(await Promise.race([gone, sleep(3000).then(() => 'timeout')]), 'timeout');
+    assert.equal(clients[0].connected && clients[2].connected, true, 'only that one socket');
+    await cluster.close();
+  });
+
+  test('IO-RA-03: a signal committed after a higher id is still delivered (no adapter)', async () => {
+    const cluster = await startCluster(2, { adapter: false });
+    const [a, b] = cluster.nodes;
+    const got = [];
+    b.strapi
+      .plugin('io')
+      .service('cluster')
+      .on('proof-kind', (payload) => got.push(payload.name));
+    const writer = knexFactory({ client: 'pg', connection: PG_URL, pool: { min: 0, max: 2 } });
+    const trx = await writer.transaction();
+    // The slow signal takes its id first but commits last.
+    await trx(TABLES.signals).insert({
+      uid: `slow-${randomBytes(4).toString('hex')}`,
+      kind: 'proof-kind',
+      origin: 'elsewhere',
+      payload: JSON.stringify({ name: 'slow' }),
+      created_at: Date.now(),
+    });
+    await a.strapi.plugin('io').service('cluster').publish('proof-kind', { name: 'fast' });
+    await b.strapi.plugin('io').service('cluster').pollNow();
+    assert.deepEqual(got, ['fast']);
+    await trx.commit();
+    await b.strapi.plugin('io').service('cluster').pollNow();
+    assert.deepEqual(got, ['fast', 'slow']);
+    await writer.destroy();
     await cluster.close();
   });
 }

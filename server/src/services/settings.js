@@ -67,6 +67,8 @@ const revisionOf = (stored) =>
 export default ({ strapi }) => {
 	let snapshot = structuredClone(DEFAULT_SETTINGS);
 	let revision = 0;
+	/** Id of the core_store row the snapshot came from. */
+	let knownRowId = null;
 	const listeners = new Set();
 
 	const query = () => strapi.db.query(CORE_STORE);
@@ -114,12 +116,33 @@ export default ({ strapi }) => {
 		}
 	};
 
-	/** Replaces the snapshot and notifies listeners when the revision changed. */
-	const apply = (stored, { force = false } = {}) => {
+	/**
+	 * Replaces the snapshot and notifies listeners when the stored revision is
+	 * newer than the snapshot's.
+	 *
+	 * Monotonic: refreshes overlap on one process (the periodic safety net, a
+	 * cluster signal, GET /io/settings), and the one that read the row first
+	 * can finish last. Applying any different revision would then install the
+	 * older settings again (security switches, IP rules, CORS) until the next
+	 * refresh. A lower or equal revision is skipped, unless it comes from a
+	 * different row: when the row was deleted and created again, or duplicate
+	 * rows from concurrent first starts were reduced to the oldest, the
+	 * revisions of the surviving row are the ones that count.
+	 *
+	 * @param {object | null} stored - Parsed stored value.
+	 * @param {{ rowId?: number | string | null }} [options] - Id of the row it was read from.
+	 * @returns {object} Current settings.
+	 */
+	const apply = (stored, { rowId = null } = {}) => {
 		const nextRevision = revisionOf(stored);
-		if (!force && nextRevision === revision) return snapshot;
+		const otherRow = rowId !== null && knownRowId !== null && String(rowId) !== String(knownRowId);
+		if (!otherRow && nextRevision <= revision) {
+			if (rowId !== null) knownRowId = rowId;
+			return snapshot;
+		}
 		snapshot = normalizeSettings(stored, strapi.log);
 		revision = nextRevision;
+		if (rowId !== null) knownRowId = rowId;
 		notify(snapshot);
 		return snapshot;
 	};
@@ -135,20 +158,25 @@ export default ({ strapi }) => {
 		 * @returns {Promise<object>} The normalized settings.
 		 */
 		async load() {
-			const stored = parseRow(await ensureRow());
+			const row = await ensureRow();
+			const stored = parseRow(row);
 			snapshot = normalizeSettings(stored, strapi.log);
 			revision = revisionOf(stored);
+			knownRowId = row?.id ?? null;
 			return snapshot;
 		},
 
 		/**
 		 * Re-reads the stored settings and applies them (snapshot plus
-		 * listeners) when another process saved a newer revision.
+		 * listeners) when another process saved a newer revision. Never goes
+		 * back to an older revision, even when an earlier, slower refresh
+		 * finishes last.
 		 *
 		 * @returns {Promise<object>} Current settings.
 		 */
 		async refresh() {
-			return apply(parseRow(await readRow()));
+			const row = await readRow();
+			return apply(parseRow(row), { rowId: row?.id ?? null });
 		},
 
 		/**
@@ -209,7 +237,9 @@ export default ({ strapi }) => {
 				const value = JSON.stringify({ ...next, revision: current + 1 });
 				const { count } = await query().updateMany({ where: { id: row.id, value: row.value }, data: { value } });
 				if (Number(count) === 1) {
-					apply({ ...next, revision: current + 1 }, { force: true });
+					// Not forced: a refresh that already applied an even newer save of
+					// another process must not be rolled back by this one.
+					apply({ ...next, revision: current + 1 }, { rowId: row.id });
 					await strapi
 						.plugin('io')
 						.service('cluster')

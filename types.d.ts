@@ -181,16 +181,18 @@ export declare class SocketIO {
 	raw(options: RawEmitOptions): Promise<void>;
 	/**
 	 * Adds a socket to a room. Plugin-managed rooms (io-role-, io-token-, io-admin-, io-entity-, presence:) are refused.
-	 * With a multi-server adapter a socket on another process is joined through the adapter and `true` means "requested".
+	 * With a multi-server adapter a socket on another process is looked up by its exact id and the result is a
+	 * Promise: always `await` it. A room name passed as `socketId` never selects the sockets of that room.
 	 */
-	joinRoom(socketId: string, room: string): boolean;
+	joinRoom(socketId: string, room: string): boolean | Promise<boolean>;
 	/** Removes a socket from a room (on any process with a multi-server adapter; see `joinRoom`). */
-	leaveRoom(socketId: string, room: string): boolean;
+	leaveRoom(socketId: string, room: string): boolean | Promise<boolean>;
 	getSocketsInRoom(room: string): Promise<string[]>;
 	sendPrivateMessage(socketId: string, event: string, data: unknown): void;
 	broadcast(socketId: string, event: string, data: unknown): void;
 	emitToNamespace(namespace: string, event: string, data: unknown): void;
-	disconnectSocket(socketId: string): boolean;
+	/** Disconnects the socket with this exact id (on any process with a multi-server adapter; see `joinRoom`). */
+	disconnectSocket(socketId: string): boolean | Promise<boolean>;
 	/** Subscribes a socket to one document with the same checks as `subscribe-entity`. */
 	subscribeToEntity(
 		socketId: string,

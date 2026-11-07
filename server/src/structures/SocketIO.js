@@ -304,24 +304,55 @@ class SocketIO {
 	}
 
 	/**
+	 * Finds the one socket with this exact id on any server.
+	 *
+	 * `io.in(x)` accepts any room, and every socket is also in a room named
+	 * after its id, so `in(socketId)` alone would also select every socket of
+	 * a room such as `io-role-authenticated` when a caller passes a room name.
+	 * This looks the id up and returns only a socket whose `id` equals it. A
+	 * name that is a room on this server but not one of its socket ids is
+	 * refused without asking the other servers.
+	 *
+	 * @param {unknown} socketId - Socket id.
+	 * @returns {Promise<import('socket.io').RemoteSocket<any, any> | null>} The socket, or null.
+	 * @see https://socket.io/docs/v4/server-api/#serverfetchsockets
+	 */
+	async _fetchExactSocket(socketId) {
+		if (typeof socketId !== 'string' || !socketId || socketId.length > 128 || !this._spansServers()) return null;
+		const adapter = this._socket.of('/').adapter;
+		if (adapter?.rooms?.has(socketId) && !adapter?.sids?.has(socketId)) return null;
+		const sockets = await this._socket.in(socketId).fetchSockets();
+		return sockets.find((s) => s.id === socketId) ?? null;
+	}
+
+	/**
 	 * Finds a socket on another server through the adapter and wraps it so the
-	 * subscription checks can read it like a local one.
+	 * subscription checks can read it like a local one. `refresh()` re-reads
+	 * its rooms right before a join (the subscription cap check).
 	 *
 	 * @param {string} socketId - Socket id.
 	 * @returns {Promise<object | null>} Socket-like object, or null.
 	 */
 	async _remoteSocket(socketId) {
-		if (typeof socketId !== 'string' || !socketId || !this._spansServers()) return null;
-		const [remote] = await this._socket.in(socketId).fetchSockets();
+		const remote = await this._fetchExactSocket(socketId);
 		if (!remote) return null;
-		return {
+		const toSet = (rooms) => (rooms instanceof Set ? rooms : new Set(rooms ?? []));
+		const wrapper = {
 			id: remote.id,
+			remote: true,
 			data: remote.data ?? {},
-			rooms: remote.rooms instanceof Set ? remote.rooms : new Set(remote.rooms ?? []),
+			rooms: toSet(remote.rooms),
 			connected: true,
 			join: (name) => remote.join(name),
 			leave: (name) => remote.leave(name),
+			refresh: async () => {
+				const fresh = await this._fetchExactSocket(socketId);
+				wrapper.connected = Boolean(fresh);
+				if (fresh) wrapper.rooms = toSet(fresh.rooms);
+				return wrapper.connected;
+			},
 		};
+		return wrapper;
 	}
 
 	/**
@@ -356,14 +387,14 @@ class SocketIO {
 	/**
 	 * Adds a socket to a room. Plugin-managed rooms cannot be joined.
 	 *
-	 * With a multi-server adapter a socket on another server is joined through
-	 * the adapter (`io.in(socketId).socketsJoin(room)`); the result is then
-	 * `true` for "requested", as the adapter does not report whether the
-	 * socket exists.
+	 * With a multi-server adapter a socket on another server is looked up by
+	 * its exact id first and then joined; the result is then a Promise, so
+	 * `await` it. A room name passed as `socketId` never selects the sockets
+	 * of that room.
 	 *
 	 * @param {string} socketId - Socket id.
 	 * @param {string} room - Room name.
-	 * @returns {boolean} True when the socket joined (or the join was sent to the other servers).
+	 * @returns {boolean | Promise<boolean>} True when the socket joined; a Promise when the socket is not on this server and an adapter spans several servers.
 	 */
 	joinRoom(socketId, room) {
 		if (isReservedRoom(room)) return false;
@@ -372,9 +403,12 @@ class SocketIO {
 			socket.join(room);
 			return true;
 		}
-		if (typeof socketId !== 'string' || !socketId || !this._spansServers()) return false;
-		this._socket.in(socketId).socketsJoin(room);
-		return true;
+		if (!this._spansServers()) return false;
+		return this._fetchExactSocket(socketId).then((remote) => {
+			if (!remote) return false;
+			remote.join(room);
+			return true;
+		});
 	}
 
 	/**
@@ -383,7 +417,7 @@ class SocketIO {
 	 *
 	 * @param {string} socketId - Socket id.
 	 * @param {string} room - Room name.
-	 * @returns {boolean} True when the socket exists (or the request was sent to the other servers).
+	 * @returns {boolean | Promise<boolean>} True when the socket exists; a Promise when it is not on this server and an adapter spans several servers.
 	 */
 	leaveRoom(socketId, room) {
 		const socket = this._socket.of('/').sockets.get(socketId);
@@ -391,9 +425,12 @@ class SocketIO {
 			socket.leave(room);
 			return true;
 		}
-		if (typeof socketId !== 'string' || !socketId || typeof room !== 'string' || !this._spansServers()) return false;
-		this._socket.in(socketId).socketsLeave(room);
-		return true;
+		if (typeof room !== 'string' || !this._spansServers()) return false;
+		return this._fetchExactSocket(socketId).then((remote) => {
+			if (!remote) return false;
+			remote.leave(room);
+			return true;
+		});
 	}
 
 	/**
@@ -497,7 +534,7 @@ class SocketIO {
 	 * Disconnects a socket.
 	 *
 	 * @param {string} socketId - Socket id.
-	 * @returns {boolean} True when the socket existed (or, with a multi-server adapter, the disconnect was sent to the other servers).
+	 * @returns {boolean | Promise<boolean>} True when the socket existed; a Promise when it is not on this server and an adapter spans several servers (only the socket with this exact id is disconnected, never a room).
 	 */
 	disconnectSocket(socketId) {
 		const socket = this._socket.of('/').sockets.get(socketId);
@@ -505,9 +542,12 @@ class SocketIO {
 			socket.disconnect(true);
 			return true;
 		}
-		if (typeof socketId !== 'string' || !socketId || !this._spansServers()) return false;
-		this._socket.in(socketId).disconnectSockets(true);
-		return true;
+		if (!this._spansServers()) return false;
+		return this._fetchExactSocket(socketId).then((remote) => {
+			if (!remote) return false;
+			remote.disconnect(true);
+			return true;
+		});
 	}
 
 	/**

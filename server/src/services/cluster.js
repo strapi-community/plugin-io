@@ -9,7 +9,13 @@ const EVENT_LOG_REQUEST = 'io:event-log';
 
 const DEFAULTS = Object.freeze({ pollInterval: 3000, heartbeatInterval: 10_000 });
 const SIGNAL_TTL_MS = 5 * 60 * 1000;
-const SEEN_MAX = 1000;
+const SEEN_MAX = 5000;
+/** Signals read per poll. */
+const SIGNAL_BATCH = 200;
+/** How long a skipped signal id is asked for again (see `poll`). */
+const GAP_WAIT_MS = 30_000;
+/** Most skipped ids kept at once. */
+const MISSING_MAX = 500;
 const PEER_REQUEST_TIMEOUT_MS = 2500;
 
 /**
@@ -40,6 +46,8 @@ export default ({ strapi }) => {
 	/** @type {Map<string, (payload: any) => any>} */
 	const handlers = new Map();
 	const seen = new Set();
+	/** Signal ids below the cursor that were not visible yet, with the time they were first missed. */
+	const missing = new Map();
 
 	let store = memory;
 	let coordinated = false;
@@ -108,13 +116,35 @@ export default ({ strapi }) => {
 		if (ticks % 6 === 0) await store.pruneNodes(now - heartbeatInterval * 30);
 	};
 
+	/**
+	 * Reads new signals and dispatches them once each.
+	 *
+	 * Ids are handed out at INSERT but rows become visible at COMMIT, so on
+	 * PostgreSQL and MySQL a lower id can commit after a higher one that this
+	 * poll already read. Advancing a plain `id > last` cursor would skip it for
+	 * good. So every id between the last one read and a newer row is kept as
+	 * "missing" and asked for again on the next polls, until it shows up or is
+	 * older than `GAP_WAIT_MS` (sequence gaps from rolled-back inserts, or
+	 * `auto_increment_increment` > 1, never fill). Duplicates are dropped by
+	 * signal uid in `dispatch`.
+	 */
 	const poll = async () => {
 		ticks += 1;
-		const signals = await store.signalsAfter(lastSignalId);
+		const now = Date.now();
+		const signals = await store.signalsAfter(lastSignalId, SIGNAL_BATCH, [...missing.keys()]);
 		for (const signal of signals) {
-			lastSignalId = Math.max(lastSignalId, signal.id);
+			if (signal.id > lastSignalId) {
+				for (let id = Math.max(lastSignalId + 1, signal.id - MISSING_MAX); id < signal.id; id += 1) {
+					if (!missing.has(id)) missing.set(id, now);
+				}
+				lastSignalId = signal.id;
+			}
+			missing.delete(signal.id);
 			await dispatch(signal);
 		}
+		const gapWait = Math.max(GAP_WAIT_MS, options().pollInterval * 5);
+		for (const [id, since] of missing) if (now - since > gapWait) missing.delete(id);
+		while (missing.size > MISSING_MAX) missing.delete(missing.keys().next().value);
 		// Safety net when a signal was lost: compare the settings revision.
 		if (ticks % 10 === 0) {
 			await plugin().service('settings').refresh();

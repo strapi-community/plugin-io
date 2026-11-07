@@ -346,8 +346,25 @@ function createDatabaseStore({ knex, dialect }) {
 				created_at: now,
 			});
 		},
-		async signalsAfter(id, limit = 200) {
-			const rows = await knex(TABLES.signals).where('id', '>', id).orderBy('id', 'asc').limit(limit);
+		/**
+		 * Signals with an id above `id`, plus the listed `missing` ids that
+		 * were not visible at an earlier read. On PostgreSQL and MySQL an id is
+		 * taken at INSERT but the row becomes visible at COMMIT, so a lower id
+		 * can appear after a higher one (see `services/cluster.js` `poll`).
+		 *
+		 * @param {number} id - Highest id read so far.
+		 * @param {number} [limit] - Maximum rows.
+		 * @param {number[]} [missing] - Lower ids still expected.
+		 * @returns {Promise<Array<{ id: number, uid: string, kind: string, origin: string, payload: any }>>} Signals, by id.
+		 */
+		async signalsAfter(id, limit = 200, missing = []) {
+			const rows = await knex(TABLES.signals)
+				.where('id', '>', id)
+				.modify((query) => {
+					if (missing.length) query.orWhereIn('id', missing);
+				})
+				.orderBy('id', 'asc')
+				.limit(limit);
 			return rows.map((row) => {
 				let payload = null;
 				try {

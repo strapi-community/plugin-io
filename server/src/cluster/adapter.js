@@ -61,6 +61,52 @@ const pick = (mod, name) => mod?.[name] ?? mod?.default?.[name];
 const defined = (options) => Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined));
 
 /**
+ * Wraps a `pg.Pool` for `@socket.io/postgres-adapter` so that losing the
+ * adapter's LISTEN connection can neither crash the process nor block the
+ * pool.
+ *
+ * The adapter (0.5.0, `PubSubClient.initClient`) checks one client out with
+ * `pool.connect()`, holds it for LISTEN and listens only for `notification`
+ * and `end` on it. pg-pool removes its own idle `error` listener from a client
+ * while it is checked out (pg-pool 3.x `_acquireClient`), and pg emits `error`
+ * on the client when the server ends the connection (restart, failover,
+ * `pg_terminate_backend`, `idle_session_timeout`). Without a listener Node
+ * throws "Unhandled 'error' event" and the process exits. The adapter then
+ * reconnects with a new `pool.connect()` but never releases the dead client,
+ * so it keeps a pool slot; with the default two slots, its queries
+ * (`pg_notify`) then wait forever and nothing reaches the other processes.
+ *
+ * The wrapper adds an `error` listener to every client it hands out and
+ * releases the client with an error on `end`, which removes it from the pool
+ * (pg-pool `_release` with an error calls `_remove`). The adapter's own
+ * `close()` drops all `end` listeners before it releases the client, so a
+ * client is never released twice.
+ *
+ * @param {import('pg').Pool} pool - pg pool.
+ * @param {(error: Error) => void} onError - Error handler.
+ * @returns {{ connect: () => Promise<import('pg').PoolClient>, query: import('pg').Pool['query'] }} Pool facade with the two methods the adapter uses.
+ * @see https://node-postgres.com/apis/pool#releasing-clients
+ * @see https://node-postgres.com/apis/client#error
+ */
+function guardListenPool(pool, onError) {
+	return {
+		async connect() {
+			const client = await pool.connect();
+			client.on('error', onError);
+			client.once('end', () => {
+				try {
+					client.release(new Error('connection ended'));
+				} catch {
+					// Already released (the adapter closed it).
+				}
+			});
+			return client;
+		},
+		query: (...args) => pool.query(...args),
+	};
+}
+
+/**
  * Normalises `config.socket.adapter` (`'postgres'`, `'redis'`, an object with
  * `type`, or a function).
  *
@@ -148,7 +194,7 @@ async function createConfiguredAdapter(adapterConfig, { strapi }) {
 			}
 		}
 		const adapter = createAdapter(
-			pool,
+			guardListenPool(pool, errorHandler),
 			defined({
 				tableName,
 				channelPrefix: options.channelPrefix,
@@ -209,4 +255,4 @@ async function createConfiguredAdapter(adapterConfig, { strapi }) {
 	throw new Error(`[io] Unknown socket.adapter type "${type}". Use "postgres", "redis" or a function.`);
 }
 
-export { createConfiguredAdapter, defined, normalizeAdapterConfig, pgConnection };
+export { createConfiguredAdapter, defined, guardListenPool, normalizeAdapterConfig, pgConnection };

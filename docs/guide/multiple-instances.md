@@ -123,8 +123,13 @@ socket: {
   transaction mode. On Railway the internal `DATABASE_URL` is direct.
 - Messages larger than 8000 bytes go through the table `socket_io_attachments`,
   which the plugin creates and the adapter cleans up every 30 s.
-- If the adapter loses its connection, events reach only local clients until it
-  reconnects ([Socket.IO docs](https://socket.io/docs/v4/postgres-adapter/)).
+- If the adapter loses its connection (database restart, failover,
+  `idle_session_timeout`), events reach only local clients until it reconnects
+  ([Socket.IO docs](https://socket.io/docs/v4/postgres-adapter/)). The adapter
+  retries after 1 to 3 s. The plugin logs the error once a minute, keeps the
+  process running and frees the dead connection's pool slot, so delivery
+  resumes after the reconnect. Settings, revocations and lockouts still travel
+  through the signal table while the adapter is down.
 
 ### Redis
 
@@ -272,7 +277,13 @@ connection: {
 - With entity subscriptions on, every change is sanitized for each reading
   audience, because a process cannot see which entries are followed elsewhere
   (the Postgres adapter has no cross-server room list).
-- `joinRoom()`, `leaveRoom()` and `disconnectSocket()` return `true` for a socket
-  on another process once the request is sent, as the adapter does not report
-  whether that socket exists. `unsubscribeFromEntity()` and
-  `getEntitySubscriptions()` return a Promise in that case; always `await` them.
+- `joinRoom()`, `leaveRoom()`, `disconnectSocket()`, `unsubscribeFromEntity()`
+  and `getEntitySubscriptions()` return a Promise for a socket on another
+  process; always `await` them. They look the id up first and act only on the
+  socket with exactly that id, never on a room of that name.
+- Parallel `subscribeToEntity()` calls for one socket made on several processes
+  at the same moment can exceed `maxPerSocket` by the number of those processes
+  minus one. Calls made on one process are capped exactly.
+- The signal table is read by id. A signal whose id was taken before another's
+  but committed after it is still delivered: skipped ids are asked for again
+  for 30 s (at least five poll intervals).

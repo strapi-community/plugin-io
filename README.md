@@ -238,16 +238,16 @@ await strapi.$io.emitIdentifier({ event: 'delete', schema: 'api::article.article
 await strapi.$io.raw({ event: 'maintenance', data: { at: '22:00' }, rooms: ['io-role-authenticated'] });
 
 // Helpers
-strapi.$io.joinRoom(socketId, 'premium'); // plugin rooms (io-role-, io-token-, io-admin-, io-entity-, presence:) are refused
-strapi.$io.leaveRoom(socketId, 'premium');
+await strapi.$io.joinRoom(socketId, 'premium'); // plugin rooms (io-role-, io-token-, io-admin-, io-entity-, presence:) are refused
+await strapi.$io.leaveRoom(socketId, 'premium');
 await strapi.$io.getSocketsInRoom('premium');
 strapi.$io.sendPrivateMessage(socketId, 'notice', data);
 strapi.$io.broadcast(socketId, 'notice', data); // everyone except socketId
 strapi.$io.emitToNamespace('chat', 'notice', data);
-strapi.$io.disconnectSocket(socketId);
+await strapi.$io.disconnectSocket(socketId);
 await strapi.$io.subscribeToEntity(socketId, 'api::article.article', documentId); // same checks as subscribe-entity
-strapi.$io.unsubscribeFromEntity(socketId, 'api::article.article', documentId);
-strapi.$io.getEntitySubscriptions(socketId);
+await strapi.$io.unsubscribeFromEntity(socketId, 'api::article.article', documentId);
+await strapi.$io.getEntitySubscriptions(socketId);
 await strapi.$io.revalidateSockets(); // every authenticated socket
 await strapi.$io.revalidateSockets(['user'], { ids: [userId] }); // only this user's sockets
 
@@ -330,6 +330,8 @@ Clients connect with `transports: ['websocket']`. The admin already does.
 - **Adapter:** `'postgres'` uses `@socket.io/postgres-adapter` (LISTEN/NOTIFY) on its own pool of 2 connections and Strapi's PostgreSQL connection; it needs a direct or session-mode connection (not PgBouncer in transaction mode). `{ type: 'redis' }` uses `@socket.io/redis-adapter` with `ioredis`. A function returns any other adapter. The packages are optional peer dependencies and load only when configured.
 - **Shared automatically** once an adapter is attached, in pm2 cluster mode or on Railway: one-time admin presence tokens (hashed, used exactly once on any process), settings (revision with compare-and-swap; a concurrent save gets `409` and the admin offers a reload), revocations of users, tokens, admins and sessions, the audience cache, the failed-handshake lockout, the `maxConnections` total, presence editor lists and the monitoring totals. Four small tables (`plugin_io_presence_tokens`, `plugin_io_counters`, `plugin_io_nodes`, `plugin_io_signals`) hold this state; one plain process writes none of it.
 - **Warnings at boot** for several processes without an adapter, long-polling with several processes, and Railway without `server.proxy.koa`. The Monitoring page shows the first one too.
+- **Database restarts:** when the Postgres adapter loses its LISTEN connection (restart, failover, `idle_session_timeout`), the process keeps running and logs a warning. Events stay on the local process until the adapter reconnects 1 to 3 s later; settings, revocations and lockouts keep travelling through the signal table.
+- **Server helpers** that take a `socketId` (`joinRoom`, `leaveRoom`, `disconnectSocket`, the entity subscription helpers) act only on the socket with exactly that id, on any process, and return a Promise for a socket on another process. A room name passed as `socketId` selects nobody.
 - **Connection budget:** each process has its own knex pool plus 2 adapter connections. 8 processes with Strapi's default pool of 10 need 96 PostgreSQL connections; set `database.connection.pool.max` to about 6 to stay well under a limit of 100.
 
 Full guide with pm2, Redis, pool sizing and the remaining limits: [Running several instances](https://strapi-community.github.io/plugin-io/guide/multiple-instances).

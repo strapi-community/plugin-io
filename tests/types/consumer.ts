@@ -47,4 +47,10 @@ async function follow(socketId: string): Promise<string | null> {
 	const result = await strapi.$io.subscribeToEntity(socketId, 'api::article.article', 'abc123');
 	return result.success ? result.documentId : result.error;
 }
-export { config, redis, run, onlyPublished, maxPerSocket, follow, unfollow };
+async function moveAndKick(socketId: string): Promise<boolean> {
+	const joined: boolean = await strapi.$io.joinRoom(socketId, 'premium');
+	const left: boolean = await strapi.$io.leaveRoom(socketId, 'trial');
+	const kicked: boolean = await strapi.$io.disconnectSocket(socketId);
+	return joined && left && kicked;
+}
+export { config, redis, run, onlyPublished, maxPerSocket, follow, unfollow, moveAndKick };

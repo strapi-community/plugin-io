@@ -14,13 +14,13 @@ await strapi.$io.emit({ event, schema, data }); // content event, sanitized per 
 await strapi.$io.emitIdentifier({ event, schema, data: { documentId, locale } });
 await strapi.$io.raw({ event, data, rooms }); // custom event, sensitive keys removed
 
-strapi.$io.joinRoom(socketId, room); // false for plugin rooms
-strapi.$io.leaveRoom(socketId, room);
+await strapi.$io.joinRoom(socketId, room); // false for plugin rooms
+await strapi.$io.leaveRoom(socketId, room);
 await strapi.$io.getSocketsInRoom(room); // socket ids
 strapi.$io.sendPrivateMessage(socketId, event, data);
 strapi.$io.broadcast(socketId, event, data); // everyone except socketId
 strapi.$io.emitToNamespace('chat', event, data);
-strapi.$io.disconnectSocket(socketId);
+await strapi.$io.disconnectSocket(socketId);
 await strapi.$io.revalidateSockets(kinds?, { ids? });
 await strapi.$io.subscribeToEntity(socketId, uid, documentId); // same checks as subscribe-entity
 strapi.$io.unsubscribeFromEntity(socketId, uid, documentId);
@@ -84,18 +84,33 @@ await strapi.$io.raw({ event: 'report:ready', data: { id }, rooms: [`user-${user
 
 ## Room helpers
 
-| Method                                      | Returns             | Notes                                                                                                                                                              |
-| ------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `joinRoom(socketId, room)`                  | `boolean`           | `false` when the socket is unknown or the room belongs to the plugin. With a multi-server adapter, `true` for a socket on another process means the join was sent. |
-| `leaveRoom(socketId, room)`                 | `boolean`           | `false` when the socket is unknown.                                                                                                                                |
-| `getSocketsInRoom(room)`                    | `Promise<string[]>` | Socket ids, across instances when an adapter such as Redis is attached.                                                                                            |
-| `sendPrivateMessage(socketId, event, data)` | `void`              | Sends `data` as is (no sanitizing).                                                                                                                                |
-| `broadcast(socketId, event, data)`          | `void`              | Everyone except `socketId`.                                                                                                                                        |
-| `emitToNamespace(namespace, event, data)`   | `void`              | `namespace` with or without the leading slash.                                                                                                                     |
-| `disconnectSocket(socketId)`                | `boolean`           | Closes the connection.                                                                                                                                             |
+| Method                                      | Returns                       | Notes                                                                                                                                   |
+| ------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `joinRoom(socketId, room)`                  | `boolean \| Promise<boolean>` | `false` when the socket is unknown or the room belongs to the plugin. A Promise for a socket on another process (multi-server adapter). |
+| `leaveRoom(socketId, room)`                 | `boolean \| Promise<boolean>` | `false` when the socket is unknown.                                                                                                     |
+| `getSocketsInRoom(room)`                    | `Promise<string[]>`           | Socket ids, across instances when an adapter such as Redis is attached.                                                                 |
+| `sendPrivateMessage(socketId, event, data)` | `void`                        | Sends `data` as is (no sanitizing).                                                                                                     |
+| `broadcast(socketId, event, data)`          | `void`                        | Everyone except `socketId`.                                                                                                             |
+| `emitToNamespace(namespace, event, data)`   | `void`                        | `namespace` with or without the leading slash.                                                                                          |
+| `disconnectSocket(socketId)`                | `boolean \| Promise<boolean>` | Closes the connection of that one socket.                                                                                               |
 
 Plugin rooms (`io-role-`, `io-token-`, `io-admin-`, `io-entity-`, `presence:`) cannot be
 joined with `joinRoom()`.
+
+The helpers that take a `socketId` (these three and the entity subscription
+helpers below) act on exactly one socket. With a multi-server adapter they look
+the id up across processes (`fetchSockets()`) and act only on a socket whose id
+equals it, so a room name such as `io-role-authenticated` passed as `socketId`
+(for example from a client request) returns `false` and never selects the
+sockets of that room. For a socket on another process they return a Promise;
+`await` the result, which also works for the plain value on one process.
+
+With entity subscriptions, `maxPerSocket` is a hard cap for every call made on
+one process, including parallel `subscribeToEntity()` calls for a socket on
+another process. Parallel calls for the same socket made on several processes
+at the same moment are each checked against the rooms the socket had when the
+call started, so they can exceed the cap by the number of those processes
+minus one.
 
 ## `revalidateSockets()`
 
