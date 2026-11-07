@@ -91,6 +91,11 @@ export function useSettingsForm() {
 		});
 	}, []);
 
+	const replaceDraft = useCallback((values) => {
+		setDraft(values);
+		setServerErrors({});
+	}, []);
+
 	const save = useCallback(async () => {
 		if (Object.keys(errors).length) return;
 		setSaving(true);
@@ -139,6 +144,7 @@ export function useSettingsForm() {
 		contentTypes,
 		roles,
 		setField,
+		replaceDraft,
 		save,
 		discard,
 		reload: loadSettings,

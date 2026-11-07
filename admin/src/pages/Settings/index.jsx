@@ -6,11 +6,13 @@ import { ConfirmAction, PageShell } from '../../components/ui';
 import { useT } from '../../hooks/useT';
 import { PERMISSIONS } from '../../permissions';
 import { LIMITS } from '../../utils/settings.mjs';
+import { BackupSection } from './sections/BackupSection';
 import { ConnectionSection } from './sections/ConnectionSection';
 import { EventsSection } from './sections/EventsSection';
 import { MonitoringSection, PresenceSection } from './sections/PresenceMonitoringSection';
 import { RolesSection } from './sections/RolesSection';
 import { SecuritySection } from './sections/SecuritySection';
+import { SubscriptionsSection } from './sections/SubscriptionsSection';
 import { useSettingsForm } from './useSettingsForm';
 
 const RBAC = [...PERMISSIONS.settings.read, ...PERMISSIONS.settings.update];
@@ -31,6 +33,7 @@ const RANGE_BY_PATH = {
 	'connection.connectionTimeout': LIMITS.ms,
 	'security.rateLimiting.maxEventsPerSecond': LIMITS.maxEventsPerSecond,
 	'monitoring.maxEventLogSize': LIMITS.maxEventLogSize,
+	'subscriptions.maxPerSocket': LIMITS.maxPerSocket,
 };
 
 /**
@@ -107,9 +110,18 @@ const SettingsPage = () => {
 			<ConnectionSection {...sectionProps} />
 			<SecuritySection {...sectionProps} />
 			<EventsSection {...sectionProps} contentTypes={form.contentTypes} reloadContentTypes={form.reloadContentTypes} />
+			<SubscriptionsSection {...sectionProps} />
 			<RolesSection {...sectionProps} roles={form.roles} reloadRoles={form.reloadRoles} />
 			<PresenceSection {...sectionProps} />
 			<MonitoringSection {...sectionProps} />
+			<BackupSection
+				saved={form.saved}
+				draft={form.draft}
+				onApply={form.replaceDraft}
+				canUpdate={canUpdate}
+				busy={form.saving}
+				t={t}
+			/>
 			{/* Kept empty: DS Tag buttons have no type and would submit a real form on Enter. */}
 			<Form method="PUT" initialValues={form.saved}>
 				<DraftSync values={form.draft} />

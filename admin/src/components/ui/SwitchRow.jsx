@@ -5,7 +5,9 @@ import { getTranslation } from '../../utils/getTranslation';
 
 /**
  * Binary setting: title and description on the left, Switch on the right,
- * in one row that wraps text but keeps the switch horizontal.
+ * in one row that wraps text but keeps the switch horizontal. The title is
+ * a `<label>` for the switch, so clicking it toggles the setting and the
+ * pointer target is larger than the switch alone.
  *
  * @param {object} props - Props.
  * @param {string} props.label - Setting name (also the switch's accessible name).
@@ -21,7 +23,14 @@ export const SwitchRow = ({ label, hint, checked, onCheckedChange, disabled }) =
 	return (
 		<Flex justifyContent="space-between" alignItems="center" gap={4} minWidth={0}>
 			<Flex direction="column" alignItems="flex-start" gap={1} minWidth={0} flex="1 1 0">
-				<Typography id={`${id}-label`} variant="omega" fontWeight="semiBold" textColor="neutral800">
+				<Typography
+					id={`${id}-label`}
+					tag="label"
+					htmlFor={`${id}-switch`}
+					variant="omega"
+					fontWeight="semiBold"
+					textColor="neutral800"
+				>
 					{label}
 				</Typography>
 				{hint ? (
@@ -31,6 +40,7 @@ export const SwitchRow = ({ label, hint, checked, onCheckedChange, disabled }) =
 				) : null}
 			</Flex>
 			<Switch
+				id={`${id}-switch`}
 				aria-labelledby={`${id}-label`}
 				aria-describedby={hint ? `${id}-hint` : undefined}
 				checked={checked}

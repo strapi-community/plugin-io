@@ -48,6 +48,19 @@ export default ({ strapi }) => {
 		},
 
 		/**
+		 * Returns the settings a validated update would produce, without saving
+		 * them (used by the settings import preview).
+		 *
+		 * @param {object} update - Body already validated by `settingsUpdateSchema`.
+		 * @returns {Promise<object>} Resulting settings.
+		 */
+		async preview(update) {
+			const base = await this.load();
+			const { version: _version, ...rest } = update || {};
+			return normalizeSettings(deepMerge(base, rest), strapi.log);
+		},
+
+		/**
 		 * Merges a validated partial update into the stored settings, persists the
 		 * result and notifies subscribers (the socket layer re-applies options).
 		 *
@@ -56,9 +69,7 @@ export default ({ strapi }) => {
 		 * @sideeffect Writes core_store key `plugin_io_settings`.
 		 */
 		async setSettings(update) {
-			const base = await this.load();
-			const { version: _version, ...rest } = update || {};
-			const next = normalizeSettings(deepMerge(base, rest), strapi.log);
+			const next = await this.preview(update);
 			await getStore().set({ key: STORE_KEY, value: next });
 			snapshot = next;
 			for (const listener of listeners) {

@@ -20,6 +20,12 @@ export default [
 		config: can(PERMISSIONS.SETTINGS_UPDATE),
 	},
 	{
+		method: 'POST',
+		path: '/settings/validate',
+		handler: 'settings.validateSettings',
+		config: can(PERMISSIONS.SETTINGS_UPDATE),
+	},
+	{
 		method: 'GET',
 		path: '/content-types',
 		handler: 'settings.getContentTypes',

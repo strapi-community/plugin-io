@@ -14,7 +14,11 @@ export const LIMITS = Object.freeze({
   ms: { min: 1000, max: 600000 },
   maxEventsPerSecond: { min: 1, max: 1000 },
   maxEventLogSize: { min: 10, max: 1000 },
+  maxPerSocket: { min: 1, max: 1000 },
 });
+
+/** Largest settings file the import accepts (bytes). */
+export const MAX_IMPORT_BYTES = 256 * 1024;
 
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const IPV6 = /^[0-9a-fA-F:]+(%\w+)?$/;
@@ -87,6 +91,9 @@ export function validateSettings(draft) {
     );
   }
   range('monitoring.maxEventLogSize', draft.monitoring?.maxEventLogSize, LIMITS.maxEventLogSize);
+  if (draft.subscriptions?.enabled) {
+    range('subscriptions.maxPerSocket', draft.subscriptions.maxPerSocket, LIMITS.maxPerSocket);
+  }
   return errors;
 }
 
@@ -164,4 +171,62 @@ export function serverErrorsToFields(error) {
   const list = error?.response?.data?.error?.details?.errors;
   if (!Array.isArray(list)) return {};
   return Object.fromEntries(list.map((entry) => [entry.path.join('.'), entry.message]));
+}
+
+/**
+ * Lists the differences between two settings documents, one entry per leaf
+ * (arrays count as one value). `version` is ignored.
+ *
+ * @param {object} before - Current values (the form).
+ * @param {object} after - Imported values.
+ * @returns {Array<{ path: string, before: any, after: any }>} Changes, sorted by path.
+ */
+export function diffSettings(before, after) {
+  const out = [];
+  const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const walk = (a, b, prefix) => {
+    const keys = new Set([...Object.keys(a ?? {}), ...Object.keys(b ?? {})]);
+    for (const key of keys) {
+      if (!prefix && key === 'version') continue;
+      const path = prefix ? `${prefix}.${key}` : key;
+      const left = a?.[key];
+      const right = b?.[key];
+      if (isObject(left) && isObject(right)) walk(left, right, path);
+      else if (!isEqual(left, right)) out.push({ path, before: left, after: right });
+    }
+  };
+  walk(before, after, '');
+  return out.sort((x, y) => x.path.localeCompare(y.path));
+}
+
+/**
+ * Reads a settings file chosen for import. Only checks size and that the
+ * file is a JSON object; the server validates the content.
+ *
+ * @param {string} text - File content.
+ * @param {number} size - File size in bytes.
+ * @returns {{ ok: true, value: object } | { ok: false, code: 'size' | 'json' }} Result.
+ */
+export function parseImportFile(text, size) {
+  if (size > MAX_IMPORT_BYTES) return { ok: false, code: 'size' };
+  try {
+    const value = JSON.parse(text);
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return { ok: false, code: 'json' };
+    return { ok: true, value };
+  } catch {
+    return { ok: false, code: 'json' };
+  }
+}
+
+/**
+ * Formats a settings value for the import preview.
+ *
+ * @param {any} value - Value.
+ * @returns {string} Short text.
+ */
+export function formatSettingValue(value) {
+  if (value === undefined) return '-';
+  if (Array.isArray(value)) return value.length ? value.join(', ') : '[]';
+  if (value !== null && typeof value === 'object') return JSON.stringify(value);
+  return String(value);
 }

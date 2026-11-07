@@ -52,3 +52,37 @@ test('helpers', () => {
   assert.equal(initials({ firstname: 'ada', lastname: 'lovelace' }), 'AL');
   assert.equal(initials({}), '?');
 });
+
+test('import preview: diffSettings lists leaf changes and ignores version', async () => {
+  const { diffSettings, formatSettingValue } = await import('../admin/src/utils/settings.mjs');
+  const before = structuredClone(DEFAULT_SETTINGS);
+  const after = setIn(setIn(before, 'presence.enabled', false), 'cors.origins', ['https://app.example.com']);
+  after.version = 99;
+  after.events = { ...after.events, contentTypes: { 'api::article.article': ['create'] } };
+  assert.deepEqual(
+    diffSettings(before, after).map((c) => c.path),
+    ['cors.origins', 'events.contentTypes.api::article.article', 'presence.enabled']
+  );
+  assert.deepEqual(diffSettings(before, structuredClone(before)), []);
+  assert.equal(formatSettingValue(['a', 'b']), 'a, b');
+  assert.equal(formatSettingValue([]), '[]');
+  assert.equal(formatSettingValue(undefined), '-');
+  assert.equal(formatSettingValue(false), 'false');
+});
+
+test('import file parsing rejects big files, invalid JSON and non-objects', async () => {
+  const { parseImportFile, MAX_IMPORT_BYTES } = await import('../admin/src/utils/settings.mjs');
+  assert.deepEqual(parseImportFile('{}', MAX_IMPORT_BYTES + 1), { ok: false, code: 'size' });
+  assert.deepEqual(parseImportFile('{nope', 5), { ok: false, code: 'json' });
+  assert.deepEqual(parseImportFile('[1]', 3), { ok: false, code: 'json' });
+  assert.deepEqual(parseImportFile('null', 4), { ok: false, code: 'json' });
+  assert.deepEqual(parseImportFile('{"presence":{}}', 15), { ok: true, value: { presence: {} } });
+});
+
+test('subscription limit is validated only while subscriptions are on', () => {
+  const draft = setIn(structuredClone(DEFAULT_SETTINGS), 'subscriptions.maxPerSocket', 0);
+  assert.deepEqual(validateSettings(draft), {});
+  assert.deepEqual(validateSettings(setIn(draft, 'subscriptions.enabled', true)), {
+    'subscriptions.maxPerSocket': 'range',
+  });
+});

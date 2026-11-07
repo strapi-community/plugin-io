@@ -107,3 +107,48 @@ test('PUT /io/settings rejects content types that do not exist', async () => {
   };
   await assert.rejects(controller.updateSettings(ctx), errors.ValidationError);
 });
+
+test('POST /io/settings/validate returns the resulting settings without saving them (import preview)', async () => {
+  const strapi = createStrapi();
+  const service = strapi.plugin('io').service('settings');
+  await service.load();
+  const controller = strapi.plugin('io').controller('settings');
+  const exported = structuredClone(await service.getSettings());
+  exported.presence.enabled = false;
+  exported.subscriptions = { enabled: true, maxPerSocket: 25 };
+  const ctx = { request: { body: exported } };
+  await controller.validateSettings(ctx);
+  assert.equal(ctx.body.data.presence.enabled, false);
+  assert.deepEqual(ctx.body.data.subscriptions, { enabled: true, maxPerSocket: 25 });
+  assert.equal(service.current().presence.enabled, true, 'nothing saved');
+  assert.equal((await service.getSettings()).presence.enabled, true, 'store unchanged');
+});
+
+test('POST /io/settings/validate rejects unknown keys, bad values and unknown content types with paths', async () => {
+  const strapi = createStrapi();
+  const controller = strapi.plugin('io').controller('settings');
+  const bodies = [
+    [{ presence: { enabled: 'yes', showTypingIndicator: true } }, 'presence.enabled'],
+    [{ subscriptions: { enabled: true, maxPerSocket: 0 } }, 'subscriptions.maxPerSocket'],
+    [{ __proto__: null, apiKey: 'x' }, ''],
+    [
+      { events: { onlyPublished: true, excludeFields: [], contentTypes: { 'api::ghost.ghost': ['create'] } } },
+      'events.contentTypes.api::ghost.ghost',
+    ],
+  ];
+  for (const [body, path] of bodies) {
+    await assert.rejects(controller.validateSettings({ request: { body } }), (error) => {
+      assert.ok(error instanceof errors.ValidationError);
+      assert.ok(
+        error.details.errors.some((e) => e.path.join('.') === path),
+        JSON.stringify(error.details.errors)
+      );
+      return true;
+    });
+  }
+});
+
+test('stored 5.x entity subscription limits migrate, the feature stays off', () => {
+  const next = normalizeSettings({ entitySubscriptions: { enabled: true, maxSubscriptionsPerSocket: 40 } });
+  assert.deepEqual(next.subscriptions, { enabled: false, maxPerSocket: 40 });
+});
