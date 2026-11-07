@@ -55,6 +55,13 @@ async function open(who, { width = 1440, height = 900, theme = 'light' } = {}) {
   return { page, errors, close: () => context.close() };
 }
 
+/** Reads a Node readable stream into a string. */
+async function streamToString(stream) {
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8');
+}
+
 /** Layout problems a native Strapi page does not have. */
 const layout = (page) =>
   page.evaluate(() => {
@@ -102,6 +109,7 @@ test('Settings: Save stays disabled until a valid change, guards navigation and 
   await page.getByRole('link', { name: 'Webhooks' }).first().click();
   await page.getByRole('alertdialog').waitFor();
   await page.keyboard.press('Escape');
+  await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
   assert.match(page.url(), /\/settings\/io\/settings$/, 'Escape keeps the page and the edits');
 
   const puts = [];
@@ -116,6 +124,76 @@ test('Settings: Save stays disabled until a valid change, guards navigation and 
   await save.click();
   await page.getByText('Settings saved.').first().waitFor();
   assert.equal(await toggle.getAttribute('aria-checked'), original);
+  assert.deepEqual(errors, []);
+  await close();
+});
+
+test(
+  'Settings: export downloads JSON; import previews changes and fills the form without saving',
+  { skip },
+  async () => {
+    const { page, errors, close } = await open(ADMIN);
+    await page.goto(`${BASE}/admin/settings/io/settings`, { waitUntil: 'networkidle' });
+    await page.getByRole('heading', { level: 1 }).first().waitFor();
+
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Export settings' }).click(),
+    ]);
+    assert.match(download.suggestedFilename(), /^socket-io-settings-\d{4}-\d{2}-\d{2}\.json$/);
+    const exported = JSON.parse(await streamToString(await download.createReadStream()));
+    assert.equal(typeof exported.presence.enabled, 'boolean');
+    assert.equal(JSON.stringify(exported).match(/token|password|secret/i), null, 'no secrets in the export');
+
+    const imported = { ...exported, presence: { ...exported.presence, enabled: !exported.presence.enabled } };
+    const puts = [];
+    page.on('request', (r) => r.method() === 'PUT' && r.url().endsWith('/io/settings') && puts.push(r));
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'settings.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(imported)),
+    });
+    const dialog = page.getByRole('alertdialog');
+    await dialog.getByText('presence.enabled').waitFor();
+    await dialog.getByRole('button', { name: 'Replace values' }).click();
+    await page.getByText('Imported values are in the form. Save to apply them.').first().waitFor();
+    assert.equal(
+      await page.getByRole('switch', { name: 'Show who is editing' }).getAttribute('aria-checked'),
+      String(!exported.presence.enabled)
+    );
+    assert.equal(await page.getByRole('button', { name: 'Save' }).isDisabled(), false, 'imported values are unsaved');
+
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'bad.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify({ presence: { enabled: 'yes', showTypingIndicator: true } })),
+    });
+    await page
+      .getByText(/The file has invalid values: presence\.enabled/)
+      .first()
+      .waitFor();
+
+    await page.getByRole('button', { name: 'Discard changes' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+    await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
+    assert.equal(puts.length, 0, 'import alone never saves');
+    assert.deepEqual(errors, []);
+    await close();
+  }
+);
+
+test('Settings: a setting title is the label of its switch (larger click target)', { skip }, async () => {
+  const { page, errors, close } = await open(ADMIN);
+  await page.goto(`${BASE}/admin/settings/io/settings`, { waitUntil: 'networkidle' });
+  const toggle = page.getByRole('switch', { name: 'Allow entry subscriptions' });
+  const before = await toggle.getAttribute('aria-checked');
+  await page.locator('label', { hasText: 'Allow entry subscriptions' }).click();
+  assert.notEqual(await toggle.getAttribute('aria-checked'), before, 'clicking the title toggles the switch');
+  const limit = page.getByRole('textbox', { name: /Subscriptions per client/ });
+  assert.equal(await limit.isDisabled(), before === 'true', 'limit follows the switch');
+  await page.locator('label', { hasText: 'Allow entry subscriptions' }).click();
+  assert.equal(await toggle.getAttribute('aria-checked'), before);
+  assert.equal(await page.getByRole('button', { name: 'Save' }).isDisabled(), true, 'back to the saved state');
   assert.deepEqual(errors, []);
   await close();
 });

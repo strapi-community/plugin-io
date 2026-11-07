@@ -1,6 +1,7 @@
 # Checks every pull request and push to a non-main branch: lint, formatting,
 # tests, type check, build and package verification on the Node versions
-# Strapi 5.61 supports.
+# Strapi 5.61 supports, then the end-to-end suites against a scaffolded
+# Strapi 5.61 app with the packed plugin (scripts/e2e-app.mjs).
 name: CI
 
 on:
@@ -53,3 +54,43 @@ jobs:
         run: npm pack --dry-run
       - name: Production audit
         run: npm audit --omit=dev --audit-level=high
+
+  e2e:
+    # Scaffolds a Strapi 5.61 app (SQLite, synthetic content types from
+    # tests/e2e/app), installs the packed plugin and runs tests/e2e: the
+    # Playwright admin suite and the socket/API suite. Secrets and admin
+    # passwords are generated per run and never printed. On Node 24 the app
+    # also uses this repo's npm overrides, to prove Strapi runs with them.
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          # The app installs into the same npm cache, keyed on the scaffold script too.
+          cache-dependency-path: |
+            package-lock.json
+            scripts/e2e-app.mjs
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      # Playwright advises against caching browsers; install Chromium only.
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Build
+        run: npm run build
+      - name: Scaffold the Strapi app and run tests/e2e
+        run: node scripts/e2e-app.mjs --dir "$RUNNER_TEMP/io-e2e-app" ${{ matrix.node == '24' && '--overrides' || '' }}
+      - name: Server log tail (on failure)
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/io-e2e-app/logs/server.log" || true
