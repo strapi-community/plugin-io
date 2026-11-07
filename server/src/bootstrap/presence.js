@@ -47,7 +47,7 @@ function getEditors(io, room, lastSeen) {
 	const editors = new Map();
 	for (const socketId of ids) {
 		const socket = io.of('/').sockets.get(socketId);
-		const user = socket?.data?.user;
+		const user = socket?.data?.admin;
 		if (!user?.id || socket.data.kind !== 'admin') continue;
 		const seen = lastSeen.get(socketId) || Date.now();
 		const existing = editors.get(user.id);
@@ -115,7 +115,7 @@ function registerPresence({ strapi, io, socket, lastSeen }) {
 		socket.to(room).emit('presence:typing', {
 			uid: payload.uid,
 			documentId: payload.documentId,
-			user: toEditor(socket.data.user),
+			user: toEditor(socket.data.admin),
 			fieldName: payload.fieldName,
 		});
 	});

@@ -27,9 +27,29 @@ export interface ContentTypeConfig {
 	populate?: PopulateConfig;
 }
 
+/**
+ * What the handshake stores on `socket.data`. Check `kind` before trusting an id:
+ * `user` ids are Users & Permissions ids, `admin` ids are admin user ids.
+ */
+export interface SocketData {
+	kind: 'public' | 'user' | 'token' | 'admin';
+	/** Users & Permissions user (`kind === 'user'` only). */
+	user?: { id: number; role: { id: number; name: string; type: string } };
+	/** Users & Permissions role (`public` and `user`). */
+	role?: { id: number; name: string; type: string };
+	/** Content API token (`kind === 'token'` only). */
+	token?: { id: number; type: 'read-only' | 'full-access' | 'custom' };
+	/** Admin user (`kind === 'admin'` only, presence sockets). */
+	admin?: { id: number; firstname: string | null; lastname: string | null };
+	/** Credential expiry in ms, or null. */
+	expiresAt?: number | null;
+}
+
 export interface SocketEvent {
 	/** Client event name, or `connection` to run once per new socket. */
 	name: string;
+	/** Also run on admin presence sockets. Default `false`: admin sockets are skipped. */
+	admin?: boolean;
 	handler: (context: { strapi: Core.Strapi; io: SocketIO }, socket: Socket, ...args: any[]) => void | Promise<void>;
 }
 
@@ -37,8 +57,12 @@ export interface SocketEvent {
 export interface SocketIOConfig {
 	events?: SocketEvent[];
 	hooks?: {
-		/** Awaited during bootstrap, e.g. to attach a Redis adapter. */
-		init?: (context: { strapi: Core.Strapi; $io: SocketIO }) => void | Promise<void>;
+		/**
+		 * Awaited during bootstrap, before the plugin handshake is added, e.g. to
+		 * attach a Redis adapter or `$io.server.use()` middleware. `io` is an
+		 * alias of `$io`.
+		 */
+		init?: (context: { strapi: Core.Strapi; $io: SocketIO; io: SocketIO }) => void | Promise<void>;
 	};
 	contentTypes: Array<string | ContentTypeConfig>;
 	socket?: {

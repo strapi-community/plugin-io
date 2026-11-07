@@ -45,3 +45,29 @@ test('hooks.init errors are logged instead of crashing bootstrap', async () => {
   assert.ok(strapi.logs.error.some((m) => m.includes('hooks.init failed')));
   await plugin.destroy({ strapi });
 });
+
+test('hooks.init gets { strapi, $io, io } and its middleware runs before the plugin handshake (IO-RA-03)', async () => {
+  const { startHost } = await import('./helpers/socket-host.mjs');
+  const order = [];
+  let context = null;
+  const host = await startHost({
+    usersPermissions: { service: () => undefined },
+    config: {
+      hooks: {
+        init: ({ strapi, $io, io }) => {
+          context = { strapi: Boolean(strapi), same: $io === io, server: Boolean(io.server) };
+          io.server.use((socket, next) => {
+            order.push(socket.data.kind ?? 'before-handshake');
+            next();
+          });
+        },
+      },
+    },
+  });
+  const { error } = await host.connect();
+  assert.equal(error, undefined);
+  assert.deepEqual(context, { strapi: true, same: true, server: true });
+  assert.deepEqual(order, ['before-handshake']);
+  assert.equal(host.strapi.logs.error.length, 0, host.strapi.logs.error.join('\n'));
+  await host.close();
+});

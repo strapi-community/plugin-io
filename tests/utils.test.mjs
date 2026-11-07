@@ -61,6 +61,13 @@ test('server options: destroyUpgrade off, small buffer, origin checks from setti
     const configured = resolveSocketServerOptions({ cors: { origin: '*' }, destroyUpgrade: true }, () => settings);
     assert.deepEqual(configured.cors, { origin: '*' });
     assert.equal(configured.destroyUpgrade, true);
-    assert.equal(isOriginAllowed('https://x.example', []), true);
+    assert.equal(isOriginAllowed('https://x.example', []), false, 'empty list: same origin only (IO-RA-05)');
+    assert.equal(isOriginAllowed(undefined, []), true, 'no Origin header: server-to-server client');
+    assert.equal(isOriginAllowed('http://cms.example:1337', [], 'cms.example:1337'), true, 'same origin');
+    assert.equal(
+      isOriginAllowed('https://admin.example', [], 'api.example', ['https://admin.example']),
+      true,
+      'admin.url'
+    );
   });
 });

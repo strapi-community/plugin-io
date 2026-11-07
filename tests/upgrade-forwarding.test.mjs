@@ -7,11 +7,13 @@
  */
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
+import { connect as netConnect } from 'node:net';
 import test from 'node:test';
 import Koa from 'koa';
 import { io as ioClient } from 'socket.io-client';
 import WebSocket, { WebSocketServer } from 'ws';
 import { SocketIO } from '../server/src/structures/SocketIO.js';
+import { attachUpgradeForwarder } from '../server/src/structures/upgrade-forwarder.js';
 import { Server } from 'socket.io';
 import { createStrapi } from './helpers/strapi-stub.mjs';
 
@@ -30,6 +32,19 @@ function createKoaApp() {
         client.send('ready');
       });
       ctx.respond = false;
+      return;
+    }
+    if (ctx.path === '/api/echo') {
+      const chunks = [];
+      for await (const chunk of ctx.req) chunks.push(chunk);
+      const body = Buffer.concat(chunks).toString('utf8');
+      const expected = Number(ctx.get('content-length') || 0);
+      if (Buffer.byteLength(body) !== expected) {
+        ctx.status = 400;
+        ctx.body = 'request size did not match content length';
+        return;
+      }
+      ctx.body = { method: ctx.method, body };
       return;
     }
     await next();
@@ -153,6 +168,95 @@ test("destroy() removes the forwarder and does not close Strapi's HTTP server (#
   await io.destroy();
   assert.equal(httpServer.listening, true, 'HTTP server must stay open for Strapi to close');
   assert.equal(httpServer.listeners('upgrade').filter((l) => l.name === 'listener').length, 0, 'forwarder removed');
+  assert.equal(
+    httpServer.shouldUpgradeCallback?.name ?? 'none',
+    typeof httpServer.shouldUpgradeCallback === 'function' ? '' : 'none',
+    'original shouldUpgradeCallback restored'
+  );
+  wss.close();
+  await httpServer.shutdown();
+});
+
+/**
+ * Sends a raw HTTP/1.1 request and resolves with the status code and body.
+ */
+function rawRequest(port, { method = 'POST', path = '/api/echo', headers = {}, body = '' }) {
+  return new Promise((resolve) => {
+    const socket = netConnect(port, '127.0.0.1');
+    const lines = [`${method} ${path} HTTP/1.1`, 'Host: 127.0.0.1', 'Connection: Upgrade, close'];
+    for (const [key, value] of Object.entries(headers)) lines.push(`${key}: ${value}`);
+    if (body) lines.push(`Content-Length: ${Buffer.byteLength(body)}`);
+    socket.write(`${lines.join('\r\n')}\r\n\r\n${body}`);
+    let data = '';
+    socket.on('data', (chunk) => (data += chunk.toString('utf8')));
+    const done = () => {
+      const status = Number(data.split(' ')[1]) || null;
+      resolve({ status, body: data.split('\r\n\r\n').slice(1).join('\r\n\r\n') });
+    };
+    socket.on('end', done);
+    socket.on('error', done);
+    setTimeout(() => {
+      socket.destroy();
+      done();
+    }, 1500).unref();
+  });
+}
+
+test('POST with a body and an Upgrade header still reaches Koa with its body (IO-RA-02)', async (t) => {
+  const { app, wss } = createKoaApp();
+  const { httpServer, port } = await listen(app);
+  const strapi = createStrapi({ httpServer });
+  await strapi.plugin('io').service('settings').load();
+  const io = new SocketIO({}, { strapi });
+  strapi.$io = io;
+  t.after(async () => {
+    await io.destroy();
+    wss.close();
+    await httpServer.shutdown();
+  });
+  if (typeof httpServer.shouldUpgradeCallback !== 'function') {
+    t.skip('Node without shouldUpgradeCallback');
+    return;
+  }
+  const body = JSON.stringify({ identifier: 'reader@example.test', password: 'x' });
+  for (const upgrade of ['h2c', 'websocket']) {
+    const reply = await rawRequest(port, {
+      headers: { Upgrade: upgrade, 'Content-Type': 'application/json', 'HTTP2-Settings': 'AAMAAABkAAQAAP__' },
+      body,
+    });
+    assert.equal(reply.status, 200, `${upgrade}: ${reply.body}`);
+    assert.deepEqual(JSON.parse(reply.body), { method: 'POST', body });
+  }
+  const get = await rawRequest(port, { method: 'GET', headers: { Upgrade: 'h2c' } });
+  assert.equal(get.status, 200, 'bodyless h2c GET');
+});
+
+test('legacy fallback (Node < 22.21): bodyless upgrades are forwarded, bodies get a clear 400 (IO-RA-02)', async () => {
+  const { app, wss } = createKoaApp();
+  const { httpServer, port } = await listen(app);
+  // An engine-like listener that ignores foreign paths, as Engine.IO does with destroyUpgrade: false.
+  const engine = () => {};
+  httpServer.on('upgrade', engine);
+  const remove = attachUpgradeForwarder({
+    httpServer,
+    enginePath: '/socket.io/',
+    ownListeners: [engine],
+    legacy: true,
+  });
+
+  const ok = await openWs(`ws://127.0.0.1:${port}/admin/transfer/runner/push`, {
+    authorization: 'Bearer transfer-token',
+  });
+  assert.deepEqual(ok, { result: 'open', message: 'ready' });
+  const get = await rawRequest(port, { method: 'GET', headers: { Upgrade: 'h2c' } });
+  assert.equal(get.status, 200);
+  const post = await rawRequest(port, { headers: { Upgrade: 'h2c' }, body: '{"a":1}' });
+  assert.equal(post.status, 400);
+  assert.match(post.body, /Node\.js 22\.21/);
+
+  remove();
+  assert.equal(httpServer.listeners('upgrade').length, 1, 'only the engine listener is left');
+  httpServer.off('upgrade', engine);
   wss.close();
   await httpServer.shutdown();
 });

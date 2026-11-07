@@ -87,6 +87,10 @@ export default ({ strapi }) => {
 		},
 
 		/**
+		 * Lists the admins with an open presence connection. Documents in content
+		 * types the requesting admin cannot read in the Content Manager are not
+		 * listed; `hiddenEditing` counts them instead.
+		 *
 		 * @route GET /io/online-users
 		 * @access admin with `plugin::io.monitoring.read`
 		 * @returns {{ data: { admins: Array<object>, counts: object } }} Admins online and counts by kind.
@@ -95,24 +99,37 @@ export default ({ strapi }) => {
 			const io = strapi.$io?.server;
 			const counts = { total: 0, admin: 0, user: 0, token: 0, public: 0 };
 			const admins = new Map();
+			const ability = ctx.state?.userAbility;
+			const readable = new Map();
+			const canRead = (uid) => {
+				if (!readable.has(uid)) {
+					readable.set(uid, Boolean(ability?.can?.('plugin::content-manager.explorer.read', uid)));
+				}
+				return readable.get(uid);
+			};
 			if (io) {
 				const now = Date.now();
 				for (const socket of await io.fetchSockets()) {
 					counts.total += 1;
 					const kind = socket.data?.kind;
 					if (kind in counts) counts[kind] += 1;
-					if (kind !== 'admin' || !socket.data.user?.id) continue;
-					const user = socket.data.user;
+					if (kind !== 'admin' || !socket.data.admin?.id) continue;
+					const user = socket.data.admin;
 					const connectedAt = socket.handshake?.issued || now;
-					const editing = (socket.data.editing || []).map((entry) => ({
-						uid: entry.uid,
-						documentId: entry.documentId,
-						kind: strapi.contentTypes[entry.uid]?.kind ?? 'collectionType',
-						contentTypeName: strapi.contentTypes[entry.uid]?.info?.displayName ?? entry.uid,
-					}));
+					const entries = socket.data.editing || [];
+					const editing = entries
+						.filter((entry) => canRead(entry.uid))
+						.map((entry) => ({
+							uid: entry.uid,
+							documentId: entry.documentId,
+							kind: strapi.contentTypes[entry.uid]?.kind ?? 'collectionType',
+							contentTypeName: strapi.contentTypes[entry.uid]?.info?.displayName ?? entry.uid,
+						}));
+					const hidden = entries.length - editing.length;
 					const existing = admins.get(user.id);
 					if (existing) {
 						existing.editing.push(...editing);
+						existing.hiddenEditing += hidden;
 						existing.connectedAt = Math.min(existing.connectedAt, connectedAt);
 					} else {
 						admins.set(user.id, {
@@ -121,6 +138,7 @@ export default ({ strapi }) => {
 							lastname: user.lastname,
 							connectedAt,
 							editing,
+							hiddenEditing: hidden,
 						});
 					}
 				}

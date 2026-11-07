@@ -30,6 +30,7 @@ export function createStrapi(options = {}) {
     tokens: options.tokens ?? [],
     users: options.users ?? [],
     admins: options.admins ?? [],
+    queries: [],
   };
   const config = {
     events: [],
@@ -84,7 +85,19 @@ export function createStrapi(options = {}) {
         },
       };
     },
-    service: (uid) => options.coreServices?.[uid],
+    service: (uid) => {
+      if (options.coreServices?.[uid]) return options.coreServices[uid];
+      if (uid === 'admin::permission') {
+        return {
+          engine: {
+            generateUserAbility: async (user) =>
+              options.adminAbility ? options.adminAbility(user) : abilityFor(user.permissions ?? []),
+          },
+        };
+      }
+      return undefined;
+    },
+    sessionManager: options.sessionManager,
     getModel: (uid) => (uid === 'admin::api-token' ? { attributes: { kind: {} } } : undefined),
     contentAPI: {
       permissions: { engine: { generateAbility: async (permissions) => abilityFor(permissions) } },
@@ -95,12 +108,18 @@ export function createStrapi(options = {}) {
       inTransaction: () => false,
       query(uid) {
         return {
-          findMany: async () => {
+          findMany: async ({ where } = {}) => {
+            state.queries.push({ uid, op: 'findMany', where });
+            const inIds = where?.id?.$in ? new Set(where.id.$in.map(String)) : null;
+            const pick = (rows) => structuredClone(inIds ? rows.filter((r) => inIds.has(String(r.id))) : rows);
             if (uid === 'plugin::users-permissions.role') return structuredClone(state.roles);
-            if (uid === 'admin::api-token') return structuredClone(state.tokens);
+            if (uid === 'admin::api-token') return pick(state.tokens);
+            if (uid === 'admin::user') return pick(state.admins);
+            if (uid === 'plugin::users-permissions.user') return pick(state.users);
             return [];
           },
           findOne: async ({ where } = {}) => {
+            state.queries.push({ uid, op: 'findOne', where });
             if (uid === 'plugin::users-permissions.role') {
               return state.roles.find((r) => (where.id ? r.id === where.id : r.type === where.type)) ?? null;
             }

@@ -6,6 +6,8 @@ const fn = z.custom((value) => typeof value === 'function', { error: 'Expected a
 const Event = z.object({
 	name: z.string().min(1),
 	handler: fn,
+	/** Also run the handler on admin presence sockets (`socket.data.kind === 'admin'`). */
+	admin: z.boolean().optional(),
 });
 
 const Hooks = z.object({

@@ -9,16 +9,19 @@ export default ({ strapi }) => ({
 	 * @route POST /io/presence/session
 	 * @access any authenticated admin (joining a document also requires Content Manager read permission)
 	 * @returns {{ data: { token: string, expiresAt: string, wsPath: string, enabled: boolean } }} Session.
-	 * @sideeffect Stores a one-time token in memory for two minutes.
+	 * @throws 429 when 10,000 unused tokens are pending across all admins.
+	 * @sideeffect Stores a one-time token in memory for two minutes (at most five per admin; the oldest is dropped).
 	 */
 	async createSession(ctx) {
 		const user = ctx.state.user;
 		if (!user?.id) return ctx.unauthorized();
 		const settings = strapi.plugin('io').service('settings').current();
-		const { token, expiresAt } = strapi
+		const session = strapi
 			.plugin('io')
 			.service('presence')
-			.createSessionToken(user, ctx.state.userAbility);
+			.createSessionToken(user, { sessionId: ctx.state.session?.id ?? null });
+		if (!session) return ctx.tooManyRequests('Too many pending presence sessions. Try again later.');
+		const { token, expiresAt } = session;
 		ctx.body = {
 			data: {
 				token,

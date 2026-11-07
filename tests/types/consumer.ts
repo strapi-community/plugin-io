@@ -1,5 +1,5 @@
 import type { Core } from '@strapi/types';
-import type { PluginSettings, SocketIOConfig } from '../../types';
+import type { PluginSettings, SocketData, SocketIOConfig } from '../../types';
 
 declare const strapi: Core.Strapi;
 
@@ -8,7 +8,17 @@ const config: SocketIOConfig = {
 		'api::article.article',
 		{ uid: 'api::page.page', actions: ['publish', 'unpublish'], populate: ['seo'] },
 	],
-	hooks: { init: async ({ $io }) => void $io.server.engine },
+	hooks: { init: async ({ $io, io }) => void ($io === io && $io.server.engine) },
+	events: [
+		{
+			name: 'whoami',
+			handler: (_ctx, socket) => {
+				const data = socket.data as SocketData;
+				if (data.kind === 'user') void data.user?.id;
+			},
+		},
+		{ name: 'admin-only', admin: true, handler: () => undefined },
+	],
 	socket: { serverOptions: { cors: { origin: 'https://app.example.com' } } },
 };
 

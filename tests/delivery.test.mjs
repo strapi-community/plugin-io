@@ -91,3 +91,36 @@ test('read-only and full-access API tokens receive events; admin-kind tokens are
   );
   await host.close();
 });
+
+test('rooms without sockets are skipped before sanitizing and not counted as delivered (IO-RA-08)', async () => {
+  let sanitized = 0;
+  const host = await startHost({
+    usersPermissions,
+    roles: [
+      { id: 1, name: 'Public', type: 'public', permissions: [{ action: 'api::article.article.find' }] },
+      { id: 2, name: 'Readers', type: 'readers', permissions: [{ action: 'api::article.article.find' }] },
+    ],
+    tokens: Array.from({ length: 20 }, (_, i) => ({
+      id: i + 1,
+      type: 'read-only',
+      kind: 'content-api',
+      permissions: [],
+    })),
+    sanitizeOutput: async (data) => {
+      sanitized += 1;
+      return data;
+    },
+  });
+  await host.connect();
+  const schema = { uid: 'api::article.article', singularName: 'article' };
+  const delivered = await host.strapi.$io.emit({
+    event: 'update',
+    schema,
+    data: { id: 1, documentId: 'a', title: 'x' },
+  });
+  assert.equal(delivered, 1, 'only the public room has a socket');
+  assert.equal(sanitized, 1, 'one sanitize pass instead of 22');
+  const reached = await host.strapi.$io.emitIdentifier({ event: 'delete', schema, data: { documentId: 'a' } });
+  assert.equal(reached, 1);
+  await host.close();
+});

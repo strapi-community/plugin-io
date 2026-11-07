@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { createHandshake } from '../middleware/handshake.js';
 import { pluginId } from '../utils/pluginId.js';
-import { resolveSocketServerOptions } from './resolveSocketServerOptions.js';
+import { originsOf, resolveSocketServerOptions } from './resolveSocketServerOptions.js';
 import { attachUpgradeForwarder } from './upgrade-forwarder.js';
 
 const REVALIDATE_MS = 5 * 60 * 1000;
@@ -20,7 +20,7 @@ const REVALIDATE_MS = 5 * 60 * 1000;
 class SocketIO {
 	/**
 	 * @param {import('socket.io').ServerOptions | undefined} options - `config.socket.serverOptions`.
-	 * @param {{ strapi?: import('@strapi/types').Core.Strapi }} [deps] - Strapi instance (defaults to the global).
+	 * @param {{ strapi?: import('@strapi/types').Core.Strapi, deferHandshake?: boolean }} [deps] - Strapi instance (defaults to the global); `deferHandshake` waits for `useHandshake()`.
 	 */
 	constructor(options, deps = {}) {
 		const strapiInstance = deps.strapi ?? globalThis.strapi;
@@ -28,7 +28,11 @@ class SocketIO {
 		const settingsService = strapiInstance.plugin(pluginId).service('settings');
 		const httpServer = strapiInstance.server.httpServer;
 
-		const serverOptions = resolveSocketServerOptions(options, () => settingsService.current());
+		const trustedOrigins = originsOf([
+			strapiInstance.config?.get?.('server.url'),
+			strapiInstance.config?.get?.('admin.url'),
+		]);
+		const serverOptions = resolveSocketServerOptions(options, () => settingsService.current(), { trustedOrigins });
 		const before = httpServer.listeners('upgrade');
 		this._socket = new Server(httpServer, serverOptions);
 		const engineListeners = httpServer.listeners('upgrade').filter((l) => !before.includes(l));
@@ -41,10 +45,11 @@ class SocketIO {
 		});
 
 		this._handshake = createHandshake({ strapi: strapiInstance });
-		this._socket.use(this._handshake);
+		this._handshakeAttached = false;
 		this._socket.on('new_namespace', (namespace) => {
 			if (namespace.name !== '/') namespace.use(this._handshake);
 		});
+		if (!deps.deferHandshake) this.useHandshake();
 
 		this._applySettings(settingsService.current(), serverOptions);
 		this._unsubscribeSettings = settingsService.onChange((next) => this._applySettings(next, serverOptions));
@@ -54,6 +59,18 @@ class SocketIO {
 		}, REVALIDATE_MS);
 		this._revalidateTimer.unref?.();
 		this._expiryTimers = new Map();
+	}
+
+	/**
+	 * Adds the plugin handshake to the default namespace. The plugin calls it
+	 * right after `hooks.init`, so middleware registered there with
+	 * `$io.server.use()` runs before the handshake, as in 5.x. Calling it
+	 * again does nothing.
+	 */
+	useHandshake() {
+		if (this._handshakeAttached) return;
+		this._handshakeAttached = true;
+		this._socket.use(this._handshake);
 	}
 
 	/**
@@ -93,7 +110,9 @@ class SocketIO {
 
 	/**
 	 * Re-checks authenticated sockets and disconnects the ones whose user,
-	 * role, admin account or API token is no longer valid.
+	 * role, session, admin account or API token is no longer valid. Sockets
+	 * are checked in one batch per kind (one query for all users, admins or
+	 * tokens), not one by one.
 	 *
 	 * Pass `ids` to check only the sockets of those users, admins or API
 	 * tokens (used by the lifecycle hooks, so one changed user does not
@@ -108,18 +127,24 @@ class SocketIO {
 		const byKind = { user: strategies.role, token: strategies.token, admin: strategies.admin };
 		const only = ids ? new Set([...ids].map(String)) : null;
 		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [this._socket.of('/')];
-		let dropped = 0;
+		const groups = new Map();
 		for (const socket of namespaces.flatMap((nsp) => [...nsp.sockets.values()])) {
 			const kind = socket.data.kind;
-			if (!kinds.includes(kind)) continue;
+			if (!kinds.includes(kind) || !byKind[kind]) continue;
 			if (only && !only.has(String(SocketIO.identityId(socket)))) continue;
-			let ok;
+			if (!groups.has(kind)) groups.set(kind, []);
+			groups.get(kind).push(socket);
+		}
+		let dropped = 0;
+		for (const [kind, sockets] of groups) {
+			let failed;
 			try {
-				ok = await byKind[kind].revalidate(socket);
+				failed = await byKind[kind].revalidateMany(sockets);
 			} catch {
-				ok = false;
+				failed = new Set(sockets.map((socket) => socket.id));
 			}
-			if (!ok) {
+			for (const socket of sockets) {
+				if (!failed.has(socket.id)) continue;
 				socket.disconnect(true);
 				dropped += 1;
 			}
@@ -135,7 +160,9 @@ class SocketIO {
 	 * @returns {number | string | undefined} Identity id.
 	 */
 	static identityId(socket) {
-		return socket.data.kind === 'token' ? socket.data.token?.id : socket.data.user?.id;
+		if (socket.data.kind === 'token') return socket.data.token?.id;
+		if (socket.data.kind === 'admin') return socket.data.admin?.id;
+		return socket.data.user?.id;
 	}
 
 	/**
@@ -146,7 +173,7 @@ class SocketIO {
 	 * @param {string} params.event - Action (`create`, `update`, `publish`, ...).
 	 * @param {{ uid: string, singularName: string }} params.schema - Content type.
 	 * @param {object} params.data - Entry from the Document Service.
-	 * @returns {Promise<number>} Number of rooms the event was sent to.
+	 * @returns {Promise<number>} Number of non-empty rooms the event was sent to.
 	 */
 	async emit({ event, schema: schemaInput, data }) {
 		const schema = this._resolveSchema(schemaInput);
@@ -159,7 +186,7 @@ class SocketIO {
 		let delivered = 0;
 
 		for (const audience of await rooms.getAudiences()) {
-			if (!rooms.canRead(audience, schema.uid)) continue;
+			if (!this._hasSockets(audience.name) || !rooms.canRead(audience, schema.uid)) continue;
 			try {
 				const sanitized = await sanitize.output({
 					data,
@@ -203,10 +230,35 @@ class SocketIO {
 		const eventName = `${schema.singularName}:${event}`;
 		const payload = { documentId: data.documentId };
 		if (data.locale) payload.locale = data.locale;
-		const names = (await rooms.getAudiences()).filter((a) => rooms.canRead(a, schema.uid)).map((a) => a.name);
+		const names = (await rooms.getAudiences())
+			.filter((a) => this._hasSockets(a.name) && rooms.canRead(a, schema.uid))
+			.map((a) => a.name);
 		if (names.length) this._socket.to(names).emit(eventName, { data: payload });
 		plugin.service('monitoring').recordEvent(eventName, { audiences: names.length });
 		return names.length;
+	}
+
+	/**
+	 * Checks whether a room has at least one socket in any namespace on this
+	 * server. Rooms without sockets are skipped before sanitizing, so an emit
+	 * costs one sanitize pass per room that is actually listening.
+	 *
+	 * With an adapter that spans several servers (Redis), rooms on other nodes
+	 * are not visible here, so the check is skipped and every room is used.
+	 *
+	 * @param {string} room - Room name.
+	 * @returns {boolean} True when the room may have listeners.
+	 */
+	_hasSockets(room) {
+		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [this._socket.of('/')];
+		for (const nsp of namespaces) {
+			const adapter = nsp.adapter;
+			if (adapter && adapter.constructor?.name !== 'Adapter' && adapter.constructor?.name !== 'SessionAwareAdapter') {
+				return true;
+			}
+			if (adapter?.rooms?.get(room)?.size) return true;
+		}
+		return false;
 	}
 
 	/**

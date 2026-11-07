@@ -39,9 +39,9 @@ async function hostWithTokenSockets() {
   }
   const calls = [];
   const strategy = host.strapi.plugin('io').service('strategy');
-  strategy.token.revalidate = async (socket) => {
-    calls.push(socket.data.token.id);
-    return socket.data.token.id !== 2;
+  strategy.token.revalidateMany = async (sockets) => {
+    for (const socket of sockets) calls.push(socket.data.token.id);
+    return new Set(sockets.filter((socket) => socket.data.token.id === 2).map((socket) => socket.id));
   };
   return { host, clients, calls };
 }
@@ -95,4 +95,38 @@ test('lifecycle hooks re-check only the changed rows and skip creates and lastUs
   await sleep(350);
   assert.deepEqual(calls.sort(), [1, 2, 3], 'bulk changes re-check every token socket');
   await host.close();
+});
+
+test('token sockets are re-checked with one query for all tokens (IO-RA-08)', async () => {
+  const host = await startHost({
+    usersPermissions: { service: () => undefined },
+    tokens: [
+      { id: 1, expiresAt: null },
+      { id: 2, expiresAt: new Date(Date.now() - 1000).toISOString() },
+    ],
+  });
+  for (let i = 0; i < 4; i += 1) await host.connect();
+  for (const [index, socket] of (await host.strapi.$io.server.fetchSockets()).entries()) {
+    socket.data.kind = 'token';
+    socket.data.token = { id: (index % 3) + 1, type: 'read-only' };
+  }
+  host.strapi.state.queries.length = 0;
+  // ids 1, 2, 3, 1: token 2 expired, token 3 deleted
+  assert.equal(await host.strapi.$io.revalidateSockets(['token']), 2);
+  const tokenQueries = host.strapi.state.queries.filter((q) => q.uid === 'admin::api-token');
+  assert.equal(tokenQueries.length, 1);
+  assert.deepEqual(tokenQueries[0].where.id.$in.sort(), [1, 2, 3]);
+  await host.close();
+});
+
+test('session deletes map to the right kind and user', async () => {
+  const { sessionTarget } = await import('../server/src/bootstrap/invalidation.js');
+  assert.deepEqual(sessionTarget({ params: { where: { userId: '3', origin: 'admin' } } }), {
+    origin: 'admin',
+    userId: '3',
+  });
+  assert.deepEqual(sessionTarget({ params: { where: { sessionId: 'x' } }, result: { count: 1 } }), {
+    origin: null,
+    userId: null,
+  });
 });

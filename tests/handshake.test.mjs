@@ -129,3 +129,28 @@ test('custom namespaces created at runtime use the same handshake', async () => 
   result.socket.close();
   await host.close();
 });
+
+test('an empty "Allowed origins" list refuses foreign-origin WebSocket clients (IO-RA-05)', async () => {
+  const host = await startHost({ usersPermissions: { service: () => undefined } });
+  const foreign = await host.connect(undefined, { extraHeaders: { origin: 'https://evil.example' } });
+  assert.ok(foreign.error, 'foreign origin refused');
+  const sameOrigin = await host.connect(undefined, { extraHeaders: { origin: host.url } });
+  assert.equal(sameOrigin.error, undefined, 'same origin allowed');
+  const serverClient = await host.connect();
+  assert.equal(serverClient.error, undefined, 'no Origin header allowed');
+  await host.strapi
+    .plugin('io')
+    .service('settings')
+    .setSettings({ cors: { origins: ['https://evil.example'] } });
+  const listed = await host.connect(undefined, { extraHeaders: { origin: 'https://evil.example' } });
+  assert.equal(listed.error, undefined, 'listed origin allowed');
+  await host.close();
+});
+
+test('originsOf keeps only absolute server and admin URLs', async () => {
+  const { originsOf } = await import('../server/src/structures/resolveSocketServerOptions.js');
+  assert.deepEqual(originsOf(['https://api.example/', '/admin', undefined, 'https://admin.example/admin']), [
+    'https://api.example',
+    'https://admin.example',
+  ]);
+});

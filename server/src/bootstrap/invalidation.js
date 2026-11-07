@@ -90,6 +90,33 @@ function registerInvalidation({ strapi }) {
 	subscribe(['admin::user'], (event) => {
 		if (!isCreate(event)) revalidate.admin(changedIds(event));
 	});
+	// Strapi sessions (admin logout, revoked sessions, users-permissions refresh
+	// mode): deleting a session re-checks the sockets of that user right away
+	// instead of at the next five-minute re-check.
+	subscribe(['admin::session'], (event) => {
+		if (!String(event?.action || '').startsWith('afterDelete')) return;
+		const { origin, userId } = sessionTarget(event);
+		const ids = userId === null ? null : [userId];
+		if (origin === 'admin' || origin === null) revalidate.admin(ids);
+		if (origin === 'users-permissions' || origin === null) revalidate.user(ids);
+	});
 }
 
-export { batch, changedIds, registerInvalidation };
+/**
+ * Reads which user and origin a session delete affects, from the delete
+ * criteria or the deleted row.
+ *
+ * @param {{ params?: { where?: any }, result?: any }} event - Database lifecycle event.
+ * @returns {{ origin: string | null, userId: string | null }} Origin and user id, null when unknown.
+ */
+function sessionTarget(event) {
+	const where = event?.params?.where ?? {};
+	const row = Array.isArray(event?.result) ? null : event?.result;
+	const pick = (key) => {
+		const value = where[key] ?? row?.[key];
+		return typeof value === 'string' || typeof value === 'number' ? String(value) : null;
+	};
+	return { origin: pick('origin'), userId: pick('userId') };
+}
+
+export { batch, changedIds, registerInvalidation, sessionTarget };

@@ -98,9 +98,12 @@ function createHandshake({ strapi }) {
 			const identity = await strategy.authenticate(auth);
 
 			if (type === 'admin') {
+				// Admin identity lives under `data.admin`, never `data.user`, so
+				// handlers written for Users & Permissions ids cannot mix them up.
 				socket.data.kind = 'admin';
-				socket.data.user = identity.user;
+				socket.data.admin = identity.user;
 				socket.data.adminAbility = identity.ability;
+				socket.data.adminSessionId = identity.sessionId ?? null;
 				socket.join(strategy.getRoomName(identity.user));
 			} else if (type === 'role') {
 				if (settings.rolePermissions?.[identity.role.type]?.canConnect === false) {
