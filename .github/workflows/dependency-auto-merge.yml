@@ -1,0 +1,78 @@
+# Verifies every Dependabot PR and merges it automatically when it is safe:
+# - patch/minor updates: merged after lint, format, build, tests, type check and verify pass;
+# - major updates: never merged automatically; the PR is labelled and left for review.
+# Merges made with GITHUB_TOKEN do not trigger release.yml, so no npm release is published
+# automatically. Updates ship with the next regular release.
+name: Dependency auto-merge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: Lint
+        run: npm run --if-present lint
+      - name: Format check
+        run: npm run --if-present format:check
+      - name: Build
+        run: npm run build
+      - name: Tests
+        run: npm test
+      - name: Type check (published types)
+        run: npm run test:types
+      - name: Verify package
+        run: npm run verify
+      - name: Production audit
+        run: npm audit --omit=dev --audit-level=high
+
+  auto-merge:
+    needs: verify
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Read update metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Merge patch and minor updates
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge "$PR_URL" --squash --delete-branch
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Flag major updates for review
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        run: |
+          gh pr edit "$PR_URL" --add-label "major-update" || true
+          gh pr comment "$PR_URL" --body "Major update: all checks passed, but this PR is not merged automatically. Review the changelog of ${DEPS} for breaking changes before merging."
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
