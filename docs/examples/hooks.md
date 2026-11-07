@@ -36,6 +36,8 @@ init(context: { strapi; $io; io }): void | Promise<void>
 
 ## Redis adapter (several Strapi instances)
 
+The simplest way is `socket.adapter: { type: 'redis' }` or `socket.adapter: 'postgres'`; see [Running several instances](/guide/multiple-instances). Attaching the adapter yourself in `hooks.init` keeps working and is detected by the plugin:
+
 Behind a load balancer, every instance needs the same rooms. Install the
 official adapter in your project:
 

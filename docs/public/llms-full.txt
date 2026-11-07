@@ -1,6 +1,6 @@
 # Strapi Plugin IO — Full Documentation (llms-full.txt)
 
-> LLM-friendly export of the @strapi-community/plugin-io docs. Use this file to answer how Socket.IO integration with Strapi v5 works (auth, events, rooms, Redis, presence, transfer coexistence). Generated: 2026-11-07T14:22:10.313Z
+> LLM-friendly export of the @strapi-community/plugin-io docs. Use this file to answer how Socket.IO integration with Strapi v5 works (auth, events, rooms, Redis, presence, transfer coexistence). Generated: 2026-11-07T16:56:36.332Z
 
 Source: https://strapi-community.github.io/plugin-io/llms-full.txt
 Package: @strapi-community/plugin-io
@@ -559,15 +559,15 @@ await strapi.$io.raw({ event: 'report:ready', data: { id }, rooms: [`user-${user
 
 ## Room helpers
 
-| Method                                      | Returns             | Notes                                                                   |
-| ------------------------------------------- | ------------------- | ----------------------------------------------------------------------- |
-| `joinRoom(socketId, room)`                  | `boolean`           | `false` when the socket is unknown or the room belongs to the plugin.   |
-| `leaveRoom(socketId, room)`                 | `boolean`           | `false` when the socket is unknown.                                     |
-| `getSocketsInRoom(room)`                    | `Promise` | Socket ids, across instances when an adapter such as Redis is attached. |
-| `sendPrivateMessage(socketId, event, data)` | `void`              | Sends `data` as is (no sanitizing).                                     |
-| `broadcast(socketId, event, data)`          | `void`              | Everyone except `socketId`.                                             |
-| `emitToNamespace(namespace, event, data)`   | `void`              | `namespace` with or without the leading slash.                          |
-| `disconnectSocket(socketId)`                | `boolean`           | Closes the connection.                                                  |
+| Method                                      | Returns             | Notes                                                                                                                                                              |
+| ------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `joinRoom(socketId, room)`                  | `boolean`           | `false` when the socket is unknown or the room belongs to the plugin. With a multi-server adapter, `true` for a socket on another process means the join was sent. |
+| `leaveRoom(socketId, room)`                 | `boolean`           | `false` when the socket is unknown.                                                                                                                                |
+| `getSocketsInRoom(room)`                    | `Promise` | Socket ids, across instances when an adapter such as Redis is attached.                                                                                            |
+| `sendPrivateMessage(socketId, event, data)` | `void`              | Sends `data` as is (no sanitizing).                                                                                                                                |
+| `broadcast(socketId, event, data)`          | `void`              | Everyone except `socketId`.                                                                                                                                        |
+| `emitToNamespace(namespace, event, data)`   | `void`              | `namespace` with or without the leading slash.                                                                                                                     |
+| `disconnectSocket(socketId)`                | `boolean`           | Closes the connection.                                                                                                                                             |
 
 Plugin rooms (`io-role-`, `io-token-`, `io-admin-`, `io-entity-`, `presence:`) cannot be
 joined with `joinRoom()`.
@@ -667,11 +667,11 @@ socket.emit('get-entity-subscriptions', ({ subscriptions }) => console.log(subsc
 
 Server code can use the same checks:
 
-| Method                                             | Returns                                                           |
-| -------------------------------------------------- | ----------------------------------------------------------------- |
-| `subscribeToEntity(socketId, uid, documentId)`     | `Promise` |
-| `unsubscribeFromEntity(socketId, uid, documentId)` | `{ success, uid, documentId, id } \| { success, error }`          |
-| `getEntitySubscriptions(socketId)`                 | `{ success, subscriptions: [{ uid, documentId, id }] }`           |
+| Method                                             | Returns                                                                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `subscribeToEntity(socketId, uid, documentId)`     | `Promise`                                                |
+| `unsubscribeFromEntity(socketId, uid, documentId)` | `{ success, uid, documentId, id } \| { success, error }` (a Promise for a socket on another process: `await` it) |
+| `getEntitySubscriptions(socketId)`                 | `{ success, subscriptions: [{ uid, documentId, id }] }` (a Promise for a socket on another process: `await` it)  |
 
 `emit()` and `emitIdentifier()` accept `broadcast: false` to reach only the
 subscribers of `data.documentId`.
@@ -807,7 +807,7 @@ hooks: {
 - `$io` and `io` are the same object (`io` is kept for configs written for older versions).
 - An error is logged as `[io] hooks.init failed` and Strapi keeps starting.
 
-Full guide with the Redis adapter: [Hooks](/examples/hooks).
+An adapter attached here is detected like `socket.adapter`. More: [Hooks](/examples/hooks).
 
 ## `socket.serverOptions`
 
@@ -884,6 +884,37 @@ module.exports = ({ env }) => ({
 - [IO class](/api/io-class): `strapi.$io` methods
 - [Custom events](/examples/events) and [Hooks](/examples/hooks)
 - [Socket.IO server options](https://socket.io/docs/v4/server-options/)
+
+## `socket.adapter`
+
+Multi-server adapter for several processes (Railway replicas, pm2 cluster).
+The packages are optional peer dependencies.
+
+| Value                                  | Adapter                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| `'postgres'` or `{ type: 'postgres' }` | `@socket.io/postgres-adapter` + `pg`, own pool (`poolMax`, default 2)          |
+| `'redis'` or `{ type: 'redis', url }`  | `@socket.io/redis-adapter` + `ioredis` (`url` defaults to `REDIS_URL`)         |
+| `async ({ strapi }) => adapter`        | Any adapter; return `{ adapter, close }` to have the plugin close your clients |
+
+Postgres options: `connectionString`, `connection`, `poolMax`, `tableName`,
+`channelPrefix`, `payloadThreshold`, `cleanupInterval`, `heartbeatInterval`,
+`heartbeatTimeout`. Redis options: `url`, `redisOptions`, `key`,
+`requestsTimeout`, `publishOnSpecificResponseChannel` (default `true`).
+
+## `socket.websocketOnly`
+
+`true` sets `transports: ['websocket']` unless `socket.serverOptions.transports`
+is set. Needed without sticky sessions.
+
+## `cluster`
+
+| Key                 | Default  | Meaning                                                                    |
+| ------------------- | -------- | -------------------------------------------------------------------------- |
+| `enabled`           | `'auto'` | On with a multi-server adapter, in pm2 cluster mode or on Railway.         |
+| `pollInterval`      | `3000`   | ms between reads of control signals (settings, revocations, cache, reset). |
+| `heartbeatInterval` | `10000`  | ms between heartbeats (monitoring totals, connection cap, peer detection). |
+
+Guide: [Running several instances](/guide/multiple-instances).
 
 
 ========== https://strapi-community.github.io/plugin-io/examples/ ==========
@@ -1536,6 +1567,8 @@ init(context: { strapi; $io; io }): void | Promise
 - **Order:** middleware you add here with `$io.server.use()` runs **before** the plugin's handshake (authentication, IP rules, origin and connection limits). At that point `socket.data.kind` is not set yet. To act on the authenticated client, use a `connection` handler in [`config.events`](/examples/events) instead.
 
 ## Redis adapter (several Strapi instances)
+
+The simplest way is `socket.adapter: { type: 'redis' }` or `socket.adapter: 'postgres'`; see [Running several instances](/guide/multiple-instances). Attaching the adapter yourself in `hooks.init` keeps working and is detected by the plugin:
 
 Behind a load balancer, every instance needs the same rooms. Install the
 official adapter in your project:

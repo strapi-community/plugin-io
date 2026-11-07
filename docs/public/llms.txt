@@ -17,6 +17,7 @@ Key facts for LLMs:
 - [Home / Overview](https://strapi-community.github.io/plugin-io/): What the plugin does and feature summary
 - [Getting Started](https://strapi-community.github.io/plugin-io/guide/getting-started): Install, enable, auth strategies, troubleshooting
 - [Dashboard Widget](https://strapi-community.github.io/plugin-io/guide/widget): Online editors / monitoring widget
+- [Running several instances](https://strapi-community.github.io/plugin-io/guide/multiple-instances): Railway replicas, pm2 cluster, Postgres or Redis adapter, WebSocket-only, proxy, pool sizing
 - [Migration v4 → v5](https://strapi-community.github.io/plugin-io/guide/migration): Upgrade notes
 - [IO Class API](https://strapi-community.github.io/plugin-io/api/io-class): Server helpers (`emit`, `raw`, rooms)
 - [Plugin Configuration](https://strapi-community.github.io/plugin-io/api/plugin-config): `contentTypes`, `socket.serverOptions`, hooks, events

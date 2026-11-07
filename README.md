@@ -27,7 +27,7 @@ Full documentation: <https://strapi-community.github.io/plugin-io/>
 - [Server API](#server-api)
 - [Security model](#security-model)
 - [Performance](#performance)
-- [Scaling with Redis](#scaling-with-redis)
+- [Running several instances](#running-several-instances)
 - [Upgrading from 5.x](#upgrading-from-5x)
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
@@ -170,6 +170,9 @@ module.exports = ({ env }) => ({
           // cors: { origin: ['https://app.example.com'] },
           // maxHttpBufferSize: 1e6,
         },
+        // Several processes: see "Running several instances".
+        // adapter: 'postgres',
+        // websocketOnly: true,
       },
     },
   },
@@ -274,7 +277,8 @@ Namespaces created with `strapi.$io.server.of('/name')`, for example in `hooks.i
 
 ## Security model
 
-- Admin routes require an authenticated admin plus the plugin permission (`admin::hasPermissions`). The presence session route only requires an authenticated admin; it keeps at most five unused tokens per admin and answers `429` when 10,000 are pending. A token holds the admin id and session id only; permissions are loaded from the database when it is used.
+- Admin routes require an authenticated admin plus the plugin permission (`admin::hasPermissions`). The presence session route only requires an authenticated admin; it keeps at most five unused tokens per admin and answers `429` when 10,000 are pending. A token holds the admin id and session id only; permissions are loaded from the database when it is used. With several processes tokens are stored as SHA-256 hashes and used with one `DELETE`, so each works exactly once.
+- Failed handshakes lock an IP out after 20 per minute (across all processes when they share a database). Unknown presence tokens count in a separate limit, so admins behind one office NAT do not lock out other clients.
 - Monitoring responses contain counts and admin display names only, never IP addresses, emails, tokens or socket ids.
 - The settings document is validated with a strict schema (unknown keys rejected, every list and number bounded). Invalid input returns `400` with field paths.
 - Entity subscriptions need read permission of the client's role or API token, are limited per client and to ten requests per second, use reserved per-audience rooms and are re-checked on every event.
@@ -294,37 +298,43 @@ Report vulnerabilities privately through GitHub security advisories.
 - **Re-checks:** every five minutes and right after a user, admin, API token or Strapi session changes. Checks run in one batch per kind: one query for all affected users, one for tokens, one for admins, plus one per distinct session. On a test host with 200 connected sockets, updating an unrelated user cost 427 SQL queries before this targeting existed; now the plugin adds none (the update itself takes Strapi 22 to 27 queries).
 - **Populate:** only what you configure, refetched once per event.
 - **Memory:** presence tokens are capped per admin and globally; monitoring keeps fixed-size counters and a bounded event log.
+- **Several processes:** a successful handshake does not touch the shared tables; a failed one costs one atomic `UPDATE`. Each process writes one heartbeat every 10 seconds and reads new control signals every 3 seconds (one indexed query each). The admin ability and the client IP stay out of `socket.data`, so `fetchSockets()` across servers sends only identity fields.
 
-## Scaling with Redis
+## Running several instances
 
-To run several Strapi instances behind a load balancer, use the official Redis adapter. Install `@socket.io/redis-adapter` and `redis` in your project and attach the adapter in `hooks.init`:
+Two Railway replicas with `pm2 -i 4` each are eight Node.js processes that share one database and no memory. They act as one Socket.IO server when you set three things:
 
-```js
-const { createAdapter } = require('@socket.io/redis-adapter');
-const { createClient } = require('redis');
-
-module.exports = ({ env }) => ({
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: ['api::article.article'],
-      hooks: {
-        async init({ strapi, $io }) {
-          const pubClient = createClient({ url: env('REDIS_URL') });
-          const subClient = pubClient.duplicate();
-          await Promise.all([pubClient.connect(), subClient.connect()]);
-          $io.server.adapter(createAdapter(pubClient, subClient));
-          strapi.log.info('[io] Redis adapter ready');
-        },
-      },
-    },
-  },
-});
+```bash
+npm install @socket.io/postgres-adapter pg   # or: @socket.io/redis-adapter ioredis
 ```
 
-Keep the Redis URL in an environment variable. The admin panel does not store it.
+```js
+// config/plugins.js
+io: {
+  enabled: true,
+  config: {
+    contentTypes: ['api::article.article'],
+    socket: {
+      adapter: 'postgres', // or { type: 'redis', url: env('REDIS_URL') }
+      websocketOnly: true, // no long-polling: Railway and pm2 have no sticky sessions
+    },
+  },
+},
 
-With an adapter that spans several servers, a server cannot see which entries are followed on the other servers. While _Entry subscriptions_ is on, every change to a content type that is not broadcast is therefore sanitized and sent to the entry rooms of each reading audience (Redis delivers it only where subscribers exist). Leave _Entry subscriptions_ off if you do not use them.
+// config/server.js (Railway passes the client IP in X-Real-IP)
+proxy: { koa: true, ipHeader: 'X-Real-IP' },
+```
+
+Clients connect with `transports: ['websocket']`. The admin already does.
+
+- **Adapter:** `'postgres'` uses `@socket.io/postgres-adapter` (LISTEN/NOTIFY) on its own pool of 2 connections and Strapi's PostgreSQL connection; it needs a direct or session-mode connection (not PgBouncer in transaction mode). `{ type: 'redis' }` uses `@socket.io/redis-adapter` with `ioredis`. A function returns any other adapter. The packages are optional peer dependencies and load only when configured.
+- **Shared automatically** once an adapter is attached, in pm2 cluster mode or on Railway: one-time admin presence tokens (hashed, used exactly once on any process), settings (revision with compare-and-swap; a concurrent save gets `409` and the admin offers a reload), revocations of users, tokens, admins and sessions, the audience cache, the failed-handshake lockout, the `maxConnections` total, presence editor lists and the monitoring totals. Four small tables (`plugin_io_presence_tokens`, `plugin_io_counters`, `plugin_io_nodes`, `plugin_io_signals`) hold this state; one plain process writes none of it.
+- **Warnings at boot** for several processes without an adapter, long-polling with several processes, and Railway without `server.proxy.koa`. The Monitoring page shows the first one too.
+- **Connection budget:** each process has its own knex pool plus 2 adapter connections. 8 processes with Strapi's default pool of 10 need 96 PostgreSQL connections; set `database.connection.pool.max` to about 6 to stay well under a limit of 100.
+
+Full guide with pm2, Redis, pool sizing and the remaining limits: [Running several instances](https://strapi-community.github.io/plugin-io/guide/multiple-instances).
+
+With an adapter that spans several servers, a server cannot see which entries are followed on the other servers. While _Entry subscriptions_ is on, every change to a content type that is not broadcast is therefore sanitized and sent to the entry rooms of each reading audience. Leave _Entry subscriptions_ off if you do not use them.
 
 ## Upgrading from 5.x
 

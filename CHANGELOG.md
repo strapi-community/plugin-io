@@ -4,6 +4,8 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ### Bug Fixes
 
+* **cluster:** the plugin works with several processes on one database, for example two Railway replicas with a pm2 cluster of four workers each, without sticky sessions. Admin presence tokens are stored hashed in the database and work exactly once on any process (before, a token issued on one process failed on the others and each miss counted as a failed login of the IP). Settings carry a revision and are saved with compare-and-swap, so concurrent saves no longer overwrite each other and every process applies a new revision within seconds. Revoking a user, admin, session or API token disconnects its sockets on every process. Presence editor lists, the failed-handshake lockout, `maxConnections` and the monitoring totals cover all processes.
+
 * **socket:** Strapi Data Transfer works again behind proxies. Engine.IO's `upgrade` listener stopped Node from passing `/admin/transfer/runner/*` upgrades to Strapi, so they timed out (504/524). The plugin wraps the HTTP server's `shouldUpgradeCallback` (Node.js 22.21+ / 24.9+) so Node accepts upgrades only on the Socket.IO path and every other request (including `POST` with an `Upgrade: h2c` header and a body) reaches Strapi untouched. Closes #112.
 * **lifecycle:** `destroy()` no longer closes Strapi's HTTP server and releases every timer, so shutdown and `strapi ts:generate-types` exit (#109).
 * **events:** content events use the Document Service middleware. Publishing emits `:publish` instead of `:delete` plus `:create`, populated refetches use the same locale and status, and delete emits one event per locale.
@@ -35,6 +37,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **docs:** the examples, configuration reference, IO class reference and migration guide were rewritten against the 6.0 code: no `socket.data.userId`, non-existent services, `eventPrefix` or `entityService` calls.
 
 ### Features
+
+* **cluster:** `socket.adapter` configures the Socket.IO adapter: `'postgres'` (`@socket.io/postgres-adapter` on its own pool of 2 connections, using Strapi's PostgreSQL connection), `{ type: 'redis' }` (`@socket.io/redis-adapter` with `ioredis`) or a function. The packages are optional peer dependencies. `socket.websocketOnly: true` turns off long-polling. `config.cluster` (`enabled: 'auto'`, `pollInterval`, `heartbeatInterval`) tunes the coordination, which turns on by itself with an adapter, in pm2 cluster mode or on Railway; one plain process keeps the in-memory behaviour.
+* **cluster:** warnings at boot for several processes without an adapter, long-polling with several processes and Railway without `server.proxy.koa`; the Monitoring page shows the first one and how many processes its totals add up.
+* **admin:** a concurrent settings save opens a dialog with "Load latest settings" instead of overwriting the other administrator's changes (`PUT /io/settings` answers `409` for a stale `revision`).
+* **server:** `joinRoom`, `leaveRoom`, `disconnectSocket`, `subscribeToEntity`, `unsubscribeFromEntity` and `getEntitySubscriptions` reach sockets on other processes through the adapter. For such sockets the last two return a Promise; `await` them.
 
 * **subscriptions:** entity subscriptions are back, rebuilt on the per-audience delivery. Clients send `subscribe-entity` with `{ uid, documentId }` (`{ uid, id }` still works), `unsubscribe-entity` and `get-entity-subscriptions`; server code can call `strapi.$io.subscribeToEntity()`, `unsubscribeFromEntity()` and `getEntitySubscriptions()`. Each subscription needs read permission of the client's own role or API token and an existing entry, the payload is sanitized with that audience's permissions at every emit, and read permission is checked again on every event. Subscribers also receive events of content types and actions that are not broadcast. Off by default; turn it on under Settings > Socket.IO > Entry subscriptions (limit per client 1 to 1,000, default 100).
 * **admin:** settings export and import are back. Export downloads the saved settings as JSON (no secrets). Import checks the file with the server's strict schema (`POST /io/settings/validate`, needs `settings.update`), lists the changed values in a confirmation dialog and fills the form; nothing is stored until Save.
@@ -71,6 +78,9 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **Admin sockets.** Presence sockets carry `socket.data.admin` (not `socket.data.user`) and do not run `config.events` handlers unless the event sets `admin: true`. Check `socket.data.kind` in your handlers.
 * **hooks.init** runs before the plugin handshake and receives `{ strapi, $io, io }`. Middleware you add there runs before authentication, so `socket.data.kind` is not set yet; use a `connection` event for logic that needs the authenticated client.
 * **Presence tokens.** `POST /io/presence/session` can answer `429` when 10,000 tokens are pending server-wide.
+* **Several processes.** If you attached a Redis adapter in `hooks.init`, it keeps working; you can switch to `socket.adapter`. Add `socket.websocketOnly: true` and `transports: ['websocket']` in clients when there are no sticky sessions. With coordination on, the plugin creates four tables (`plugin_io_presence_tokens`, `plugin_io_counters`, `plugin_io_nodes`, `plugin_io_signals`) on first start; size `database.connection.pool.max` for the extra adapter connections (README "Running several instances").
+* **Socket data.** `socket.data.adminAbility` and `socket.data.clientIp` are gone, so they are not sent to other servers by `fetchSockets()`.
+* **Service API.** `presence.createSessionToken()`, `consumeSessionToken()` and `size()` return Promises. `monitoring.getConnectionStats()` returns the totals of all processes.
 
 ## [5.8.3](https://github.com/strapi-community/plugin-io/compare/5.8.2...5.8.3) (2026-08-02)
 

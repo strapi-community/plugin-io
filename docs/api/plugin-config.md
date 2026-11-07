@@ -117,7 +117,7 @@ hooks: {
 - `$io` and `io` are the same object (`io` is kept for configs written for older versions).
 - An error is logged as `[io] hooks.init failed` and Strapi keeps starting.
 
-Full guide with the Redis adapter: [Hooks](/examples/hooks).
+An adapter attached here is detected like `socket.adapter`. More: [Hooks](/examples/hooks).
 
 ## `socket.serverOptions`
 
@@ -194,3 +194,34 @@ module.exports = ({ env }) => ({
 - [IO class](/api/io-class): `strapi.$io` methods
 - [Custom events](/examples/events) and [Hooks](/examples/hooks)
 - [Socket.IO server options](https://socket.io/docs/v4/server-options/)
+
+## `socket.adapter`
+
+Multi-server adapter for several processes (Railway replicas, pm2 cluster).
+The packages are optional peer dependencies.
+
+| Value                                  | Adapter                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| `'postgres'` or `{ type: 'postgres' }` | `@socket.io/postgres-adapter` + `pg`, own pool (`poolMax`, default 2)          |
+| `'redis'` or `{ type: 'redis', url }`  | `@socket.io/redis-adapter` + `ioredis` (`url` defaults to `REDIS_URL`)         |
+| `async ({ strapi }) => adapter`        | Any adapter; return `{ adapter, close }` to have the plugin close your clients |
+
+Postgres options: `connectionString`, `connection`, `poolMax`, `tableName`,
+`channelPrefix`, `payloadThreshold`, `cleanupInterval`, `heartbeatInterval`,
+`heartbeatTimeout`. Redis options: `url`, `redisOptions`, `key`,
+`requestsTimeout`, `publishOnSpecificResponseChannel` (default `true`).
+
+## `socket.websocketOnly`
+
+`true` sets `transports: ['websocket']` unless `socket.serverOptions.transports`
+is set. Needed without sticky sessions.
+
+## `cluster`
+
+| Key                 | Default  | Meaning                                                                    |
+| ------------------- | -------- | -------------------------------------------------------------------------- |
+| `enabled`           | `'auto'` | On with a multi-server adapter, in pm2 cluster mode or on Railway.         |
+| `pollInterval`      | `3000`   | ms between reads of control signals (settings, revocations, cache, reset). |
+| `heartbeatInterval` | `10000`  | ms between heartbeats (monitoring totals, connection cap, peer detection). |
+
+Guide: [Running several instances](/guide/multiple-instances).

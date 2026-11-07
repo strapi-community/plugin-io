@@ -84,15 +84,15 @@ await strapi.$io.raw({ event: 'report:ready', data: { id }, rooms: [`user-${user
 
 ## Room helpers
 
-| Method                                      | Returns             | Notes                                                                   |
-| ------------------------------------------- | ------------------- | ----------------------------------------------------------------------- |
-| `joinRoom(socketId, room)`                  | `boolean`           | `false` when the socket is unknown or the room belongs to the plugin.   |
-| `leaveRoom(socketId, room)`                 | `boolean`           | `false` when the socket is unknown.                                     |
-| `getSocketsInRoom(room)`                    | `Promise<string[]>` | Socket ids, across instances when an adapter such as Redis is attached. |
-| `sendPrivateMessage(socketId, event, data)` | `void`              | Sends `data` as is (no sanitizing).                                     |
-| `broadcast(socketId, event, data)`          | `void`              | Everyone except `socketId`.                                             |
-| `emitToNamespace(namespace, event, data)`   | `void`              | `namespace` with or without the leading slash.                          |
-| `disconnectSocket(socketId)`                | `boolean`           | Closes the connection.                                                  |
+| Method                                      | Returns             | Notes                                                                                                                                                              |
+| ------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `joinRoom(socketId, room)`                  | `boolean`           | `false` when the socket is unknown or the room belongs to the plugin. With a multi-server adapter, `true` for a socket on another process means the join was sent. |
+| `leaveRoom(socketId, room)`                 | `boolean`           | `false` when the socket is unknown.                                                                                                                                |
+| `getSocketsInRoom(room)`                    | `Promise<string[]>` | Socket ids, across instances when an adapter such as Redis is attached.                                                                                            |
+| `sendPrivateMessage(socketId, event, data)` | `void`              | Sends `data` as is (no sanitizing).                                                                                                                                |
+| `broadcast(socketId, event, data)`          | `void`              | Everyone except `socketId`.                                                                                                                                        |
+| `emitToNamespace(namespace, event, data)`   | `void`              | `namespace` with or without the leading slash.                                                                                                                     |
+| `disconnectSocket(socketId)`                | `boolean`           | Closes the connection.                                                                                                                                             |
 
 Plugin rooms (`io-role-`, `io-token-`, `io-admin-`, `io-entity-`, `presence:`) cannot be
 joined with `joinRoom()`.
@@ -192,11 +192,11 @@ socket.emit('get-entity-subscriptions', ({ subscriptions }) => console.log(subsc
 
 Server code can use the same checks:
 
-| Method                                             | Returns                                                           |
-| -------------------------------------------------- | ----------------------------------------------------------------- |
-| `subscribeToEntity(socketId, uid, documentId)`     | `Promise<{ success, uid, documentId, id } \| { success, error }>` |
-| `unsubscribeFromEntity(socketId, uid, documentId)` | `{ success, uid, documentId, id } \| { success, error }`          |
-| `getEntitySubscriptions(socketId)`                 | `{ success, subscriptions: [{ uid, documentId, id }] }`           |
+| Method                                             | Returns                                                                                                          |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `subscribeToEntity(socketId, uid, documentId)`     | `Promise<{ success, uid, documentId, id } \| { success, error }>`                                                |
+| `unsubscribeFromEntity(socketId, uid, documentId)` | `{ success, uid, documentId, id } \| { success, error }` (a Promise for a socket on another process: `await` it) |
+| `getEntitySubscriptions(socketId)`                 | `{ success, subscriptions: [{ uid, documentId, id }] }` (a Promise for a socket on another process: `await` it)  |
 
 `emit()` and `emitIdentifier()` accept `broadcast: false` to reach only the
 subscribers of `data.documentId`.

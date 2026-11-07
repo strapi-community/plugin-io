@@ -160,6 +160,7 @@ export default defineConfig({
 						{ text: 'What is Socket.IO Plugin?', link: '/' },
 						{ text: 'Getting Started', link: '/guide/getting-started' },
 						{ text: 'Dashboard Widget', link: '/guide/widget' },
+						{ text: 'Running several instances', link: '/guide/multiple-instances' },
 						{ text: 'Migration guide', link: '/guide/migration' },
 					],
 				},
