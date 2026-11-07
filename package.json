@@ -134,6 +134,13 @@
   "license": "MIT",
   "types": "./types.d.ts",
   "overrides": {
-    "zod@4.4.3": "^4.6.7"
+    "zod@4.4.3": "^4.6.7",
+    "nodemailer": "^10.3.1",
+    "koa-body": {
+      "zod": "^4.6.7"
+    },
+    "@modelcontextprotocol/node": {
+      "@hono/node-server": "^2.1.6"
+    }
   }
 }
