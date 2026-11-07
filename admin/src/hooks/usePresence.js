@@ -1,257 +1,136 @@
-/**
- * Custom hook for presence tracking in Admin Panel
- * Tracks which users are editing which entities.
- */
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useFetchClient, useForm } from '@strapi/strapi/admin';
+import { io } from 'socket.io-client';
 
-import { useAdminSocket } from './useAdminSocket';
-import { PLUGIN_ID } from '../pluginId';
-
-/**
- * Hook for tracking presence on a specific entity
- * @param {string} uid - Content type UID
- * @param {string} documentId - Document ID
- * @param {object} options - Options
- * @returns {object} Presence state and methods
- */
-export const usePresence = (uid, documentId, options = {}) => {
-	const {
-		autoJoin = true,
-		heartbeatInterval = 30000,
-	} = options;
-
-	const { socket, connected, emit, on, socketId } = useAdminSocket();
-	const [editors, setEditors] = useState([]);
-	const [isJoined, setIsJoined] = useState(false);
-	const [typingUsers, setTypingUsers] = useState(new Map()); // socketId -> { fieldName, timestamp }
-	const heartbeatRef = useRef(null);
-	const typingTimeoutRef = useRef(new Map());
-
-	/**
-	 * Join entity for presence tracking
-	 */
-	const join = useCallback(() => {
-		if (!connected || !uid || !documentId) return;
-
-		emit('presence:join', { uid, documentId }, (response) => {
-			if (response?.success) {
-				setEditors(response.editors || []);
-				setIsJoined(true);
-				console.info(`[${PLUGIN_ID}] Joined presence for ${uid}:${documentId}`);
-			}
-		});
-	}, [connected, uid, documentId, emit]);
-
-	/**
-	 * Leave entity
-	 */
-	const leave = useCallback(() => {
-		if (!connected || !uid || !documentId) return;
-
-		emit('presence:leave', { uid, documentId });
-		setIsJoined(false);
-		setEditors([]);
-		console.info(`[${PLUGIN_ID}] Left presence for ${uid}:${documentId}`);
-	}, [connected, uid, documentId, emit]);
-
-	/**
-	 * Send typing indicator for a field
-	 */
-	const sendTyping = useCallback((fieldName) => {
-		if (!connected || !isJoined) return;
-
-		emit('presence:typing', { uid, documentId, fieldName });
-	}, [connected, isJoined, uid, documentId, emit]);
-
-	/**
-	 * Dispatches presence state to the LivePresencePanel via window event
-	 */
-	const dispatchPresenceState = useCallback((state) => {
-		// Store globally for panel initial load
-		window.__SOCKET_IO_PRESENCE_STATE__ = state;
-		
-		// Dispatch event for panel updates
-		window.dispatchEvent(new CustomEvent('socket-io-presence-update', {
-			detail: state,
-		}));
-	}, []);
-
-	// Handle presence updates
-	useEffect(() => {
-		if (!socket || !uid || !documentId) return;
-
-		const handleUpdate = (data) => {
-			if (data.uid === uid && data.documentId === documentId) {
-				setEditors(data.editors || []);
-			}
-		};
-
-		const handleTyping = (data) => {
-			if (data.uid === uid && data.documentId === documentId) {
-				// Update typing users
-				setTypingUsers((prev) => {
-					const next = new Map(prev);
-					next.set(data.user.id, {
-						user: data.user,
-						fieldName: data.fieldName,
-						timestamp: data.timestamp,
-					});
-					return next;
-				});
-
-				// Clear typing after 3 seconds
-				const existingTimeout = typingTimeoutRef.current.get(data.user.id);
-				if (existingTimeout) clearTimeout(existingTimeout);
-
-				const timeout = setTimeout(() => {
-					setTypingUsers((prev) => {
-						const next = new Map(prev);
-						next.delete(data.user.id);
-						return next;
-					});
-				}, 3000);
-
-				typingTimeoutRef.current.set(data.user.id, timeout);
-			}
-		};
-
-		const unsubUpdate = on('presence:update', handleUpdate);
-		const unsubTyping = on('presence:typing', handleTyping);
-
-		return () => {
-			unsubUpdate();
-			unsubTyping();
-		};
-	}, [socket, on, uid, documentId]);
-
-	// Dispatch presence state to panel whenever it changes
-	useEffect(() => {
-		dispatchPresenceState({
-			status: connected ? 'connected' : 'disconnected',
-			editors: editors.map(e => ({
-				...e,
-				isCurrentUser: e.socketId === socketId,
-			})),
-			typingUsers: Array.from(typingUsers.values()),
-			error: null,
-		});
-	}, [connected, editors, typingUsers, socketId, dispatchPresenceState]);
-
-	// Auto-join on mount or when entity changes
-	useEffect(() => {
-		if (autoJoin && connected && uid && documentId) {
-			join();
-		}
-
-		return () => {
-			if (isJoined) {
-				leave();
-			}
-		};
-	}, [autoJoin, connected, uid, documentId]);
-
-	// Heartbeat to keep presence alive
-	useEffect(() => {
-		if (!connected || !isJoined) {
-			if (heartbeatRef.current) {
-				clearInterval(heartbeatRef.current);
-				heartbeatRef.current = null;
-			}
-			return;
-		}
-
-		heartbeatRef.current = setInterval(() => {
-			emit('presence:heartbeat', {});
-		}, heartbeatInterval);
-
-		return () => {
-			if (heartbeatRef.current) {
-				clearInterval(heartbeatRef.current);
-			}
-		};
-	}, [connected, isJoined, emit, heartbeatInterval]);
-
-	// Cleanup typing timeouts
-	useEffect(() => {
-		return () => {
-			for (const timeout of typingTimeoutRef.current.values()) {
-				clearTimeout(timeout);
-			}
-		};
-	}, []);
-
-	// Filter out current user from editors list
-	const otherEditors = editors.filter((e) => e.socketId !== socketId);
-	const isBeingEditedByOthers = otherEditors.length > 0;
-
-	return {
-		editors,
-		otherEditors,
-		editorCount: editors.length,
-		otherEditorCount: otherEditors.length,
-		isJoined,
-		isBeingEditedByOthers,
-		typingUsers: Array.from(typingUsers.values()),
-		join,
-		leave,
-		sendTyping,
-	};
-};
+const HEARTBEAT_MS = 30000;
+const TYPING_THROTTLE_MS = 2000;
+const TYPING_VISIBLE_MS = 4000;
 
 /**
- * Hook for checking if multiple entities are being edited
- * Useful for list views
- * @returns {object} Methods to check entity editing status
+ * Resolves the Strapi server URL the admin talks to.
+ *
+ * @returns {string} Absolute base URL.
  */
-export const usePresenceCheck = () => {
-	const { emit, connected } = useAdminSocket();
-	const [editingEntities, setEditingEntities] = useState(new Map());
+const backendUrl = () => window.strapi?.backendURL || window.location.origin;
 
-	/**
-	 * Check if an entity is being edited
-	 */
-	const checkEntity = useCallback(async (uid, documentId) => {
-		if (!connected) return { isBeingEdited: false, editors: [] };
+/**
+ * Connects the edit view to live presence for one document.
+ *
+ * Every (re)connect asks the server for a fresh one-time session token via
+ * the socket.io-client `auth` callback, so reconnects after a network drop or
+ * server restart work. Heartbeats pause while the tab is hidden.
+ *
+ * @param {{ uid?: string, documentId?: string }} target - Document; nothing happens without both.
+ * @returns {{ status: 'idle'|'connecting'|'connected'|'disconnected'|'disabled', editors: Array<object>, typing: Record<string, string>, showTyping: boolean }} State.
+ */
+export function usePresence({ uid, documentId }) {
+	const { post } = useFetchClient();
+	const [state, setState] = useState({ status: 'idle', editors: [], typing: {}, showTyping: true });
+	const socketRef = useRef(null);
+	const values = useForm('LivePresencePanel', (s) => s.values, false);
+	const lastValues = useRef(values);
+	const lastTypingAt = useRef(0);
 
-		return new Promise((resolve) => {
-			emit('presence:check', { uid, documentId }, (response) => {
-				const result = {
-					isBeingEdited: response?.editors?.length > 0,
-					editors: response?.editors || [],
-				};
-				
-				// Cache result
-				setEditingEntities((prev) => {
-					const next = new Map(prev);
-					next.set(`${uid}:${documentId}`, result);
-					return next;
-				});
+	useEffect(() => {
+		if (!uid || !documentId) return undefined;
+		let cancelled = false;
+		const typingTimers = new Map();
+		let heartbeat = null;
 
-				resolve(result);
+		const fetchSession = async () => (await post('/io/presence/session')).data.data;
+
+		(async () => {
+			setState((prev) => ({ ...prev, status: 'connecting' }));
+			let session;
+			try {
+				session = await fetchSession();
+			} catch {
+				if (!cancelled) setState((prev) => ({ ...prev, status: 'disconnected' }));
+				return;
+			}
+			if (cancelled) return;
+			if (!session.enabled) {
+				setState((prev) => ({ ...prev, status: 'disabled' }));
+				return;
+			}
+			let firstToken = session.token;
+			const socket = io(backendUrl(), {
+				path: session.wsPath,
+				transports: ['websocket'],
+				auth: (cb) => {
+					if (firstToken) {
+						const token = firstToken;
+						firstToken = null;
+						cb({ strategy: 'admin-jwt', token });
+						return;
+					}
+					fetchSession()
+						.then((next) => cb({ strategy: 'admin-jwt', token: next.token }))
+						.catch(() => cb({}));
+				},
 			});
-		});
-	}, [connected, emit]);
+			socketRef.current = socket;
 
-	/**
-	 * Get cached editing status for an entity
-	 */
-	const getEntityStatus = useCallback((uid, documentId) => {
-		return editingEntities.get(`${uid}:${documentId}`) || { isBeingEdited: false, editors: [] };
-	}, [editingEntities]);
+			socket.on('connect', () => {
+				setState((prev) => ({ ...prev, status: 'connected', showTyping: session.showTypingIndicator }));
+				socket.emit('presence:join', { uid, documentId }, (response) => {
+					if (response?.success) setState((prev) => ({ ...prev, editors: response.editors || [] }));
+				});
+			});
+			socket.on('disconnect', () => setState((prev) => ({ ...prev, status: 'disconnected' })));
+			socket.on('connect_error', () => setState((prev) => ({ ...prev, status: 'disconnected' })));
+			socket.on('presence:update', (payload) => {
+				if (payload?.uid === uid && payload?.documentId === documentId) {
+					setState((prev) => ({ ...prev, editors: payload.editors || [] }));
+				}
+			});
+			socket.on('presence:typing', (payload) => {
+				if (payload?.uid !== uid || payload?.documentId !== documentId || !payload.user?.id) return;
+				const key = String(payload.user.id);
+				clearTimeout(typingTimers.get(key));
+				setState((prev) => ({ ...prev, typing: { ...prev.typing, [key]: payload.fieldName } }));
+				typingTimers.set(
+					key,
+					setTimeout(() => {
+						setState((prev) => {
+							const typing = { ...prev.typing };
+							delete typing[key];
+							return { ...prev, typing };
+						});
+					}, TYPING_VISIBLE_MS)
+				);
+			});
 
-	/**
-	 * Clear cached status
-	 */
-	const clearCache = useCallback(() => {
-		setEditingEntities(new Map());
-	}, []);
+			heartbeat = setInterval(() => {
+				if (document.visibilityState === 'visible' && socket.connected) socket.emit('presence:heartbeat');
+			}, HEARTBEAT_MS);
+		})();
 
-	return {
-		checkEntity,
-		getEntityStatus,
-		clearCache,
-		editingEntities,
-	};
-};
+		return () => {
+			cancelled = true;
+			clearInterval(heartbeat);
+			for (const timer of typingTimers.values()) clearTimeout(timer);
+			const socket = socketRef.current;
+			if (socket) {
+				socket.emit('presence:leave', { uid, documentId });
+				socket.disconnect();
+			}
+			socketRef.current = null;
+		};
+	}, [uid, documentId, post]);
 
-export default usePresence;
+	useEffect(() => {
+		const previous = lastValues.current;
+		lastValues.current = values;
+		const socket = socketRef.current;
+		if (!socket?.connected || !values || !previous || previous === values) return;
+		const now = Date.now();
+		if (now - lastTypingAt.current < TYPING_THROTTLE_MS) return;
+		const changed = Object.keys(values).find((key) => values[key] !== previous[key]);
+		if (!changed) return;
+		lastTypingAt.current = now;
+		socket.emit('presence:typing', { uid, documentId, fieldName: changed });
+	}, [values, uid, documentId]);
+
+	return state;
+}
