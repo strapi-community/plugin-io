@@ -141,6 +141,8 @@ function sessionTarget(event) {
 
 const KINDS = new Set(['user', 'token', 'admin']);
 const MAX_SIGNAL_IDS = 1000;
+/** Counter key of a lockout signal: limiter prefix and SHA-256 hex of the IP. */
+const LOCKOUT_KEY = /^(hs|ps):[0-9a-f]{64}$/;
 
 /**
  * Applies the control signals of other processes on this one:
@@ -148,7 +150,9 @@ const MAX_SIGNAL_IDS = 1000;
  *   admins or tokens (all of that kind when `ids` is null);
  * - `audiences`: clear the audience cache (roles, permissions, tokens);
  * - `settings`: load a newer settings revision;
- * - `stats-reset`: clear the local monitoring counters.
+ * - `stats-reset`: clear the local monitoring counters;
+ * - `lockout` `{ key, until }`: refuse handshakes from an IP (by its hashed
+ *   counter key) that reached the failed-handshake limit elsewhere.
  *
  * Payloads come from the plugin's own processes but are still checked, as
  * they pass through the adapter and the signal table.
@@ -171,6 +175,13 @@ function registerClusterSignals({ strapi }) {
 	cluster.on('audiences', () => plugin().service('rooms').invalidate());
 	cluster.on('settings', () => plugin().service('settings').refresh());
 	cluster.on('stats-reset', () => plugin().service('monitoring').reset());
+	cluster.on('lockout', (payload) => {
+		const key = payload?.key;
+		if (typeof key !== 'string' || !LOCKOUT_KEY.test(key) || !Number.isFinite(payload.until)) return;
+		const handshake = strapi.$io?._handshake;
+		const limiter = key.startsWith('ps:') ? handshake?.presenceMisses : handshake?.failures;
+		limiter?.learn(key, payload.until);
+	});
 }
 
 export { batch, changedIds, registerClusterSignals, registerInvalidation, sessionTarget };

@@ -522,12 +522,20 @@ class SocketIO {
 		this._expiryTimers.clear();
 		this._unsubscribeSettings?.();
 		this._removeUpgradeForwarder?.();
-		this._socket.disconnectSockets(true);
 		this.strapi.plugin(pluginId).service('subscriptions')?.untrack?.();
+		// Close only this process's connections, like Socket.IO's own close():
+		// - `io.disconnectSockets()` goes through a multi-server adapter and
+		//   would disconnect the clients of every other process too
+		//   (socket.io-adapter `ClusterAdapter.disconnectSockets` publishes
+		//   unless `flags.local`);
+		// - a server-side disconnect reaches clients as "io server disconnect",
+		//   after which socket.io-client does not reconnect. Closing the
+		//   transport gives "transport close", so clients reconnect (to another
+		//   process) after a restart or during a rolling deploy.
+		this._socket.engine?.close?.();
 		// `_nsps` is what Socket.IO's own close() iterates; there is no public list.
 		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [];
 		await Promise.allSettled(namespaces.map((nsp) => nsp.adapter?.close?.()));
-		this._socket.engine?.close?.();
 		// The configured adapter's own connections (pg pool, Redis clients).
 		await this._closeAdapter?.();
 		this._closeAdapter = null;

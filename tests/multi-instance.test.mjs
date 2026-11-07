@@ -151,6 +151,32 @@ test('shared failure limiter: blocks once the shared count reaches the limit and
   assert.equal(await broken.fail('192.0.2.1'), true, 'falls back to the local count');
 });
 
+test('shared failure limiter: a block is announced once and learned by key on other processes', async () => {
+  const store = createMemoryStore();
+  const announced = [];
+  const key = (ip) => `hs:${ip}`;
+  const a = createSharedFailureLimiter({
+    store: () => store,
+    key,
+    maxFailures: 2,
+    onBlock: (k, until) => announced.push({ k, until }),
+  });
+  const b = createSharedFailureLimiter({ store: () => store, key, maxFailures: 2 });
+  await a.fail('203.0.113.5');
+  assert.equal(announced.length, 0);
+  assert.equal(await a.fail('203.0.113.5'), true);
+  await a.fail('203.0.113.5');
+  assert.equal(announced.length, 1, 'announced once per block');
+  assert.equal(b.isBlocked('203.0.113.5'), false);
+  assert.equal(b.learn(announced[0].k, announced[0].until), true);
+  assert.equal(b.isBlocked('203.0.113.5'), true, 'blocked without a failure on b');
+  assert.equal(b.isBlocked('203.0.113.6'), false);
+  assert.equal(b.learn('hs:x', Date.now() + 10 * 60_000), false, 'an end beyond the window is ignored');
+  assert.equal(b.learn('hs:x', Date.now() - 1), false, 'an expired block is ignored');
+  b.clear('203.0.113.5');
+  assert.equal(b.isBlocked('203.0.113.5'), false);
+});
+
 test('presence token misses use their own limit and do not lock out the IP (IO-MP-03)', async () => {
   const host = await startHost({ usersPermissions });
   for (let i = 0; i < 25; i += 1) {

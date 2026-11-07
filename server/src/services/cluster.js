@@ -48,6 +48,8 @@ export default ({ strapi }) => {
 	let server = null;
 	let env = detectClusterEnv();
 	let peers = [];
+	let peersReadAt = 0;
+	let peersReading = null;
 	let lastSignalId = 0;
 	let timers = [];
 	let ticks = 0;
@@ -93,6 +95,7 @@ export default ({ strapi }) => {
 		await store.beat(nodeId, plugin().service('monitoring').localSnapshot(), now, startedAt);
 		const alive = await store.listNodes(now - heartbeatInterval * 3);
 		peers = alive.filter((node) => node.nodeId !== nodeId);
+		peersReadAt = Date.now();
 		if (peers.length && !clusterAdapter && !warnedPeers) {
 			warnedPeers = true;
 			warnings.add('no-adapter');
@@ -219,7 +222,7 @@ export default ({ strapi }) => {
 				warnings.add('proxy');
 				strapi.log.warn(
 					'[io] Running on Railway without server.proxy.koa: every client appears with the proxy IP, so IP rules and ' +
-						"the failed-handshake lockout hit all clients at once. Set server.proxy = { koa: true, ipHeader: 'X-Real-IP' }."
+						"the failed-handshake lockout hit all clients at once. Set server.proxy = { koa: true, ipHeader: 'X-Real-IP', maxIpsCount: 1 }."
 				);
 			}
 
@@ -303,6 +306,33 @@ export default ({ strapi }) => {
 		},
 
 		/**
+		 * Connections on the other processes, re-reading the node table when the
+		 * last read is older than the poll interval. Without this a process
+		 * would see the others' counts only at its own next heartbeat, so the
+		 * figures could be up to two heartbeat intervals old. Concurrent callers
+		 * share one read; a failed read keeps the last known figures.
+		 *
+		 * @returns {Promise<number>} Connections elsewhere.
+		 */
+		async connectionsElsewhereFresh() {
+			if (!coordinated) return 0;
+			if (Date.now() - peersReadAt > options().pollInterval) {
+				peersReading ??= store
+					.listNodes(Date.now() - options().heartbeatInterval * 3)
+					.then((alive) => {
+						peers = alive.filter((node) => node.nodeId !== nodeId);
+						peersReadAt = Date.now();
+					})
+					.catch((error) => reportError('node list', error))
+					.finally(() => {
+						peersReading = null;
+					});
+				await peersReading;
+			}
+			return this.connectionsElsewhere();
+		},
+
+		/**
 		 * Snapshots of every live process (this one fresh, the others from their
 		 * last heartbeat).
 		 *
@@ -314,6 +344,7 @@ export default ({ strapi }) => {
 			try {
 				const alive = await store.listNodes(Date.now() - options().heartbeatInterval * 3);
 				peers = alive.filter((node) => node.nodeId !== nodeId);
+				peersReadAt = Date.now();
 			} catch (error) {
 				reportError('node list', error);
 			}

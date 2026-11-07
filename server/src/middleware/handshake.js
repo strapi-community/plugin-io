@@ -46,11 +46,19 @@ const MESSAGES = Object.freeze({
 function createHandshake({ strapi }) {
 	const cluster = () => strapi.plugin('io').service('cluster');
 	const sharedStore = () => (cluster()?.isCoordinated?.() ? cluster().store() : null);
-	const failures = createSharedFailureLimiter({ store: sharedStore, key: (ip) => `hs:${sha256(ip)}` });
+	// A block started here is announced to the other processes, so the IP is
+	// refused everywhere, not only where it failed (see registerClusterSignals).
+	const onBlock = (key, until) => {
+		cluster()
+			?.publish?.('lockout', { key, until })
+			?.catch?.(() => {});
+	};
+	const failures = createSharedFailureLimiter({ store: sharedStore, key: (ip) => `hs:${sha256(ip)}`, onBlock });
 	const presenceMisses = createSharedFailureLimiter({
 		store: sharedStore,
 		key: (ip) => `ps:${sha256(ip)}`,
 		maxFailures: PRESENCE_MISSES_PER_MINUTE,
+		onBlock,
 	});
 	let ipRulesFor = null;
 	let ipRules = () => true;
@@ -88,8 +96,8 @@ function createHandshake({ strapi }) {
 		if (!currentIpRules(settings.security)(ip)) return next(new Error(MESSAGES.NOT_ALLOWED));
 
 		const max = settings.connection.maxConnections;
+		const elsewhere = max > 0 ? ((await cluster()?.connectionsElsewhereFresh?.()) ?? 0) : 0;
 		const engineCount = socket.nsp?.server?.engine?.clientsCount ?? 0;
-		const elsewhere = max > 0 ? (cluster()?.connectionsElsewhere?.() ?? 0) : 0;
 		if (max > 0 && engineCount + elsewhere > max) return next(new Error(MESSAGES.FULL));
 
 		const auth = socket.handshake.auth && typeof socket.handshake.auth === 'object' ? socket.handshake.auth : {};

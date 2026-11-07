@@ -371,4 +371,91 @@ if (!PG_URL) {
     assert.equal(log.scope, 'instance', 'event log is labelled as this instance only');
     await cluster.close();
   });
+
+  test('a process that shuts down closes only its own clients, and they may reconnect (rolling deploy)', async () => {
+    const cluster = await startCluster(2);
+    const [a, b] = cluster.nodes;
+    const onA = (await a.connect()).socket;
+    const onB = (await b.connect()).socket;
+    const reasonA = new Promise((resolve) => onA.once('disconnect', resolve));
+    let bDropped = null;
+    onB.once('disconnect', (reason) => {
+      bDropped = reason;
+    });
+    // What plugin destroy does on SIGINT/SIGTERM (pm2 reload, Railway deploy).
+    await a.strapi.$io.destroy();
+    assert.equal(
+      await Promise.race([reasonA, sleep(3000).then(() => 'timeout')]),
+      'transport close',
+      'not "io server disconnect", after which socket.io-client gives up'
+    );
+    await sleep(500);
+    assert.equal(bDropped, null, 'clients of the other process stay connected');
+    assert.equal(onB.connected, true);
+    await cluster.close();
+  });
+
+  test('a lockout started on one node refuses that IP on every node, even without new failures there', async () => {
+    const cluster = await startCluster(3);
+    for (let i = 0; i < 20; i += 1) await cluster.nodes[0].connect({ strategy: 'api-token', token: `wrong-${i}` });
+    for (const node of cluster.nodes) {
+      await until(() => node.strapi.$io._handshake.failures.isBlocked('127.0.0.1'), 2000);
+      const { error } = await node.connect();
+      assert.equal(error?.message, 'Too many authentication attempts. Try again later.');
+    }
+    await cluster.close();
+  });
+
+  test('the connection cap re-reads stale peer counts instead of waiting for its own next heartbeat', async () => {
+    const cluster = await startCluster(3);
+    const [a, b, c] = cluster.nodes;
+    await a.strapi
+      .plugin('io')
+      .service('settings')
+      .setSettings({
+        connection: { maxConnections: 2, pingTimeout: 20000, pingInterval: 25000, connectionTimeout: 45000 },
+      });
+    for (const node of cluster.nodes) await node.strapi.plugin('io').service('settings').refresh();
+    // c reads the node table before a and b have connections.
+    await c.strapi.plugin('io').service('cluster').heartbeatNow();
+    await a.connect();
+    await b.connect();
+    await a.strapi.plugin('io').service('cluster').heartbeatNow();
+    await b.strapi.plugin('io').service('cluster').heartbeatNow();
+    await sleep(200); // > pollInterval of the test cluster
+    const full = await c.connect();
+    assert.equal(full.error?.message, 'Server is at capacity. Try again later.');
+    await cluster.close();
+  });
+
+  test('eight saves without a revision at the same time on four nodes all succeed and none is lost', async () => {
+    const cluster = await startCluster(4);
+    const base = await cluster.nodes[0].strapi.plugin('io').service('settings').getSettings();
+    const edits = {
+      cors: { origins: ['https://app.example.test'] },
+      connection: { ...base.connection, pingInterval: 26000 },
+      security: { ...base.security, rateLimiting: { enabled: false, maxEventsPerSecond: 11 } },
+      events: { ...base.events, excludeFields: ['proofField'] },
+      rolePermissions: { authenticated: { canConnect: true } },
+      presence: { enabled: true, showTypingIndicator: false },
+      subscriptions: { enabled: false, maxPerSocket: 77 },
+      monitoring: { ...base.monitoring, maxEventLogSize: 123 },
+    };
+    const results = await Promise.allSettled(
+      Object.entries(edits).map(([key, value], i) =>
+        cluster.nodes[i % 4].strapi
+          .plugin('io')
+          .service('settings')
+          .setSettings({ [key]: value })
+      )
+    );
+    assert.deepEqual(
+      results.map((r) => r.status),
+      Array(8).fill('fulfilled')
+    );
+    const stored = await cluster.nodes[1].strapi.plugin('io').service('settings').getSettings();
+    for (const [key, value] of Object.entries(edits)) assert.deepEqual(stored[key], value, key);
+    assert.equal(cluster.nodes[1].strapi.plugin('io').service('settings').revision(), 8);
+    await cluster.close();
+  });
 }

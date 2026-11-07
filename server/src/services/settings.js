@@ -5,7 +5,16 @@ const STORE_KEY = 'plugin_io_settings';
 /** Full core_store key (`strapi.store({ type: 'plugin', name: 'io' })` prefixes `plugin_io_`). */
 const ROW_KEY = `plugin_io_${STORE_KEY}`;
 const CORE_STORE = 'strapi::core-store';
-const MAX_ATTEMPTS = 3;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Compare-and-swap attempts per save. A save that names a revision fails
+ * with 409 on the first lost race anyway; the attempts matter for saves
+ * without a revision (API callers, imports), which re-merge onto the newer
+ * row. Eight processes saving at once needed more than three.
+ */
+const MAX_ATTEMPTS = 10;
+/** Upper bound of the random pause before a retry, multiplied by the attempt. */
+const RETRY_JITTER_MS = 15;
 
 /**
  * Thrown when a save names a revision that is no longer the stored one, so
@@ -208,6 +217,8 @@ export default ({ strapi }) => {
 						.catch(() => {});
 					return snapshot;
 				}
+				// Lost the race: spread the retries so the writers do not collide again.
+				if (attempt < MAX_ATTEMPTS) await sleep(Math.floor(Math.random() * RETRY_JITTER_MS * attempt));
 			}
 			throw new SettingsConflictError(revisionOf(parseRow(await readRow())));
 		},

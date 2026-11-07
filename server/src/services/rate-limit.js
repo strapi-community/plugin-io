@@ -67,9 +67,11 @@ function createFailureLimiter({ maxFailures = 20, windowMs = 60_000 } = {}) {
  *   handshake never queries the database.
  * - `fail()` increments the shared counter in one atomic UPDATE. When the
  *   cluster-wide count reaches the limit, this process blocks the IP locally
- *   until the window ends. Another process learns about the block at its
- *   next failure from that IP, so the effective limit is `maxFailures` plus
- *   at most one attempt per other process.
+ *   until the window ends and calls `onBlock(key, until)` once, so the
+ *   cluster service can tell the other processes (`learn()`). Until that
+ *   signal arrives, another process also learns about the block at its next
+ *   failure from that IP, so the effective limit is `maxFailures` plus at
+ *   most one attempt per other process.
  * - Without coordination, or when the database call fails, it behaves like
  *   `createFailureLimiter` (per process).
  *
@@ -78,17 +80,28 @@ function createFailureLimiter({ maxFailures = 20, windowMs = 60_000 } = {}) {
  * @param {(ip: string) => string} [options.key] - Counter key for an IP.
  * @param {number} [options.maxFailures] - Failures per window.
  * @param {number} [options.windowMs] - Window length.
- * @returns {{ isBlocked: (ip: string) => boolean, fail: (ip: string) => Promise<boolean>, clear: (ip: string) => void, size: () => number }} Limiter.
+ * @param {(key: string, until: number) => void} [options.onBlock] - Called when this process starts a block.
+ * @returns {{ isBlocked: (ip: string) => boolean, fail: (ip: string) => Promise<boolean>, learn: (key: string, until: number) => boolean, clear: (ip: string) => void, size: () => number }} Limiter.
  */
-function createSharedFailureLimiter({ store, key = (ip) => ip, maxFailures = 20, windowMs = 60_000 }) {
+function createSharedFailureLimiter({ store, key = (ip) => ip, maxFailures = 20, windowMs = 60_000, onBlock }) {
 	const local = createFailureLimiter({ maxFailures, windowMs });
-	/** @type {Map<string, number>} Blocks learned from the shared counter (ip -> until). */
+	/** @type {Map<string, number>} Blocks by counter key (key -> until), from the shared counter or another process. */
 	const blocked = new Map();
+	const prune = () => {
+		if (blocked.size <= 10_000) return;
+		const now = Date.now();
+		for (const [k, v] of blocked) if (v <= now) blocked.delete(k);
+	};
+	const blockedUntil = (k) => {
+		const until = blocked.get(k);
+		if (until && until > Date.now()) return until;
+		if (until) blocked.delete(k);
+		return 0;
+	};
 	return {
 		isBlocked(ip) {
-			const until = blocked.get(ip);
-			if (until && until > Date.now()) return true;
-			if (until) blocked.delete(ip);
+			// Hashing is only needed while some block is known.
+			if (blocked.size && blockedUntil(key(ip))) return true;
 			return local.isBlocked(ip);
 		},
 		async fail(ip) {
@@ -96,13 +109,14 @@ function createSharedFailureLimiter({ store, key = (ip) => ip, maxFailures = 20,
 			const shared = store();
 			if (!shared) return localBlocked;
 			try {
-				const { hits, windowStart } = await shared.hit(key(ip), windowMs);
+				const k = key(ip);
+				const { hits, windowStart } = await shared.hit(k, windowMs);
 				if (hits >= maxFailures) {
-					blocked.set(ip, windowStart + windowMs);
-					if (blocked.size > 10_000) {
-						const now = Date.now();
-						for (const [k, v] of blocked) if (v <= now) blocked.delete(k);
-					}
+					const until = windowStart + windowMs;
+					const known = blockedUntil(k) >= until;
+					blocked.set(k, until);
+					prune();
+					if (!known) onBlock?.(k, until);
 					return true;
 				}
 			} catch {
@@ -110,12 +124,22 @@ function createSharedFailureLimiter({ store, key = (ip) => ip, maxFailures = 20,
 			}
 			return localBlocked;
 		},
+		learn(k, until) {
+			if (typeof k !== 'string' || !Number.isFinite(until)) return false;
+			const now = Date.now();
+			if (until <= now || until > now + windowMs) return false;
+			if (blockedUntil(k) >= until) return false;
+			blocked.set(k, until);
+			prune();
+			return true;
+		},
 		clear(ip) {
-			const hadFailures = local.has(ip) || blocked.has(ip);
+			const k = key(ip);
+			const hadFailures = local.has(ip) || blocked.has(k);
 			local.clear(ip);
-			blocked.delete(ip);
+			blocked.delete(k);
 			const shared = store();
-			if (shared && hadFailures) shared.clearCounter(key(ip)).catch(() => {});
+			if (shared && hadFailures) shared.clearCounter(k).catch(() => {});
 		},
 		size() {
 			return local.size();
