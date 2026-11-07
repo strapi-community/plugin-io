@@ -82,5 +82,15 @@ export default defineConfig([
     },
   },
 
+  {
+    // CommonJS app files of the cluster acceptance run (Strapi loads them).
+    name: 'io/cluster-app',
+    files: ['tests/cluster/app/**/*.{js,cjs}'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { ...globals.node, strapi: 'readonly' },
+    },
+  },
+
   eslintConfigPrettier,
 ]);

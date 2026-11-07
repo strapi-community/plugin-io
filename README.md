@@ -383,6 +383,7 @@ npm test              # node --test
 npm run test:types    # checks types.d.ts with tsc
 npm run test:e2e      # e2e suites against a running Strapi app (see below)
 npm run test:e2e:app  # scaffolds a Strapi 5.61 app with the packed plugin and runs the e2e suites (as CI does)
+npm run test:cluster  # 8 processes (2 pm2 daemons x 4 workers) on PostgreSQL behind a non-sticky balancer (CONTRIBUTING.md)
 npm run verify
 ```
 
@@ -394,7 +395,7 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/). sem
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please open an [issue](https://github.com/strapi-community/plugin-io/issues) first for larger changes, run `npm run lint`, `npm run format:check` and `npm test` before you push, and add a test for every fix.
+Bug reports and pull requests are welcome. Please open an [issue](https://github.com/strapi-community/plugin-io/issues) first for larger changes and add a test for every fix. [CONTRIBUTING.md](./CONTRIBUTING.md) lists the checks to run before you push, the cluster acceptance run and the admin UI conventions.
 
 ## License
 

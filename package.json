@@ -57,7 +57,8 @@
     "docs:build": "npm --prefix docs run build",
     "prepack": "npm run build",
     "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.e2e.mjs\"",
-    "test:e2e:app": "node scripts/e2e-app.mjs"
+    "test:e2e:app": "node scripts/e2e-app.mjs",
+    "test:cluster": "node scripts/cluster-acceptance.mjs"
   },
   "dependencies": {
     "@strapi/utils": "^5.61.0",

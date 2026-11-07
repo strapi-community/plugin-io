@@ -12,6 +12,7 @@ const SITE_URL = 'https://strapi-community.github.io/plugin-io';
 const ORDER = [
 	'index.md',
 	'guide/getting-started.md',
+	'guide/multiple-instances.md',
 	'guide/widget.md',
 	'guide/migration.md',
 	'api/io-class.md',

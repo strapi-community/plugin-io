@@ -81,7 +81,7 @@ memory, as before, and writes nothing extra.
 | Revocations (user, token, admin)  | A control signal over the adapter (`serverSideEmit`) and table `plugin_io_signals`, polled every 3 s as fallback.        |
 | Audience cache                    | Same control signal; the 10-second cache stays as the upper bound.                                                       |
 | Failed-handshake lockout          | Table `plugin_io_counters` (hashed IPs). 20 failures per minute across all processes; a block is announced to all.       |
-| Connection cap (`maxConnections`) | A total over all processes, from their heartbeats (10 s), re-read at most every poll interval (3 s).                     |
+| Connection cap (`maxConnections`) | A total over all processes, from their heartbeats (10 s), re-read at most every poll interval (3 s): exact after 13 s.   |
 | Monitoring                        | Each process writes its counters to `plugin_io_nodes`; the page shows the sum. The event log is merged over the adapter. |
 
 The four `plugin_io_*` tables are created on first start with portable knex
@@ -270,9 +270,16 @@ connection: {
 - The failed-handshake lockout may let through one extra attempt per other
   process while the failures are counted. Once an IP is blocked, the block is
   announced to every process (over the adapter, or within the poll interval).
-- `maxConnections` uses the other processes' last heartbeat, so a burst of new
-  connections within one heartbeat interval (10 s) can exceed the cap by what
-  arrived on the other processes in that time.
+- `maxConnections` counts the other processes from their last heartbeat, and a
+  process re-reads those heartbeats at most once per poll interval. Its view of
+  the others is therefore up to `heartbeatInterval + pollInterval` old (13 s
+  with the defaults). Within that window the total can exceed the cap by the
+  connections the other processes accepted in it, and a process can refuse a
+  connection for up to the same time after others closed theirs. Once no
+  connection has opened or closed for 13 s, the cap is exact. The cluster
+  acceptance run (CONTRIBUTING.md) checks the cap only after every process has
+  written and re-read a heartbeat; a fixed 11 s wait was shorter than this
+  window and made that check fail in 1 of 5 runs.
 - Monitoring totals from other processes are at most one heartbeat old.
 - With entity subscriptions on, every change is sanitized for each reading
   audience, because a process cannot see which entries are followed elsewhere
