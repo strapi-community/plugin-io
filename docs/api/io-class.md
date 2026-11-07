@@ -30,6 +30,7 @@ io.emitToNamespace(namespace, event, data);
 // Connection management
 io.disconnectSocket(socketId);
 io.revalidateSockets(); // re-check JWTs, API tokens and admin accounts
+io.revalidateSockets(['token'], { ids: [tokenId] }); // only the sockets of these ids
 
 // Properties
 io.server; // Raw Socket.IO server

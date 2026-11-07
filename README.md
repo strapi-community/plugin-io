@@ -216,7 +216,8 @@ strapi.$io.sendPrivateMessage(socketId, 'notice', data);
 strapi.$io.broadcast(socketId, 'notice', data); // everyone except socketId
 strapi.$io.emitToNamespace('chat', 'notice', data);
 strapi.$io.disconnectSocket(socketId);
-await strapi.$io.revalidateSockets();
+await strapi.$io.revalidateSockets(); // every authenticated socket
+await strapi.$io.revalidateSockets(['user'], { ids: [userId] }); // only this user's sockets
 
 strapi.$io.server; // the Socket.IO Server
 strapi.$io.namespaces; // { '': Namespace, chat: Namespace, ... }

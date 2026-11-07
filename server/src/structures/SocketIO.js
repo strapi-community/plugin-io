@@ -95,16 +95,24 @@ class SocketIO {
 	 * Re-checks authenticated sockets and disconnects the ones whose user,
 	 * role, admin account or API token is no longer valid.
 	 *
+	 * Pass `ids` to check only the sockets of those users, admins or API
+	 * tokens (used by the lifecycle hooks, so one changed user does not
+	 * re-check every connection).
+	 *
 	 * @param {('user'|'token'|'admin')[]} [kinds] - Kinds to check; all by default.
+	 * @param {{ ids?: Iterable<number | string> }} [options] - Limit the check to these user, admin or token ids.
 	 * @returns {Promise<number>} Number of disconnected sockets.
 	 */
-	async revalidateSockets(kinds = ['user', 'token', 'admin']) {
+	async revalidateSockets(kinds = ['user', 'token', 'admin'], { ids } = {}) {
 		const strategies = this.strapi.plugin(pluginId).service('strategy');
 		const byKind = { user: strategies.role, token: strategies.token, admin: strategies.admin };
+		const only = ids ? new Set([...ids].map(String)) : null;
+		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [this._socket.of('/')];
 		let dropped = 0;
-		for (const socket of this._socket.of('/').sockets.values()) {
+		for (const socket of namespaces.flatMap((nsp) => [...nsp.sockets.values()])) {
 			const kind = socket.data.kind;
 			if (!kinds.includes(kind)) continue;
+			if (only && !only.has(String(SocketIO.identityId(socket)))) continue;
 			let ok;
 			try {
 				ok = await byKind[kind].revalidate(socket);
@@ -117,6 +125,17 @@ class SocketIO {
 			}
 		}
 		return dropped;
+	}
+
+	/**
+	 * Returns the id that identifies a socket's credentials: the user id for
+	 * JWT and admin sockets, the API token id for token sockets.
+	 *
+	 * @param {import('socket.io').Socket} socket - Connected socket.
+	 * @returns {number | string | undefined} Identity id.
+	 */
+	static identityId(socket) {
+		return socket.data.kind === 'token' ? socket.data.token?.id : socket.data.user?.id;
 	}
 
 	/**

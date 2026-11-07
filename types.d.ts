@@ -99,8 +99,14 @@ export declare class SocketIO {
 	broadcast(socketId: string, event: string, data: unknown): void;
 	emitToNamespace(namespace: string, event: string, data: unknown): void;
 	disconnectSocket(socketId: string): boolean;
-	/** Re-checks authenticated sockets and disconnects invalid ones. */
-	revalidateSockets(kinds?: Array<'user' | 'token' | 'admin'>): Promise<number>;
+	/**
+	 * Re-checks authenticated sockets (in every namespace) and disconnects invalid ones.
+	 * `ids` limits the check to the sockets of those user, admin or API token ids.
+	 */
+	revalidateSockets(
+		kinds?: Array<'user' | 'token' | 'admin'>,
+		options?: { ids?: Iterable<number | string> }
+	): Promise<number>;
 	destroy(): Promise<void>;
 	/** Namespaces by name without the leading slash. */
 	readonly namespaces: Record<string, import('socket.io').Namespace>;
