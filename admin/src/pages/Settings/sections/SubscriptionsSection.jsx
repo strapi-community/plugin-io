@@ -1,5 +1,5 @@
 import { Grid } from '@strapi/design-system';
-import { NumberField, SectionCard, SwitchRow } from '../../../components/ui';
+import { BooleanField, NumberField, SectionCard } from '../../../components/ui';
 
 /**
  * Entity subscriptions: clients may follow single entries with
@@ -17,17 +17,20 @@ export const SubscriptionsSection = ({ draft, setField, errorFor, disabled, t })
 			'Let clients follow single entries, also of content types that are not broadcast. Clients need read permission for the content type.'
 		)}
 	>
-		<SwitchRow
-			label={t('settings.subscriptions.enabled.label', 'Allow entry subscriptions')}
-			hint={t(
-				'settings.subscriptions.enabled.hint',
-				'Clients send subscribe-entity with a content type and documentId.'
-			)}
-			checked={draft.subscriptions.enabled}
-			onCheckedChange={(value) => setField('subscriptions.enabled', value)}
-			disabled={disabled}
-		/>
 		<Grid.Root gap={6}>
+			<Grid.Item col={12} direction="column" alignItems="stretch">
+				<BooleanField
+					name="subscriptions.enabled"
+					label={t('settings.subscriptions.enabled.label', 'Allow entry subscriptions')}
+					hint={t(
+						'settings.subscriptions.enabled.hint',
+						'Clients send subscribe-entity with a content type and documentId.'
+					)}
+					checked={draft.subscriptions.enabled}
+					onCheckedChange={(value) => setField('subscriptions.enabled', value)}
+					disabled={disabled}
+				/>
+			</Grid.Item>
 			<Grid.Item col={6} xs={12} direction="column" alignItems="stretch">
 				<NumberField
 					name="subscriptions.maxPerSocket"

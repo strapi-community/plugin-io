@@ -30,7 +30,38 @@ test('no deprecated settings API and no DS v1 `as` prop', () => {
   assert.deepEqual(offenders(/createSettingSection|addSettingsLinks\(/), []);
   assert.deepEqual(offenders(/<[A-Z]\w*[^>]*\sas=\{/), []);
 });
-test('Toggle is not used for settings (Switch is)', () => assert.deepEqual(offenders(/\bToggle\b/), []));
+// Settings booleans follow the native Strapi BooleanInput 1:1 (Settings >
+// Users & Permissions > Advanced settings): a DS Toggle with TRUE/FALSE
+// labels inside Field.Root/Label/Hint/Error, laid out on Grid.Item col 12.
+// The plugin owner chose this over the workbench "Switch row" rule.
+test('settings booleans use the native BooleanInput pattern (Toggle in Field)', () => {
+  const field = source('components/ui/BooleanField.jsx');
+  assert.match(field, /<Field\.Root[^>]*maxWidth="320px"/, 'Field.Root capped like BooleanInput');
+  assert.match(field, /<Field\.Label>/, 'visible label tied to the input');
+  assert.match(field, /<Toggle[\s\S]*onLabel=[\s\S]*'common\.true'[\s\S]*offLabel=[\s\S]*'common\.false'/);
+  assert.match(field, /<Field\.Hint \/>[\s\S]*<Field\.Error \/>/);
+  assert.deepEqual(offenders(/\bSwitch\b/), [], 'no Switch left in settings');
+  assert.deepEqual(
+    offenders(/\bToggle\b/).filter((f) => f !== 'components/ui/BooleanField.jsx'),
+    [],
+    'Toggle only through BooleanField'
+  );
+  for (const file of [
+    'pages/Settings/sections/EventsSection.jsx',
+    'pages/Settings/sections/SecuritySection.jsx',
+    'pages/Settings/sections/SubscriptionsSection.jsx',
+    'pages/Settings/sections/PresenceMonitoringSection.jsx',
+  ]) {
+    const s = source(file);
+    const items = [...s.matchAll(/<Grid\.Item col=\{12\}[^>]*>\s*<BooleanField/g)].length;
+    assert.equal(items, (s.match(/<BooleanField/g) || []).length, `${file}: every boolean on a full Grid row`);
+    assert.match(s, /<Grid\.Root gap=\{6\}>/, `${file}: native field gap`);
+  }
+});
+test('per-role "can connect" is a Checkbox per table row like native permission grants', () => {
+  const roles = source('pages/Settings/sections/RolesSection.jsx');
+  assert.match(roles, /<Td>\s*<Checkbox\s+aria-label=\{t\('settings\.roles\.connect\.label'/);
+});
 test('no admin JWT is sent to the users-permissions strategy', () =>
   assert.deepEqual(offenders(/strategy:\s*'jwt'/), []));
 test('no raw /admin hrefs (router links keep custom admin paths working)', () =>

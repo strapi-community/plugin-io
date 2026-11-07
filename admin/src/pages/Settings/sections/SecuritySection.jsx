@@ -1,8 +1,10 @@
 import { Grid } from '@strapi/design-system';
-import { NumberField, SectionCard, SwitchRow, TagListField } from '../../../components/ui';
+import { BooleanField, NumberField, SectionCard, TagListField } from '../../../components/ui';
 
 /**
- * Security settings: required authentication, event rate limit and IP rules.
+ * Security settings: required authentication, IP rules and the event rate
+ * limit. One grid, like the native Advanced settings form: booleans span
+ * the full row, paired inputs share it.
  *
  * @param {object} props - Section props from the settings page.
  * @returns {JSX.Element} Section.
@@ -12,41 +14,20 @@ export const SecuritySection = ({ draft, setField, errorFor, disabled, t }) => (
 		title={t('settings.security.title', 'Security')}
 		subtitle={t('settings.security.subtitle', 'These rules apply to every new connection.')}
 	>
-		<SwitchRow
-			label={t('settings.security.requireAuth.label', 'Require authentication')}
-			hint={t(
-				'settings.security.requireAuth.hint',
-				'Reject clients that connect without a user JWT or API token. When off, they join the Public role.'
-			)}
-			checked={draft.security.requireAuthentication}
-			onCheckedChange={(value) => setField('security.requireAuthentication', value)}
-			disabled={disabled}
-		/>
-		<SwitchRow
-			label={t('settings.security.rateLimit.label', 'Limit client events')}
-			hint={t('settings.security.rateLimit.hint', 'Drop events a single client sends faster than the limit below.')}
-			checked={draft.security.rateLimiting.enabled}
-			onCheckedChange={(value) => setField('security.rateLimiting.enabled', value)}
-			disabled={disabled}
-		/>
 		<Grid.Root gap={6}>
-			<Grid.Item col={6} xs={12} direction="column" alignItems="stretch">
-				<NumberField
-					name="security.rateLimiting.maxEventsPerSecond"
-					label={t('settings.security.maxEvents.label', 'Events per second per client')}
-					hint={
-						draft.security.rateLimiting.enabled
-							? t('settings.security.maxEvents.hint', 'Allowed: 1 to 1,000.')
-							: t('settings.security.maxEvents.disabledHint', 'Requires "Limit client events".')
-					}
-					error={errorFor('security.rateLimiting.maxEventsPerSecond')}
-					value={draft.security.rateLimiting.maxEventsPerSecond}
-					onChange={(value) => setField('security.rateLimiting.maxEventsPerSecond', value)}
-					disabled={disabled || !draft.security.rateLimiting.enabled}
+			<Grid.Item col={12} direction="column" alignItems="stretch">
+				<BooleanField
+					name="security.requireAuthentication"
+					label={t('settings.security.requireAuth.label', 'Require authentication')}
+					hint={t(
+						'settings.security.requireAuth.hint',
+						'Reject clients that connect without a user JWT or API token. When off, they join the Public role.'
+					)}
+					checked={draft.security.requireAuthentication}
+					onCheckedChange={(value) => setField('security.requireAuthentication', value)}
+					disabled={disabled}
 				/>
 			</Grid.Item>
-		</Grid.Root>
-		<Grid.Root gap={6}>
 			<Grid.Item col={6} xs={12} direction="column" alignItems="stretch">
 				<TagListField
 					name="security.ipWhitelist"
@@ -74,6 +55,31 @@ export const SecuritySection = ({ draft, setField, errorFor, disabled, t }) => (
 					value={draft.security.ipBlacklist}
 					onChange={(value) => setField('security.ipBlacklist', value)}
 					disabled={disabled}
+				/>
+			</Grid.Item>
+			<Grid.Item col={12} direction="column" alignItems="stretch">
+				<BooleanField
+					name="security.rateLimiting.enabled"
+					label={t('settings.security.rateLimit.label', 'Limit client events')}
+					hint={t('settings.security.rateLimit.hint', 'Drop events a single client sends faster than the limit below.')}
+					checked={draft.security.rateLimiting.enabled}
+					onCheckedChange={(value) => setField('security.rateLimiting.enabled', value)}
+					disabled={disabled}
+				/>
+			</Grid.Item>
+			<Grid.Item col={6} xs={12} direction="column" alignItems="stretch">
+				<NumberField
+					name="security.rateLimiting.maxEventsPerSecond"
+					label={t('settings.security.maxEvents.label', 'Events per second per client')}
+					hint={
+						draft.security.rateLimiting.enabled
+							? t('settings.security.maxEvents.hint', 'Allowed: 1 to 1,000.')
+							: t('settings.security.maxEvents.disabledHint', 'Requires "Limit client events".')
+					}
+					error={errorFor('security.rateLimiting.maxEventsPerSecond')}
+					value={draft.security.rateLimiting.maxEventsPerSecond}
+					onChange={(value) => setField('security.rateLimiting.maxEventsPerSecond', value)}
+					disabled={disabled || !draft.security.rateLimiting.enabled}
 				/>
 			</Grid.Item>
 		</Grid.Root>

@@ -1,10 +1,10 @@
 import {
 	Button,
+	Checkbox,
 	EmptyStateLayout,
 	Flex,
 	LinkButton,
 	Loader,
-	Switch,
 	Table,
 	Tbody,
 	Td,
@@ -18,6 +18,8 @@ import { SectionCard } from '../../../components/ui';
 
 /**
  * Role settings: whether clients of each Users & Permissions role may connect.
+ * One Checkbox per role row, like the grant checkboxes of the native role
+ * permission matrices (Users & Permissions and admin Roles).
  *
  * @param {object} props - Section props from the settings page.
  * @returns {JSX.Element} Section.
@@ -83,13 +85,11 @@ export const RolesSection = ({ draft, setField, disabled, t, roles, reloadRoles 
 								<Typography textColor="neutral600">{role.description || '—'}</Typography>
 							</Td>
 							<Td>
-								<Switch
+								<Checkbox
 									aria-label={t('settings.roles.connect.label', 'Allow {role} to connect', { role: role.name })}
 									checked={permissions[role.type]?.canConnect !== false}
-									onCheckedChange={(value) => setCanConnect(role.type, value)}
+									onCheckedChange={(value) => setCanConnect(role.type, value === true)}
 									disabled={disabled}
-									onLabel={t('common.on', 'On')}
-									offLabel={t('common.off', 'Off')}
 								/>
 							</Td>
 						</Tr>

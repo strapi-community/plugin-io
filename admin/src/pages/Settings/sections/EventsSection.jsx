@@ -4,6 +4,7 @@ import {
 	Checkbox,
 	EmptyStateLayout,
 	Flex,
+	Grid,
 	Loader,
 	Table,
 	Tbody,
@@ -14,7 +15,7 @@ import {
 	Typography,
 	VisuallyHidden,
 } from '@strapi/design-system';
-import { SectionCard, SwitchRow, TagListField } from '../../../components/ui';
+import { BooleanField, SectionCard, TagListField } from '../../../components/ui';
 import { CONTENT_ACTIONS, DRAFT_ACTIONS } from '../../../utils/settings.mjs';
 
 /**
@@ -144,30 +145,37 @@ export const EventsSection = ({ draft, setField, errorFor, disabled, t, contentT
 				'Choose which changes are sent to clients. Each role and API token only receives content it may read (find or findOne permission).'
 			)}
 		>
-			<SwitchRow
-				label={t('settings.events.onlyPublished.label', 'Only published content')}
-				hint={t(
-					'settings.events.onlyPublished.hint',
-					'Do not send draft versions of Draft & Publish content. Turn off to send drafts to roles that may read them.'
-				)}
-				checked={draft.events.onlyPublished}
-				onCheckedChange={(value) => setField('events.onlyPublished', value)}
-				disabled={disabled}
-			/>
-			<TagListField
-				name="events.excludeFields"
-				kind="field"
-				label={t('settings.events.excludeFields.label', 'Excluded fields')}
-				hint={t(
-					'settings.events.excludeFields.hint',
-					'Field names removed from every event, in addition to private fields and built-in secrets.'
-				)}
-				placeholder="internalNotes"
-				error={errorFor('events.excludeFields')}
-				value={draft.events.excludeFields}
-				onChange={(value) => setField('events.excludeFields', value)}
-				disabled={disabled}
-			/>
+			<Grid.Root gap={6}>
+				<Grid.Item col={12} direction="column" alignItems="stretch">
+					<BooleanField
+						name="events.onlyPublished"
+						label={t('settings.events.onlyPublished.label', 'Only published content')}
+						hint={t(
+							'settings.events.onlyPublished.hint',
+							'Do not send draft versions of Draft & Publish content. Turn off to send drafts to roles that may read them.'
+						)}
+						checked={draft.events.onlyPublished}
+						onCheckedChange={(value) => setField('events.onlyPublished', value)}
+						disabled={disabled}
+					/>
+				</Grid.Item>
+				<Grid.Item col={12} direction="column" alignItems="stretch">
+					<TagListField
+						name="events.excludeFields"
+						kind="field"
+						label={t('settings.events.excludeFields.label', 'Excluded fields')}
+						hint={t(
+							'settings.events.excludeFields.hint',
+							'Field names removed from every event, in addition to private fields and built-in secrets.'
+						)}
+						placeholder="internalNotes"
+						error={errorFor('events.excludeFields')}
+						value={draft.events.excludeFields}
+						onChange={(value) => setField('events.excludeFields', value)}
+						disabled={disabled}
+					/>
+				</Grid.Item>
+			</Grid.Root>
 			{table}
 		</SectionCard>
 	);

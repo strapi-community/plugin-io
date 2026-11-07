@@ -67,7 +67,12 @@ test('import preview: diffSettings lists leaf changes and ignores version', asyn
   assert.equal(formatSettingValue(['a', 'b']), 'a, b');
   assert.equal(formatSettingValue([]), '[]');
   assert.equal(formatSettingValue(undefined), '-');
-  assert.equal(formatSettingValue(false), 'false');
+  assert.equal(formatSettingValue(false), 'False');
+  assert.equal(formatSettingValue(true), 'True');
+  const de = { true: 'Ja', false: 'Nein' };
+  assert.equal(formatSettingValue(true, de), 'Ja');
+  assert.equal(formatSettingValue(false, de), 'Nein');
+  assert.equal(formatSettingValue(0, de), '0', 'numbers are not booleans');
 });
 
 test('import file parsing rejects big files, invalid JSON and non-objects', async () => {

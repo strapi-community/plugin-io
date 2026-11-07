@@ -221,11 +221,16 @@ export function parseImportFile(text, size) {
 /**
  * Formats a settings value for the import preview.
  *
+ * Booleans use the translated labels so the preview reads the same words
+ * as the TRUE/FALSE toggles on the form.
+ *
  * @param {any} value - Value.
+ * @param {{ true: string, false: string }} [labels] - Translated boolean labels.
  * @returns {string} Short text.
  */
-export function formatSettingValue(value) {
+export function formatSettingValue(value, labels = { true: 'True', false: 'False' }) {
   if (value === undefined) return '-';
+  if (typeof value === 'boolean') return value ? labels.true : labels.false;
   if (Array.isArray(value)) return value.length ? value.join(', ') : '[]';
   if (value !== null && typeof value === 'object') return JSON.stringify(value);
   return String(value);

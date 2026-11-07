@@ -31,6 +31,7 @@ export const BackupSection = ({ saved, draft, onApply, canUpdate, busy, t }) => 
 	const importRef = useRef(null);
 	const [reading, setReading] = useState(false);
 	const [pending, setPending] = useState(null);
+	const booleanLabels = { true: t('common.true', 'True'), false: t('common.false', 'False') };
 
 	const exportSettings = () => {
 		const blob = new Blob([`${JSON.stringify(saved, null, 2)}\n`], { type: 'application/json' });
@@ -167,8 +168,8 @@ export const BackupSection = ({ saved, draft, onApply, canUpdate, busy, t }) => 
 										</Typography>
 										<Typography variant="pi" textColor="neutral600" tag="p">
 											{t('settings.backup.confirm.change', '{before} to {after}', {
-												before: formatSettingValue(change.before),
-												after: formatSettingValue(change.after),
+												before: formatSettingValue(change.before, booleanLabels),
+												after: formatSettingValue(change.after, booleanLabels),
 											})}
 										</Typography>
 									</Box>
