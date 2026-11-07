@@ -58,6 +58,19 @@ test('settings booleans use the native BooleanInput pattern (Toggle in Field)', 
     assert.match(s, /<Grid\.Root gap=\{6\}>/, `${file}: native field gap`);
   }
 });
+test('section cards use the native settings card padding at every width', () => {
+  const card = sources.find(([f]) => f === 'components/ui/SectionCard.jsx')?.[1] ?? '';
+  for (const prop of [
+    'paddingTop={6}',
+    'paddingBottom={6}',
+    'paddingLeft={7}',
+    'paddingRight={7}',
+    'shadow="filterShadow"',
+  ])
+    assert.ok(card.includes(prop), prop);
+  assert.doesNotMatch(card, /padding(Left|Right)=\{\{/, 'no narrower padding on small screens');
+});
+
 test('per-role "can connect" is a Checkbox per table row like native permission grants', () => {
   const roles = source('pages/Settings/sections/RolesSection.jsx');
   assert.match(roles, /<Td>\s*<Checkbox\s+aria-label=\{t\('settings\.roles\.connect\.label'/);

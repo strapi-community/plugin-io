@@ -3,6 +3,9 @@ import { Box, Flex, Typography } from '@strapi/design-system';
 /**
  * Section container with the native settings card look (neutral0,
  * filterShadow, radius) and an h2 title with optional subtitle and action.
+ * Padding is the native one at every width (6 top/bottom, 7 left/right), as
+ * on Settings > Users & Permissions > Advanced settings, so fields line up
+ * with the native pages on phones too.
  *
  * @param {object} props - Props.
  * @param {string} props.title - Section heading.
@@ -22,8 +25,8 @@ export const SectionCard = ({ title, subtitle, action, fill = false, id, childre
 		shadow="filterShadow"
 		paddingTop={6}
 		paddingBottom={6}
-		paddingLeft={{ initial: 4, medium: 7 }}
-		paddingRight={{ initial: 4, medium: 7 }}
+		paddingLeft={7}
+		paddingRight={7}
 		minWidth={0}
 		height={fill ? '100%' : undefined}
 	>
