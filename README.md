@@ -324,6 +324,8 @@ module.exports = ({ env }) => ({
 
 Keep the Redis URL in an environment variable. The admin panel does not store it.
 
+With an adapter that spans several servers, a server cannot see which entries are followed on the other servers. While _Entry subscriptions_ is on, every change to a content type that is not broadcast is therefore sanitized and sent to the entry rooms of each reading audience (Redis delivers it only where subscribers exist). Leave _Entry subscriptions_ off if you do not use them.
+
 ## Upgrading from 5.x
 
 6.0 contains breaking changes. The full list is in [CHANGELOG.md](./CHANGELOG.md). In short:
