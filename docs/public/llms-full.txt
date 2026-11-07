@@ -1,6 +1,6 @@
 # Strapi Plugin IO — Full Documentation (llms-full.txt)
 
-> LLM-friendly export of the @strapi-community/plugin-io docs. Use this file to answer how Socket.IO integration with Strapi v5 works (auth, events, rooms, Redis, presence, transfer coexistence). Generated: 2026-08-02T08:28:10.381Z
+> LLM-friendly export of the @strapi-community/plugin-io docs. Use this file to answer how Socket.IO integration with Strapi v5 works (auth, events, rooms, Redis, presence, transfer coexistence). Generated: 2026-11-07T10:34:13.950Z
 
 Source: https://strapi-community.github.io/plugin-io/llms-full.txt
 Package: @strapi-community/plugin-io
@@ -25,7 +25,7 @@ Enable in `config/plugins.js`:
 
 ```javascript
 module.exports = {
-  'io': {
+  io: {
     enabled: true,
     config: {
       contentTypes: ['api::article.article'],
@@ -33,12 +33,12 @@ module.exports = {
         serverOptions: {
           cors: {
             origin: 'http://localhost:3000',
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -50,8 +50,8 @@ import { io } from 'socket.io-client';
 const socket = io('http://localhost:1337', {
   auth: {
     strategy: 'jwt',
-    token: 'your-jwt-token'
-  }
+    token: 'your-jwt-token',
+  },
 });
 
 socket.on('article:create', (data) => {
@@ -88,16 +88,22 @@ contentTypes: [
   'api::comment.comment',
   {
     uid: 'api::product.product',
-    actions: ['create', 'update']
-  }
-]
+    actions: ['create', 'update'],
+  },
+];
 ```
 
 ```javascript
 // Frontend: Automatic events
-socket.on('article:create', (article) => { /* ... */ });
-socket.on('article:update', (article) => { /* ... */ });
-socket.on('article:delete', (article) => { /* ... */ });
+socket.on('article:create', (article) => {
+  /* ... */
+});
+socket.on('article:update', (article) => {
+  /* ... */
+});
+socket.on('article:delete', (article) => {
+  /* ... */
+});
 ```
 
 ### 🔐 Role-Based Access Control
@@ -113,6 +119,7 @@ Permissions are automatically enforced based on user roles:
 ### 📊 Real-Time Monitoring
 
 View live statistics in your admin panel:
+
 - 🟢 Active connections
 - 💬 Active rooms
 - ⚡ Events per second
@@ -146,24 +153,31 @@ strapi.$io.disconnectSocket(socketId, 'Kicked by admin');
 ## Use Cases
 
 ### Real-Time Blog
+
 Automatically notify readers when new articles are published
 
 ### Live Chat
+
 Build a chat system with rooms, private messages, and typing indicators
 
 ### E-Commerce
+
 Update product availability, prices, and inventory in real-time
 
 ### Collaborative Tools
+
 Synchronize state across multiple users editing the same document
 
 ### Dashboards
+
 Push live metrics, alerts, and system status to admin panels
 
 ### Gaming
+
 Handle player connections, game state, and multiplayer interactions
 
 ### IoT Integration
+
 Receive and broadcast sensor data and device status updates
 
 ## Dashboard Widget
@@ -173,6 +187,7 @@ The plugin includes a **live statistics widget** on your Strapi admin home page:
 ![Socket.IO Dashboard Widget](/widget.png)
 
 📊 **Widget Features:**
+
 - 🟢 Live connection status with pulsing indicator
 - 👥 Active connections count
 - 💬 Active rooms count
@@ -191,6 +206,7 @@ Configure everything visually in the admin panel:
 ![Socket.IO Settings](/settings.png)
 
 **Settings → Socket.IO** gives you full control over:
+
 - CORS origins
 - Content type monitoring
 - Role-based permissions
@@ -200,6 +216,7 @@ Configure everything visually in the admin panel:
 ![Monitoring Dashboard](/monitoringSettings.png)
 
 **Real-time monitoring** shows:
+
 - Active connections with user details
 - Event logs
 - Performance metrics
@@ -243,6 +260,7 @@ Configure everything visually in the admin panel:
 Check out other powerful Strapi v5 plugins by [@Schero94](https://github.com/Schero94) that complement Socket.IO perfectly:
 
 ### 📧 Magic-Mail
+
 Enterprise-grade multi-account email management with OAuth 2.0 support. Perfect for sending transactional emails triggered by real-time events.
 
 **Features**: Gmail/Microsoft/Yahoo OAuth, SendGrid, Mailgun, smart routing, rate limiting
@@ -252,6 +270,7 @@ Enterprise-grade multi-account email management with OAuth 2.0 support. Perfect 
 ---
 
 ### 🔐 Magic-Sessionmanager
+
 Advanced session tracking and monitoring for Strapi v5. Track Socket.IO connections, monitor active users, and analyze session patterns.
 
 **Features**: Real-time tracking, IP monitoring, active user dashboard, session analytics
@@ -261,6 +280,7 @@ Advanced session tracking and monitoring for Strapi v5. Track Socket.IO connecti
 ---
 
 ### 🔖 Magicmark
+
 Powerful bookmark management system with real-time sync capabilities. Share bookmarks instantly with your team using Socket.IO integration.
 
 **Features**: Tag organization, team sharing, real-time sync, full REST API
@@ -322,45 +342,39 @@ module.exports = ({ env }) => ({
     enabled: true,
     config: {
       // Enable automatic events for content types
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment'
-      ],
-      
+      contentTypes: ['api::article.article', 'api::comment.comment'],
+
       // Socket.IO server options
       socket: {
         serverOptions: {
           cors: {
             origin: env('CLIENT_URL', 'http://localhost:3000'),
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 });
 ```
 
 ```typescript [TypeScript]
 export default ({ env }) => ({
-	io: {
-		enabled: true,
-		config: {
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment'
-      ],
-      
+  io: {
+    enabled: true,
+    config: {
+      contentTypes: ['api::article.article', 'api::comment.comment'],
+
       socket: {
         serverOptions: {
           cors: {
             origin: env('CLIENT_URL', 'http://localhost:3000'),
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 });
 ```
 
@@ -401,15 +415,15 @@ socket.on('connect', () => {
 });
 
 // Listen for article events
-	socket.on('article:create', (data) => {
+socket.on('article:create', (data) => {
   console.log('New article created:', data);
-	});
+});
 
-	socket.on('article:update', (data) => {
+socket.on('article:update', (data) => {
   console.log('Article updated:', data);
-	});
+});
 
-	socket.on('article:delete', (data) => {
+socket.on('article:delete', (data) => {
   console.log('Article deleted:', data);
 });
 ```
@@ -421,10 +435,10 @@ import { io } from 'socket.io-client';
 const jwtToken = 'your-jwt-token-here';
 
 const socket = io('http://localhost:1337', {
-	auth: {
-		strategy: 'jwt',
-    token: jwtToken
-  }
+  auth: {
+    strategy: 'jwt',
+    token: jwtToken,
+  },
 });
 
 socket.on('connect', () => {
@@ -432,7 +446,7 @@ socket.on('connect', () => {
 });
 
 // Listen for events based on user role permissions
-	socket.on('article:create', (data) => {
+socket.on('article:create', (data) => {
   console.log('New article:', data);
 });
 ```
@@ -445,17 +459,17 @@ import { io } from 'socket.io-client';
 const apiToken = 'your-api-token-here';
 
 const socket = io('http://localhost:1337', {
-	auth: {
+  auth: {
     strategy: 'api-token',
-    token: apiToken
-  }
+    token: apiToken,
+  },
 });
 
 socket.on('connect', () => {
   console.log('✅ API Token authenticated:', socket.id);
 });
 
-	socket.on('article:create', (data) => {
+socket.on('article:create', (data) => {
   console.log('New article:', data);
 });
 ```
@@ -464,11 +478,11 @@ socket.on('connect', () => {
 
 The plugin automatically handles authentication and places connections in rooms based on their role or token:
 
-| Strategy | Use Case | Room Assignment |
-|----------|----------|----------------|
-| **None** | Public access | `Public` role room |
-| **JWT** | User-Permissions plugin | User's role room (e.g., `Authenticated`) |
-| **API Token** | Server-to-server | Token's configured permissions |
+| Strategy      | Use Case                | Room Assignment                          |
+| ------------- | ----------------------- | ---------------------------------------- |
+| **None**      | Public access           | `Public` role room                       |
+| **JWT**       | User-Permissions plugin | User's role room (e.g., `Authenticated`) |
+| **API Token** | Server-to-server        | Token's configured permissions           |
 
 Users only receive events for content types their role has permission to access. This is enforced automatically!
 
@@ -486,7 +500,7 @@ After installation, configure the plugin visually:
 
 ![Socket.IO Settings Panel](/settings.png)
 
-*The visual settings panel makes configuration easy - no code required for most settings!*
+_The visual settings panel makes configuration easy - no code required for most settings!_
 
 ---
 
@@ -497,6 +511,7 @@ After installation, you'll see a live statistics widget on your admin home page:
 ![Socket.IO Dashboard Widget](/widget.png)
 
 **Widget Features:**
+
 - 🟢 Live connection status with pulsing indicator
 - 👥 Active connections count
 - 💬 Active rooms count
@@ -512,37 +527,37 @@ Test your setup with this simple HTML file:
 
 ```html
 
-  Socket.IO Test
   
-
+    Socket.IO Test
+    
   
+  
+    
 # Socket.IO Test
 
-  
+    
 Connecting...
 
-  
+    
 
-  
-    const socket = io('http://localhost:1337');
     
-    socket.on('connect', () => {
-      document.getElementById('status').innerHTML = 
-        '✅ Connected: ' + socket.id;
-    });
-    
-    socket.on('article:create', (data) => {
-      const div = document.getElementById('events');
-      div.innerHTML += '
-📝 New article: ' + 
-        JSON.stringify(data) + '
+      const socket = io('http://localhost:1337');
+
+      socket.on('connect', () => {
+        document.getElementById('status').innerHTML = '✅ Connected: ' + socket.id;
+      });
+
+      socket.on('article:create', (data) => {
+        const div = document.getElementById('events');
+        div.innerHTML += '
+📝 New article: ' + JSON.stringify(data) + '
 ';
-    });
+      });
+
+      socket.on('disconnect', () => {
+        document.getElementById('status').innerHTML = '❌ Disconnected';
+      });
     
-    socket.on('disconnect', () => {
-      document.getElementById('status').innerHTML = 
-        '❌ Disconnected';
-    });
   
 
 ```
@@ -608,25 +623,30 @@ The Socket.IO plugin adds a beautiful, real-time statistics widget to your Strap
 
 ![Socket.IO Dashboard Widget](/widget.png)
 
-*The widget automatically appears on your admin dashboard after installing the plugin.*
+_The widget automatically appears on your admin dashboard after installing the plugin._
 
 ---
 
 ## Features
 
 ### 🟢 Live Status Indicator
+
 A pulsing green dot shows the plugin is active and receiving real-time data. If the indicator turns red, the Socket.IO server is offline or not responding.
 
 ### 👥 Active Connections
+
 Displays the current number of connected Socket.IO clients in real-time.
 
 ### 💬 Active Rooms
+
 Shows how many Socket.IO rooms are currently active.
 
 ### ⚡ Events per Second
+
 Real-time counter showing the current rate of event emissions.
 
 ### 📈 Total Events
+
 Cumulative count of all events processed since the plugin started or was reset.
 
 ---
@@ -649,14 +669,16 @@ The widget appears in the main dashboard area below the welcome message.
 
 ![Socket.IO Settings Panel](/settings.png)
 
-*Access full settings by clicking the "View Settings" link in the widget or navigating to Settings → Socket.IO*
+_Access full settings by clicking the "View Settings" link in the widget or navigating to Settings → Socket.IO_
 
 ### Color-Coded Metrics
+
 - **Blue Cards** - Connection metrics
-- **Green Cards** - Activity metrics  
+- **Green Cards** - Activity metrics
 - **Orange Cards** - Performance metrics
 
 ### Responsive Layout
+
 - Desktop: Full-width cards with icons
 - Tablet: 2-column grid
 - Mobile: Single column stack
@@ -667,9 +689,10 @@ The widget appears in the main dashboard area below the welcome message.
 
 ![Monitoring Settings](/monitoringSettings.png)
 
-*The monitoring dashboard provides detailed insights into connections, events, and performance.*
+_The monitoring dashboard provides detailed insights into connections, events, and performance._
 
 ### What You Can Monitor
+
 - **Active Connections** - See who's connected right now
 - **Connection History** - Track connection patterns
 - **Event Logs** - View all emitted events
@@ -708,16 +731,19 @@ const interval = setInterval(fetchStats, 5000);
 ## Benefits
 
 ### For Developers
+
 - 👀 **Visual Monitoring** - See Socket.IO activity at a glance
 - 🐛 **Debug Tool** - Quickly spot connection issues
 - 📊 **Performance Tracking** - Monitor event rates
 
 ### For Admins
+
 - 📈 **Real-Time Insights** - Live connection data
 - 🚨 **Issue Detection** - Notice problems immediately
 - ✅ **System Health** - Confirm Socket.IO is running
 
 ### For Teams
+
 - 👥 **Collaboration** - See team activity
 - 📊 **Metrics Dashboard** - Shared visibility
 - 🎯 **Decision Making** - Data-driven insights
@@ -729,14 +755,16 @@ const interval = setInterval(fetchStats, 5000);
 ### Widget Not Showing
 
 **Check plugin is enabled:**
+
 ```javascript
 // config/plugins.js
 module.exports = {
-  io: { enabled: true }
+  io: { enabled: true },
 };
 ```
 
 **Restart Strapi:**
+
 ```bash
 npm run develop
 ```
@@ -746,11 +774,13 @@ npm run develop
 **Check browser console** for errors
 
 **Verify API endpoint:**
+
 ```
 GET /io/monitoring/stats
 ```
 
 **Clear cache and refresh:**
+
 ```bash
 rm -rf .cache build
 npm run develop
@@ -759,11 +789,13 @@ npm run develop
 ### Widget Shows Zero Connections
 
 This is normal if:
+
 - No clients are currently connected
 - Plugin just started
 - All sockets disconnected
 
 **Test connection:**
+
 ```javascript
 import { io } from 'socket.io-client';
 const socket = io('http://localhost:1337');
@@ -788,7 +820,31 @@ const socket = io('http://localhost:1337');
 
 ========== https://strapi-community.github.io/plugin-io/guide/migration ==========
 
-# Migration Guide: v2 (Strapi v4) to v5 (Strapi v5)
+# Migration Guide
+
+## 5.x to 6.0
+
+6.0 makes delivery follow Strapi's read permissions and enforces the admin settings. Check these points after upgrading:
+
+1. **Read permission decides delivery.** Roles and API tokens receive events for content types they may `find` or `findOne`. Create or update permissions alone no longer deliver events.
+2. **Publish events.** Publishing emits `:publish` (it used to emit `:delete` and `:create`). Unpublish and discard draft emit `:unpublish` and `:discardDraft`. If `config.contentTypes[].actions` limits actions, add the new ones.
+3. **Drafts** are not sent by default. Turn off _Only published content_ to send them.
+4. **Delete events** go only to readers and include `locale`.
+5. **Room names:** API-token rooms are `io-token-`, custom role rooms `io-role-`.
+6. **Settings** stored by 5.x are migrated and are now enforced. Review _Settings > Socket.IO_.
+7. **Admin permissions:** grant `Read settings`, `Update settings`, `Read monitoring` and `Reset statistics and send test events` (Settings > Administration Panel > Roles > Plugins > IO) to roles other than Super Admin.
+8. **Removed:** the `security` service, settings export and import, entity subscription helpers and `GET /api/io`.
+9. **Node.js 22** or later is required; `maxHttpBufferSize` defaults to 100 KB.
+
+| Plugin Version | Strapi Version | Node.js | Status   |
+| -------------- | -------------- | ------- | -------- |
+| **v6.x**       | v5.13+         | 22-24   | Current  |
+| v5.x           | v5.x           | 18-22   | Previous |
+| v2.x           | v4.x           | 14-20   | Legacy   |
+
+---
+
+## v2 (Strapi v4) to v5 (Strapi v5)
 
 Complete guide for migrating from `@strapi-community/plugin-io` v2.x (Strapi v4) to v5.x (Strapi v5).
 
@@ -804,16 +860,17 @@ The Socket.IO plugin has been updated for Strapi v5 with minimal breaking change
 
 ## Version Compatibility
 
-| Plugin Version | Strapi Version | Node.js | Status |
-|----------------|----------------|---------|--------|
-| **v5.x** | v5.x | 18-22 | ✅ Current |
-| v2.x | v4.x | 14-20 | 🔒 Legacy |
+| Plugin Version | Strapi Version | Node.js | Status     |
+| -------------- | -------------- | ------- | ---------- |
+| **v5.x**       | v5.x           | 18-22   | ✅ Current |
+| v2.x           | v4.x           | 14-20   | 🔒 Legacy  |
 
 ---
 
 ## Before You Start
 
 ### 1. Backup Your Project
+
 ```bash
 # Create a backup of your entire project
 cp -r my-strapi-project my-strapi-project-backup
@@ -824,11 +881,14 @@ git tag v4-backup
 ```
 
 ### 2. Review Strapi v5 Changes
+
 Read the official Strapi v5 migration guide:
+
 - [Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - [Breaking Changes Overview](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
 
 ### 3. Test Environment
+
 Migrate in a development environment first!
 
 ---
@@ -870,12 +930,12 @@ module.exports = {
         serverOptions: {
           cors: {
             origin: process.env.CLIENT_URL || 'http://localhost:3000',
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -884,18 +944,20 @@ module.exports = {
 **Strapi v5 Change:** Entity Service API has minor updates.
 
 **Old (v4):**
+
 ```javascript
 // In custom event handlers
 await strapi.entityService.create('api::article.article', {
-  data: { title: 'Test' }
+  data: { title: 'Test' },
 });
 ```
 
 **New (v5):**
+
 ```javascript
 // Same syntax! No changes needed ✅
 await strapi.entityService.create('api::article.article', {
-  data: { title: 'Test' }
+  data: { title: 'Test' },
 });
 ```
 
@@ -904,17 +966,19 @@ await strapi.entityService.create('api::article.article', {
 **Strapi v5 Change:** Query Engine updates.
 
 **Old (v4):**
+
 ```javascript
 await strapi.db.query('api::article.article').findMany({
-  where: { publishedAt: { $notNull: true } }
+  where: { publishedAt: { $notNull: true } },
 });
 ```
 
 **New (v5):**
+
 ```javascript
 // Same syntax! ✅
 await strapi.db.query('api::article.article').findMany({
-  where: { publishedAt: { $notNull: true } }
+  where: { publishedAt: { $notNull: true } },
 });
 ```
 
@@ -936,6 +1000,7 @@ npm run develop
 ### ✅ No Breaking Changes in Plugin API
 
 Good news! The plugin API is 100% compatible:
+
 - ✅ `strapi.$io.emit()` - Works the same
 - ✅ `strapi.$io.raw()` - Works the same
 - ✅ Helper functions - All work the same
@@ -948,6 +1013,7 @@ Good news! The plugin API is 100% compatible:
 These are Strapi core changes, not plugin-specific:
 
 #### 1. Plugin Structure
+
 **Change:** Strapi v5 uses new plugin SDK
 
 **Impact:** None for users, only for plugin development
@@ -955,6 +1021,7 @@ These are Strapi core changes, not plugin-specific:
 **Action Required:** None ✅
 
 #### 2. TypeScript
+
 **Change:** Strapi v5 is TypeScript-first
 
 **Impact:** Better type support available
@@ -973,6 +1040,7 @@ declare module '@strapi/strapi' {
 ```
 
 #### 3. Dependencies
+
 **Change:** Updated peer dependencies
 
 **Impact:** Must use Strapi v5 packages
@@ -988,6 +1056,7 @@ npm install @strapi/strapi@5 @strapi/plugin-users-permissions@5
 ## Configuration Migration
 
 ### Content Types
+
 **✅ No changes needed**
 
 ```javascript
@@ -996,12 +1065,13 @@ contentTypes: [
   'api::article.article',
   {
     uid: 'api::product.product',
-    actions: ['create', 'update']
-  }
-]
+    actions: ['create', 'update'],
+  },
+];
 ```
 
 ### Events
+
 **✅ No changes needed**
 
 ```javascript
@@ -1011,12 +1081,13 @@ events: [
     name: 'connection',
     handler({ strapi, io }, socket) {
       console.log('Connected:', socket.id);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Hooks
+
 **✅ No changes needed**
 
 ```javascript
@@ -1035,22 +1106,24 @@ hooks: {
 ### Example 1: Custom Event Handler
 
 **Before (v2):**
+
 ```javascript
 events: [
   {
     name: 'chat:send',
     async handler({ strapi, io }, socket, message) {
       await strapi.entityService.create('api::message.message', {
-        data: { text: message, author: socket.data.user.id }
+        data: { text: message, author: socket.data.user.id },
       });
-      
+
       io.server.to('chat-room').emit('chat:message', message);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 **After (v3):**
+
 ```javascript
 // Exactly the same! ✅
 events: [
@@ -1058,24 +1131,26 @@ events: [
     name: 'chat:send',
     async handler({ strapi, io }, socket, message) {
       await strapi.entityService.create('api::message.message', {
-        data: { text: message, author: socket.data.user.id }
+        data: { text: message, author: socket.data.user.id },
       });
-      
+
       io.server.to('chat-room').emit('chat:message', message);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Example 2: Helper Functions
 
 **Before (v2):**
+
 ```javascript
 strapi.$io.joinRoom(socketId, 'premium-users');
 strapi.$io.sendPrivateMessage(socketId, 'notification', data);
 ```
 
 **After (v3):**
+
 ```javascript
 // Exactly the same! ✅
 strapi.$io.joinRoom(socketId, 'premium-users');
@@ -1085,11 +1160,12 @@ strapi.$io.sendPrivateMessage(socketId, 'notification', data);
 ### Example 3: Client Connection
 
 **Before (v2):**
+
 ```javascript
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken }
+  auth: { strategy: 'jwt', token: userToken },
 });
 
 socket.on('article:create', (data) => {
@@ -1098,12 +1174,13 @@ socket.on('article:create', (data) => {
 ```
 
 **After (v3):**
+
 ```javascript
 // Exactly the same! ✅
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken }
+  auth: { strategy: 'jwt', token: userToken },
 });
 
 socket.on('article:create', (data) => {
@@ -1116,11 +1193,13 @@ socket.on('article:create', (data) => {
 ## Admin Panel Migration
 
 ### Settings Access
+
 **✅ No changes needed**
 
 Navigate to: **Settings → Socket.IO**
 
 All settings work the same:
+
 - CORS configuration
 - Role permissions
 - Content type management
@@ -1133,11 +1212,13 @@ All settings work the same:
 ### Issue 1: Plugin Not Loading
 
 **Symptoms:**
+
 ```
 Error: Cannot find module '@strapi-community/plugin-io'
 ```
 
 **Solution:**
+
 ```bash
 # Clear node_modules and reinstall
 rm -rf node_modules package-lock.json
@@ -1148,11 +1229,13 @@ npm install strapi-plugin-io@latest
 ### Issue 2: TypeScript Errors
 
 **Symptoms:**
+
 ```
 Property '$io' does not exist on type 'Strapi'
 ```
 
 **Solution:**
+
 ```typescript
 // Create types/strapi.d.ts
 import type { SocketIO } from '@strapi-community/plugin-io/types';
@@ -1170,6 +1253,7 @@ declare module '@strapi/strapi' {
 **Symptoms:** Socket.IO events don't fire after migration
 
 **Solution:**
+
 ```bash
 # Rebuild the plugin
 npm run build
@@ -1186,6 +1270,7 @@ npm run develop
 **Symptoms:** Connection blocked by CORS after migration
 
 **Solution:**
+
 ```javascript
 // Update CORS settings for Strapi v5
 // config/plugins.js
@@ -1250,6 +1335,7 @@ setTimeout(() => {
 ```
 
 Run it:
+
 ```bash
 node test-socket-io.js
 ```
@@ -1259,6 +1345,7 @@ node test-socket-io.js
 ## Performance Improvements in v3
 
 ### New in v3.0
+
 - ✅ **Better Caching**: 90% reduction in DB queries
 - ✅ **Parallel Processing**: Faster event emissions
 - ✅ **Optimized Bundle**: Smaller package size
@@ -1272,6 +1359,7 @@ node test-socket-io.js
 If migration fails, here's how to rollback:
 
 ### Option 1: Restore from Backup
+
 ```bash
 # Remove new version
 rm -rf my-strapi-project
@@ -1283,6 +1371,7 @@ npm install
 ```
 
 ### Option 2: Git Revert
+
 ```bash
 # Revert to v4-backup tag
 git reset --hard v4-backup
@@ -1292,6 +1381,7 @@ npm install
 ```
 
 ### Option 3: Downgrade
+
 ```bash
 # Downgrade Strapi
 npm install @strapi/strapi@4
@@ -1307,24 +1397,28 @@ npm install @strapi-community/plugin-io@2
 **Recommended approach:**
 
 ### Week 1: Preparation
+
 - Read [Strapi v5 migration guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - Read this guide
 - Backup project
 - Set up test environment
 
 ### Week 2: Development Migration
+
 - Migrate development environment
 - Test all features
 - Fix any issues
 - Update tests
 
 ### Week 3: Staging Migration
+
 - Migrate staging environment
 - Run full test suite
 - Performance testing
 - User acceptance testing
 
 ### Week 4: Production Migration
+
 - Migrate production
 - Monitor closely
 - Be ready to rollback
@@ -1335,6 +1429,7 @@ npm install @strapi-community/plugin-io@2
 ## Getting Help
 
 ### Resources
+
 - 📖 [Official Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - 📖 [Strapi v5 Breaking Changes](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
 - 🔗 [Plugin GitHub Repository](https://github.com/strapi-community/plugin-io)
@@ -1342,7 +1437,9 @@ npm install @strapi-community/plugin-io@2
 - 🐛 [Report Issues](https://github.com/strapi-community/plugin-io/issues)
 
 ### Support
+
 If you encounter issues during migration:
+
 1. Check this guide
 2. Search existing GitHub issues
 3. Ask in GitHub Discussions
@@ -1367,6 +1464,7 @@ If you encounter issues during migration:
 ## Summary
 
 ### ✅ What Works Without Changes
+
 - All API methods (`emit()`, `raw()`, helpers)
 - Configuration file
 - Event handlers
@@ -1376,12 +1474,14 @@ If you encounter issues during migration:
 - Authentication
 
 ### ⚠️ What to Update
+
 - Strapi core to v5
 - All @strapi/* packages
 - Plugin to v5.x
 - Dependencies (npm install)
 
 ### 🎯 Migration Difficulty
+
 **Easy** - Most projects migrate in under 1 hour!
 
 ---
@@ -1424,18 +1524,12 @@ io.broadcast(socketId, event, data);
 io.emitToNamespace(namespace, event, data);
 
 // Connection management
-io.disconnectSocket(socketId, reason);
-
-// Entity subscriptions (new in v5.0)
-io.subscribeToEntity(socketId, uid, id);
-io.unsubscribeFromEntity(socketId, uid, id);
-io.getEntitySubscriptions(socketId);
-io.emitToEntity(uid, id, event, data);
-io.getEntityRoomSockets(uid, id);
+io.disconnectSocket(socketId);
+io.revalidateSockets(); // re-check JWTs, API tokens and admin accounts
 
 // Properties
-io.server;           // Raw Socket.IO server
-io.namespaces;       // All namespaces
+io.server; // Raw Socket.IO server
+io.namespaces; // All namespaces
 ```
 
 ---
@@ -1455,7 +1549,7 @@ console.log(`Connected clients: ${sockets.size}`);
 
 // Broadcast to everyone
 strapi.$io.server.emit('announcement', {
-  message: 'Server maintenance in 10 minutes'
+  message: 'Server maintenance in 10 minutes',
 });
 
 // Access adapter and rooms
@@ -1465,7 +1559,7 @@ console.log('Active rooms:', Array.from(rooms.keys()));
 
 ### `strapi.$io.namespaces`
 
-Access all configured namespaces.
+All namespaces created on the server, keyed by name without the leading slash (`''` is the default namespace). Namespaces created with `strapi.$io.server.of('/name')` use the same handshake as the default namespace.
 
 **Type:** `Record`
 
@@ -1474,12 +1568,12 @@ Access all configured namespaces.
 if (strapi.$io.namespaces.admin) {
   strapi.$io.namespaces.admin.emit('dashboard:update', {
     users: 1234,
-    activeNow: 56
+    activeNow: 56,
   });
 }
 
 // List all namespaces
-Object.keys(strapi.$io.namespaces).forEach(ns => {
+Object.keys(strapi.$io.namespaces).forEach((ns) => {
   console.log(`Namespace: ${ns}`);
 });
 ```
@@ -1490,25 +1584,26 @@ Object.keys(strapi.$io.namespaces).forEach(ns => {
 
 ### `emit()`
 
-Sends data to all roles/tokens with permission for the content type action. Automatically sanitizes and transforms data based on role permissions.
+Sends data to every role and API token that may **read** the content type (`find` or `findOne` permission). Each audience receives the entry sanitized with its own permissions; if sanitizing fails for an audience, that audience is skipped and nothing raw is sent.
 
 **Signature:**
 
 ```typescript
-emit(options: EmitOptions): Promise
+emit(options: EmitOptions): Promise // number of rooms reached
 
 interface EmitOptions {
-  event: string;      // Action: 'create' | 'update' | 'delete' | custom
-  schema: object;     // Content type schema
-  data: any;          // Data to emit
+  event: string;                        // 'create' | 'update' | 'publish' | 'discardDraft' | custom
+  schema: string | { uid: string };     // Content type uid or schema
+  data: any;                            // Entry from the Document Service
 }
 ```
 
-**Supported Actions:** `create`, `update`, `delete` (or custom actions)
+**Built-in actions:** `create`, `update`, `delete`, `publish`, `unpublish`, `discardDraft` (or custom actions)
 
 **Event Format:** `{contentType}:{action}` (e.g., `article:create`)
 
 **Features:**
+
 - ✅ Automatic permission checking
 - ✅ Data sanitization per role
 - ✅ Relation population (if configured)
@@ -1519,10 +1614,10 @@ interface EmitOptions {
 strapi.$io.emit({
   event: 'create',
   schema: 'api::article.article',
-  data: articleData
+  data: articleData,
 });
 
-// Only users with 'create' permission on articles receive this
+// Only roles and tokens with find/findOne permission on articles receive this
 ```
 
 ```javascript [Custom Action]
@@ -1530,7 +1625,7 @@ strapi.$io.emit({
 strapi.$io.emit({
   event: 'publish',
   schema: 'api::article.article',
-  data: { id: 123, status: 'published' }
+  data: { id: 123, status: 'published' },
 });
 
 // Receives as: socket.on('article:publish', ...)
@@ -1539,10 +1634,9 @@ strapi.$io.emit({
 ```javascript [Controller Integration]
 // In your controller
 async create(ctx) {
-  const entry = await strapi.entityService.create(
-    'api::article.article',
-    { data: ctx.request.body }
-  );
+  const entry = await strapi.documents('api::article.article').create({
+    data: ctx.request.body,
+  });
 
   // Emit to all permitted users
   await strapi.$io.emit({
@@ -1550,7 +1644,7 @@ async create(ctx) {
     schema: 'api::article.article',
     data: entry
   });
-  
+
   return entry;
 }
 ```
@@ -1579,8 +1673,8 @@ strapi.$io.raw({
   event: 'notification',
   data: {
     type: 'info',
-    message: 'System maintenance completed'
-  }
+    message: 'System maintenance completed',
+  },
 });
 ```
 
@@ -1591,8 +1685,8 @@ strapi.$io.raw({
   rooms: ['premium', 'vip'],
   data: {
     discount: 50,
-    expiresIn: '24h'
-  }
+    expiresIn: '24h',
+  },
 });
 ```
 
@@ -1603,8 +1697,8 @@ strapi.$io.raw({
   data: {
     page: '/products',
     timestamp: Date.now(),
-    visitors: 42
-  }
+    visitors: 42,
+  },
 });
 ```
 
@@ -1629,7 +1723,7 @@ joinRoom(socketId: string, roomName: string): boolean
 strapi.$io.joinRoom(socket.id, 'premium-users');
 
 // Add to multiple rooms
-['notifications', 'chat', 'updates'].forEach(room => {
+['notifications', 'chat', 'updates'].forEach((room) => {
   strapi.$io.joinRoom(socket.id, room);
 });
 ```
@@ -1653,8 +1747,9 @@ strapi.$io.leaveRoom(socket.id, 'premium-users');
 // Leave all custom rooms
 const socket = strapi.$io.server.sockets.sockets.get(socketId);
 if (socket) {
-  socket.rooms.forEach(room => {
-    if (room !== socket.id) {  // Don't leave own room
+  socket.rooms.forEach((room) => {
+    if (room !== socket.id) {
+      // Don't leave own room
       strapi.$io.leaveRoom(socket.id, room);
     }
   });
@@ -1683,7 +1778,7 @@ interface SocketInfo {
 const sockets = await strapi.$io.getSocketsInRoom('chat-lobby');
 console.log(`${sockets.length} users in lobby`);
 
-sockets.forEach(socket => {
+sockets.forEach((socket) => {
   console.log(`Socket ${socket.id}, User: ${socket.userId}`);
 });
 
@@ -1709,25 +1804,17 @@ sendPrivateMessage(
 
 ```javascript
 // Send private notification
-strapi.$io.sendPrivateMessage(
-  socket.id,
-  'private-notification',
-  {
-    type: 'success',
-    message: 'Your payment was processed'
-  }
-);
+strapi.$io.sendPrivateMessage(socket.id, 'private-notification', {
+  type: 'success',
+  message: 'Your payment was processed',
+});
 
 // Send user-specific data
-strapi.$io.sendPrivateMessage(
-  socket.id,
-  'user-stats',
-  {
-    points: 1250,
-    level: 15,
-    achievements: ['first-post', 'verified']
-  }
-);
+strapi.$io.sendPrivateMessage(socket.id, 'user-stats', {
+  points: 1250,
+  level: 15,
+  achievements: ['first-post', 'verified'],
+});
 ```
 
 ### `broadcast()`
@@ -1750,19 +1837,19 @@ broadcast(
 // User joined - notify others
 strapi.$io.broadcast(socket.id, 'user-joined', {
   username: 'john_doe',
-  avatar: '/avatars/john.png'
+  avatar: '/avatars/john.png',
 });
 
 // User typing indicator
 strapi.$io.broadcast(socket.id, 'typing', {
   userId: 123,
-  chatRoom: 'general'
+  chatRoom: 'general',
 });
 
 // Collaborative editing - sync changes to others
 strapi.$io.broadcast(socket.id, 'document:update', {
   documentId: 456,
-  changes: [{ op: 'insert', pos: 10, text: 'Hello' }]
+  changes: [{ op: 'insert', pos: 10, text: 'Hello' }],
 });
 ```
 
@@ -1785,12 +1872,12 @@ emitToNamespace(
 strapi.$io.emitToNamespace('admin', 'dashboard:stats', {
   onlineUsers: 1234,
   revenue: 56789,
-  orders: 42
+  orders: 42,
 });
 
 // Send to chat namespace
 strapi.$io.emitToNamespace('chat', 'announcement', {
-  message: 'New features available!'
+  message: 'New features available!',
 });
 ```
 
@@ -1822,145 +1909,13 @@ strapi.$io.disconnectSocket(socket.id, 'Session expired');
 
 ---
 
-## Entity Subscription Functions
+## Entity Subscriptions (removed in 6.0)
 
-Entity subscriptions allow targeted updates for specific entities rather than receiving all events for a content type.
-
-### `subscribeToEntity()`
-
-Subscribe a socket to a specific entity (server-side).
-
-**Signature:**
-
-```typescript
-subscribeToEntity(
-  socketId: string,
-  uid: string,
-  id: string | number
-): Promise
-
-interface EntitySubscriptionResult {
-  success: boolean;
-  room?: string;
-  uid?: string;
-  id?: string | number;
-  error?: string;
-}
-```
+`subscribeToEntity`, `unsubscribeFromEntity`, `getEntitySubscriptions`, `emitToEntity`, `getEntityRoomSockets` and the client events `subscribe-entity` / `unsubscribe-entity` were only part of an unpublished source tree; the npm builds 5.4.0 to 5.8.3 did not contain them. They are not part of 6.0. Filter content events by `documentId` on the client instead:
 
 ```javascript
-// Subscribe user to article updates
-const result = await strapi.$io.subscribeToEntity(
-  socket.id,
-  'api::article.article',
-  123
-);
-
-if (result.success) {
-  console.log(`Subscribed to room: ${result.room}`);
-}
-```
-
-### `unsubscribeFromEntity()`
-
-Unsubscribe a socket from a specific entity.
-
-**Signature:**
-
-```typescript
-unsubscribeFromEntity(
-  socketId: string,
-  uid: string,
-  id: string | number
-): EntitySubscriptionResult
-```
-
-```javascript
-// Unsubscribe when user leaves article page
-const result = strapi.$io.unsubscribeFromEntity(
-  socket.id,
-  'api::article.article',
-  123
-);
-```
-
-### `getEntitySubscriptions()`
-
-Get all entity subscriptions for a socket.
-
-**Signature:**
-
-```typescript
-getEntitySubscriptions(socketId: string): {
-  success: boolean;
-  subscriptions?: Array;
-  error?: string;
-}
-```
-
-```javascript
-// Check what entities a user is watching
-const result = strapi.$io.getEntitySubscriptions(socket.id);
-
-if (result.success) {
-  result.subscriptions.forEach(sub => {
-    console.log(`Watching: ${sub.uid} #${sub.id}`);
-  });
-}
-```
-
-### `emitToEntity()`
-
-Emit an event to all clients subscribed to a specific entity.
-
-**Signature:**
-
-```typescript
-emitToEntity(
-  uid: string,
-  id: string | number,
-  event: string,
-  data: any
-): void
-```
-
-```javascript
-// Notify all subscribers when article gets a new comment
-strapi.$io.emitToEntity(
-  'api::article.article',
-  123,
-  'article:commented',
-  {
-    commentId: 456,
-    author: 'jane_doe',
-    text: 'Great article!'
-  }
-);
-```
-
-### `getEntityRoomSockets()`
-
-Get all sockets subscribed to a specific entity.
-
-**Signature:**
-
-```typescript
-getEntityRoomSockets(
-  uid: string,
-  id: string | number
-): Promise>
-```
-
-```javascript
-// Check who's watching an article
-const sockets = await strapi.$io.getEntityRoomSockets(
-  'api::article.article',
-  123
-);
-
-console.log(`${sockets.length} users watching this article`);
-sockets.forEach(s => {
-  console.log(`User: ${s.user?.username || 'anonymous'}`);
+socket.on('article:update', ({ data }) => {
+  if (data.attributes.documentId === currentDocumentId) render(data);
 });
 ```
 
@@ -1998,9 +1953,9 @@ events: [
     name: 'custom-event',
     handler({ strapi, io }, socket, data) {
       console.log('Received:', data);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ---
@@ -2019,7 +1974,7 @@ const io: SocketIO = strapi.$io;
 const options: EmitOptions = {
   event: 'create',
   schema: 'api::article.article',
-  data: articleData
+  data: articleData,
 };
 
 await io.emit(options);
@@ -2036,13 +1991,13 @@ await io.emit(options);
 strapi.$io.emit({
   event: 'update',
   schema: 'api::article.article',
-  data: updatedArticle
+  data: updatedArticle,
 });
 
 // ❌ Bad - no permission checking
 strapi.$io.raw({
   event: 'article:update',
-  data: updatedArticle
+  data: updatedArticle,
 });
 ```
 
@@ -2052,7 +2007,7 @@ strapi.$io.raw({
 // ✅ Good - doesn't relate to content type
 strapi.$io.raw({
   event: 'server:status',
-  data: { uptime: process.uptime() }
+  data: { uptime: process.uptime() },
 });
 ```
 
@@ -2076,7 +2031,7 @@ if (sockets.length > 0) {
   strapi.$io.raw({
     event: 'stats:update',
     rooms: ['dashboard'],
-    data: stats
+    data: stats,
   });
 }
 ```
@@ -2102,25 +2057,25 @@ Complete reference for all Socket.IO plugin configuration options in `config/plu
 
 ```javascript
 module.exports = ({ env }) => ({
-	io: {
-		enabled: true,
-		config: {
+  io: {
+    enabled: true,
+    config: {
       // Content type monitoring
       contentTypes: [],
-      
+
       // Server socket options
       socket: {},
-      
+
       // Custom server events
       events: [],
-      
+
       // Lifecycle hooks
       hooks: {},
-      
+
       // Admin settings (configured via admin panel)
       // cors, security, monitoring, etc.
-    }
-  }
+    },
+  },
 });
 ```
 
@@ -2136,11 +2091,7 @@ Defines which content types should automatically emit real-time events on CRUD o
 ### Simple Format
 
 ```javascript
-contentTypes: [
-  'api::article.article',
-  'api::comment.comment',
-  'api::product.product'
-]
+contentTypes: ['api::article.article', 'api::comment.comment', 'api::product.product'];
 ```
 
 All CRUD events (`create`, `update`, `delete`) are emitted for these content types.
@@ -2153,37 +2104,37 @@ Control which specific actions trigger events:
 contentTypes: [
   // All actions
   'api::article.article',
-  
+
   // Specific actions only
   {
     uid: 'api::product.product',
-    actions: ['create', 'update']  // No delete events
+    actions: ['create', 'update'], // No delete events
   },
-  
+
   // Custom event names
   {
     uid: 'api::comment.comment',
     actions: ['create'],
-    eventPrefix: 'new-comment'  // Emits as 'new-comment:create'
+    eventPrefix: 'new-comment', // Emits as 'new-comment:create'
   },
-  
+
   // Include relations
   {
     uid: 'api::article.article',
     actions: ['create', 'update'],
-    populate: ['author', 'category', 'tags']
-  }
-]
+    populate: ['author', 'category', 'tags'],
+  },
+];
 ```
 
 ### Options
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `uid` | `string` | Content type UID (e.g., `'api::article.article'`) |
-| `actions` | `string[]` | Actions to monitor: `['create', 'update', 'delete']` |
-| `eventPrefix` | `string` | Custom event name prefix (default: content type name) |
-| `populate` | `string[]` | Relations to populate in emitted data |
+| Option        | Type       | Description                                           |
+| ------------- | ---------- | ----------------------------------------------------- |
+| `uid`         | `string`   | Content type UID (e.g., `'api::article.article'`)     |
+| `actions`     | `string[]` | Actions to monitor: `['create', 'update', 'delete']`  |
+| `eventPrefix` | `string`   | Custom event name prefix (default: content type name) |
+| `populate`    | `string[]` | Relations to populate in emitted data                 |
 
 ### Event Format
 
@@ -2191,9 +2142,15 @@ Events are emitted as: `{contentType}:{action}`
 
 ```javascript
 // With contentTypes: ['api::article.article']
-socket.on('article:create', (data) => { /* ... */ });
-socket.on('article:update', (data) => { /* ... */ });
-socket.on('article:delete', (data) => { /* ... */ });
+socket.on('article:create', (data) => {
+  /* ... */
+});
+socket.on('article:update', (data) => {
+  /* ... */
+});
+socket.on('article:delete', (data) => {
+  /* ... */
+});
 ```
 
 ---
@@ -2232,16 +2189,16 @@ socket: {
       methods: ['GET', 'POST'],
       credentials: true
     },
-    
+
     // Connection settings
     pingTimeout: 60000,
     pingInterval: 25000,
     upgradeTimeout: 10000,
     maxHttpBufferSize: 1e6,
-    
+
     // Transports
     transports: ['websocket', 'polling'],
-    
+
     // Path (default: /socket.io)
     path: '/socket.io'
   }
@@ -2308,9 +2265,9 @@ events: [
     name: 'event-name',
     handler: ({ strapi, io }, socket, ...args) => {
       // Handle event
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Handler Signature
@@ -2334,15 +2291,15 @@ events: [
     name: 'connection',
     handler({ strapi, io }, socket) {
       strapi.log.info(`[io] Socket connected: ${socket.id}`);
-      
+
       // Send welcome message
       socket.emit('welcome', {
         message: 'Connected to Strapi!',
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript [Disconnect Event]
@@ -2351,12 +2308,12 @@ events: [
     name: 'disconnect',
     handler({ strapi }, socket, reason) {
       strapi.log.info(`[io] Socket ${socket.id} disconnected: ${reason}`);
-      
+
       // Clean up user session
       // Update last seen, etc.
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript [Custom Event]
@@ -2369,16 +2326,16 @@ events: [
         socket.emit('error', { message: 'Invalid message' });
         return;
       }
-      
+
       // Broadcast to room
       io.server.to(message.room).emit('chat:message', {
         id: socket.id,
         text: message.text,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript [Typing Indicator]
@@ -2389,20 +2346,20 @@ events: [
       // Notify others in room
       socket.to(roomId).emit('user:typing', {
         userId: socket.data.userId,
-        roomId
+        roomId,
       });
-    }
+    },
   },
   {
     name: 'typing:stop',
     handler({ strapi, io }, socket, { roomId }) {
       socket.to(roomId).emit('user:stopped-typing', {
         userId: socket.data.userId,
-        roomId
+        roomId,
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript [Room Management]
@@ -2411,31 +2368,28 @@ events: [
     name: 'room:join',
     async handler({ strapi, io }, socket, { roomId }) {
       // Check permission
-      const hasAccess = await strapi
-        .plugin('io')
-        .service('permissions')
-        .canAccessRoom(socket.data.userId, roomId);
-      
+      const hasAccess = await strapi.plugin('io').service('permissions').canAccessRoom(socket.data.userId, roomId);
+
       if (!hasAccess) {
         socket.emit('error', { message: 'Access denied' });
         return;
       }
-      
+
       // Join room
       socket.join(roomId);
-      
+
       // Notify others
       socket.to(roomId).emit('user:joined', {
         userId: socket.data.userId,
-        roomId
+        roomId,
       });
-      
+
       // Send room history
       const history = await fetchRoomHistory(roomId);
       socket.emit('room:history', history);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Built-in Events
@@ -2483,23 +2437,20 @@ module.exports = {
         async init({ strapi, io }) {
           // Setup Redis adapter for scaling
           const pubClient = createClient({
-            url: process.env.REDIS_URL
+            url: process.env.REDIS_URL,
           });
-          
+
           const subClient = pubClient.duplicate();
-          
-          await Promise.all([
-            pubClient.connect(),
-            subClient.connect()
-          ]);
-          
+
+          await Promise.all([pubClient.connect(), subClient.connect()]);
+
           io.server.adapter(createAdapter(pubClient, subClient));
-          
+
           strapi.log.info('[io] Redis adapter initialized');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -2515,18 +2466,16 @@ module.exports = {
         async init({ strapi, io }) {
           const mongoClient = new MongoClient(process.env.MONGO_URL);
           await mongoClient.connect();
-          
-          const mongoCollection = mongoClient
-            .db('mydb')
-            .collection('socket.io-adapter-events');
-          
+
+          const mongoCollection = mongoClient.db('mydb').collection('socket.io-adapter-events');
+
           io.server.adapter(createAdapter(mongoCollection));
-          
+
           strapi.log.info('[io] MongoDB adapter initialized');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -2541,18 +2490,18 @@ module.exports = {
           io.server.use((socket, next) => {
             // Log all connections
             strapi.log.info(`Connection attempt from ${socket.handshake.address}`);
-            
+
             // Add custom data
             socket.data.connectedAt = Date.now();
-            
+
             next();
           });
-          
+
           strapi.log.info('[io] Custom middleware registered');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -2566,17 +2515,19 @@ module.exports = {
       hooks: {
         init({ strapi, io }) {
           // Apply rate limiting
-          io.server.use(rateLimit({
-            tokensPerInterval: 100,
-            interval: 60000,  // 100 requests per minute
-            fireImmediately: true
-          }));
-          
+          io.server.use(
+            rateLimit({
+              tokensPerInterval: 100,
+              interval: 60000, // 100 requests per minute
+              fireImmediately: true,
+            })
+          );
+
           strapi.log.info('[io] Rate limiting enabled');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -2591,9 +2542,9 @@ const { createClient } = require('redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
 
 module.exports = ({ env }) => ({
-	io: {
-		enabled: true,
-		config: {
+  io: {
+    enabled: true,
+    config: {
       // Monitor content types
       contentTypes: [
         'api::article.article',
@@ -2601,24 +2552,24 @@ module.exports = ({ env }) => ({
         {
           uid: 'api::product.product',
           actions: ['create', 'update'],
-          populate: ['category', 'images']
-        }
+          populate: ['category', 'images'],
+        },
       ],
-      
+
       // Socket.IO server options
       socket: {
         serverOptions: {
           cors: {
             origin: env('CLIENT_URL', 'http://localhost:3000'),
             methods: ['GET', 'POST'],
-            credentials: true
+            credentials: true,
           },
           transports: ['websocket', 'polling'],
           pingTimeout: 60000,
-          pingInterval: 25000
-        }
+          pingInterval: 25000,
+        },
       },
-      
+
       // Custom events
       events: [
         {
@@ -2626,55 +2577,51 @@ module.exports = ({ env }) => ({
           handler({ strapi }, socket) {
             strapi.log.info(`[io] Connected: ${socket.id}`);
             socket.emit('welcome', { serverTime: Date.now() });
-          }
+          },
         },
         {
           name: 'disconnect',
           handler({ strapi }, socket, reason) {
             strapi.log.info(`[io] Disconnected: ${socket.id} (${reason})`);
-          }
+          },
         },
         {
           name: 'chat:message',
           async handler({ strapi, io }, socket, data) {
             // Validate & save message
-            const message = await strapi.entityService.create(
-              'api::message.message',
-              { data: { text: data.text, user: socket.data.userId } }
-            );
-            
+            const message = await strapi.entityService.create('api::message.message', {
+              data: { text: data.text, user: socket.data.userId },
+            });
+
             // Broadcast to room
             io.server.to(data.room).emit('chat:message', message);
-          }
-        }
+          },
+        },
       ],
-      
+
       // Lifecycle hooks
       hooks: {
         async init({ strapi, io }) {
           // Setup Redis adapter for horizontal scaling
           if (env('REDIS_URL')) {
             const pubClient = createClient({ url: env('REDIS_URL') });
-					const subClient = pubClient.duplicate();
-            
-            await Promise.all([
-              pubClient.connect(),
-              subClient.connect()
-            ]);
-            
+            const subClient = pubClient.duplicate();
+
+            await Promise.all([pubClient.connect(), subClient.connect()]);
+
             io.server.adapter(createAdapter(pubClient, subClient));
             strapi.log.info('[io] Redis adapter initialized');
           }
-          
+
           // Custom middleware
           io.server.use((socket, next) => {
             socket.data.connectedAt = Date.now();
             next();
           });
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 });
 ```
 
@@ -2731,7 +2678,7 @@ Configure visually:
   - Rate limiting
   - IP whitelisting
   - Authentication requirements
-  
+
 - **Monitoring**
   - Connection logs
   - Event tracking
@@ -2740,16 +2687,17 @@ Configure visually:
 ![Monitoring Dashboard](/monitoringSettings.png)
 
 The monitoring dashboard provides:
+
 - Real-time connection list
 - Active user details
 - Event logs with timestamps
 - Performance statistics
 - Connection history
-  
+
 - **Namespaces**
   - Create isolated channels
   - Separate admin/public connections
-  
+
 - **Role Permissions**
   - Control content type access per role
   - Custom event permissions
@@ -2774,16 +2722,19 @@ Real-world use cases and implementation patterns for Socket.IO Plugin.
 ## 📚 Available Examples
 
 ### Content Types
+
 Learn how to monitor content types and emit real-time events automatically.
 
 **[View Content Types Examples →](./content-types)**
 
-### Events  
+### Events
+
 Custom event handlers and client-server communication patterns.
 
 **[View Events Examples →](./events)**
 
 ### Hooks
+
 Use lifecycle hooks for initialization, adapters, and middleware.
 
 **[View Hooks Examples →](./hooks)**
@@ -2802,9 +2753,9 @@ module.exports = {
   io: {
     enabled: true,
     config: {
-      contentTypes: ['api::article.article']
-    }
-  }
+      contentTypes: ['api::article.article'],
+    },
+  },
 };
 ```
 
@@ -2832,31 +2783,28 @@ events: [
     name: 'chat:send',
     async handler({ strapi, io }, socket, message) {
       // Save message
-      const saved = await strapi.entityService.create(
-        'api::message.message',
-        { data: message }
-      );
-      
+      const saved = await strapi.entityService.create('api::message.message', { data: message });
+
       // Broadcast to room
       io.server.to(message.room).emit('chat:message', saved);
-    }
+    },
   },
   {
     name: 'room:join',
     handler({ strapi, io }, socket, roomId) {
       socket.join(roomId);
       socket.to(roomId).emit('user:joined', {
-        userId: socket.data.userId
+        userId: socket.data.userId,
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
 // Frontend
 const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken }
+  auth: { strategy: 'jwt', token: userToken },
 });
 
 // Join room
@@ -2865,7 +2813,7 @@ socket.emit('room:join', 'general');
 // Send message
 socket.emit('chat:send', {
   room: 'general',
-  text: 'Hello everyone!'
+  text: 'Hello everyone!',
 });
 
 // Receive messages
@@ -2886,14 +2834,14 @@ async updateProduct(id, data) {
     id,
     { data, populate: ['images', 'category'] }
   );
-  
+
   // Notify all watching users
   await strapi.$io.emit({
     event: 'update',
     schema: 'api::product.product',
     data: product
   });
-  
+
   // If out of stock, send special alert
   if (product.stock === 0) {
     strapi.$io.raw({
@@ -2901,7 +2849,7 @@ async updateProduct(id, data) {
       data: { id: product.id, name: product.name }
     });
   }
-  
+
   return product;
 }
 ```
@@ -2935,17 +2883,17 @@ events: [
       // Broadcast to others editing same document
       socket.to(`document:${docId}`).emit('document:changes', {
         userId: socket.data.userId,
-        changes
+        changes,
       });
-    }
+    },
   },
   {
     name: 'document:open',
     handler({ strapi, io }, socket, docId) {
       socket.join(`document:${docId}`);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
@@ -2957,7 +2905,7 @@ socket.emit('document:open', documentId);
 editor.on('change', (changes) => {
   socket.emit('document:edit', {
     docId: documentId,
-    changes
+    changes,
   });
 });
 
@@ -2980,12 +2928,12 @@ hooks: {
     setInterval(async () => {
       const stats = {
         users: await strapi.db.query('plugin::users-permissions.user').count(),
-        orders: await strapi.db.query('api::order.order').count({ 
-          where: { status: 'pending' } 
+        orders: await strapi.db.query('api::order.order').count({
+          where: { status: 'pending' }
         }),
         revenue: await calculateRevenue()
       };
-      
+
       // Send to admin namespace
       io.namespaces.admin?.emit('dashboard:stats', stats);
     }, 5000);
@@ -2996,7 +2944,7 @@ hooks: {
 ```javascript
 // Frontend: Admin Dashboard
 const socket = io('http://localhost:1337/admin', {
-  auth: { strategy: 'api-token', token: adminToken }
+  auth: { strategy: 'api-token', token: adminToken },
 });
 
 socket.on('dashboard:stats', (stats) => {
@@ -3018,20 +2966,20 @@ events: [
     handler({ io }, socket, { room }) {
       socket.to(room).emit('user:typing', {
         userId: socket.data.userId,
-        room
+        room,
       });
-    }
+    },
   },
   {
     name: 'typing:stop',
     handler({ io }, socket, { room }) {
       socket.to(room).emit('user:stopped-typing', {
         userId: socket.data.userId,
-        room
+        room,
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
@@ -3041,10 +2989,10 @@ let typingTimeout;
 messageInput.addEventListener('input', () => {
   // Emit typing start
   socket.emit('typing:start', { room: currentRoom });
-  
+
   // Clear previous timeout
   clearTimeout(typingTimeout);
-  
+
   // Set timeout to stop typing
   typingTimeout = setTimeout(() => {
     socket.emit('typing:stop', { room: currentRoom });
@@ -3072,41 +3020,37 @@ events: [
     async handler({ strapi, io }, socket) {
       if (socket.data.userId) {
         // Mark user as online
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.userId,
-          { data: { isOnline: true } }
-        );
-        
+        await strapi.entityService.update('plugin::users-permissions.user', socket.data.userId, {
+          data: { isOnline: true },
+        });
+
         // Notify others
         socket.broadcast.emit('user:online', {
-          userId: socket.data.userId
+          userId: socket.data.userId,
         });
       }
-    }
+    },
   },
   {
     name: 'disconnect',
     async handler({ strapi }, socket) {
       if (socket.data.userId) {
         // Mark user as offline
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.userId,
-          { data: { 
+        await strapi.entityService.update('plugin::users-permissions.user', socket.data.userId, {
+          data: {
             isOnline: false,
-            lastSeen: new Date()
-          }}
-        );
-        
+            lastSeen: new Date(),
+          },
+        });
+
         // Notify others
         socket.broadcast.emit('user:offline', {
-          userId: socket.data.userId
+          userId: socket.data.userId,
         });
       }
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
@@ -3295,7 +3239,7 @@ describe('Socket.IO Connection', () => {
 
   test('should emit custom event', (done) => {
     socket.emit('ping', { timestamp: Date.now() });
-    
+
     socket.on('pong', (data) => {
       expect(data).toHaveProperty('timestamp');
       done();
@@ -3344,17 +3288,14 @@ module.exports = ({ env }) => ({
   io: {
     enabled: true,
     config: {
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment',
-        'api::product.product'
-      ]
-    }
-  }
+      contentTypes: ['api::article.article', 'api::comment.comment', 'api::product.product'],
+    },
+  },
 });
 ```
 
 **This automatically enables:**
+
 - ✅ Create events (`article:create`)
 - ✅ Update events (`article:update`)
 - ✅ Delete events (`article:delete`)
@@ -3374,30 +3315,30 @@ module.exports = ({ env }) => ({
         // Only create events
         {
           uid: 'api::article.article',
-          actions: ['create']
+          actions: ['create'],
         },
-        
+
         // Create and update, no delete
         {
           uid: 'api::product.product',
-          actions: ['create', 'update']
+          actions: ['create', 'update'],
         },
-        
+
         // All events (same as string format)
         {
           uid: 'api::comment.comment',
-          actions: ['create', 'update', 'delete']
-        }
-      ]
-    }
-  }
+          actions: ['create', 'update', 'delete'],
+        },
+      ],
+    },
+  },
 });
 ```
 
 ### Available Actions
 
-| Action | Event Name | Description |
-|--------|-----------|-------------|
+| Action   | Event Name             | Description                 |
+| -------- | ---------------------- | --------------------------- |
 | `create` | `{contentType}:create` | Fired when entry is created |
 | `update` | `{contentType}:update` | Fired when entry is updated |
 | `delete` | `{contentType}:delete` | Fired when entry is deleted |
@@ -3415,18 +3356,18 @@ contentTypes: [
   {
     uid: 'api::article.article',
     actions: ['create', 'update'],
-    populate: ['author', 'category', 'tags']
-  }
-]
+    populate: ['author', 'category', 'tags'],
+  },
+];
 ```
 
 **Frontend receives:**
 
 ```javascript
 socket.on('article:create', (article) => {
-  console.log(article.attributes.author);  // ✅ Populated
+  console.log(article.attributes.author); // ✅ Populated
   console.log(article.attributes.category); // ✅ Populated
-  console.log(article.attributes.tags);     // ✅ Populated
+  console.log(article.attributes.tags); // ✅ Populated
 });
 ```
 
@@ -3439,9 +3380,9 @@ contentTypes: [
   {
     uid: 'api::article.article',
     actions: ['create'],
-    eventPrefix: 'new-article'  // Emits as 'new-article:create'
-  }
-]
+    eventPrefix: 'new-article', // Emits as 'new-article:create'
+  },
+];
 ```
 
 **Frontend listens to:**
@@ -3469,21 +3410,21 @@ module.exports = {
         {
           uid: 'api::article.article',
           actions: ['create', 'update', 'delete'],
-          populate: ['author', 'category', 'coverImage']
+          populate: ['author', 'category', 'coverImage'],
         },
-        
+
         // Comments - only create
         {
           uid: 'api::comment.comment',
           actions: ['create'],
-          populate: ['author']
+          populate: ['author'],
         },
-        
+
         // Categories - all events, no relations
-        'api::category.category'
-      ]
-    }
-  }
+        'api::category.category',
+      ],
+    },
+  },
 };
 ```
 
@@ -3525,24 +3466,24 @@ module.exports = {
         {
           uid: 'api::product.product',
           actions: ['create', 'update'],
-          populate: ['images', 'category', 'variants']
+          populate: ['images', 'category', 'variants'],
         },
-        
+
         // Orders - all events
         {
           uid: 'api::order.order',
           actions: ['create', 'update'],
-          populate: ['customer', 'items']
+          populate: ['customer', 'items'],
         },
-        
+
         // Stock updates
         {
           uid: 'api::inventory.inventory',
-          actions: ['update']
-        }
-      ]
-    }
-  }
+          actions: ['update'],
+        },
+      ],
+    },
+  },
 };
 ```
 
@@ -3554,7 +3495,7 @@ socket.on('product:update', (product) => {
   if (product.id === currentProductId) {
     updatePrice(product.attributes.price);
     updateStock(product.attributes.stock);
-    
+
     if (product.attributes.stock === 0) {
       showOutOfStockBanner();
     }
@@ -3593,16 +3534,16 @@ Only emit events for published content:
 module.exports = {
   async afterCreate(event) {
     const { result } = event;
-    
+
     // Only emit if published
     if (result.publishedAt) {
       await strapi.$io.emit({
         event: 'create',
         schema: 'api::article.article',
-        data: result
+        data: result,
       });
     }
-  }
+  },
 };
 ```
 
@@ -3615,7 +3556,7 @@ Control which roles receive which events via Admin Panel:
 1. Select **Public** role:
    - Enable `article:create` ✅
    - Disable `article:delete` ❌
-   
+
 2. Select **Authenticated** role:
    - Enable all article events ✅
 
@@ -3630,7 +3571,7 @@ Reduce payload size by excluding heavy fields:
 ```javascript
 // In Admin Panel Settings
 events: {
-  excludeFields: ['content', 'largeData', 'internalNotes']
+  excludeFields: ['content', 'largeData', 'internalNotes'];
 }
 ```
 
@@ -3641,7 +3582,7 @@ Or programmatically:
 module.exports = {
   async afterCreate(event) {
     const { result } = event;
-    
+
     // Custom emit with limited fields
     await strapi.$io.raw({
       event: 'article:create',
@@ -3649,11 +3590,11 @@ module.exports = {
         id: result.id,
         title: result.title,
         excerpt: result.excerpt,
-        author: result.author.username
+        author: result.author.username,
         // Exclude heavy content field
-      }
+      },
     });
-  }
+  },
 };
 ```
 
@@ -3667,14 +3608,14 @@ const { debounce } = require('lodash');
 const emitBulkUpdate = debounce((ids) => {
   strapi.$io.raw({
     event: 'articles:bulk-update',
-    data: { updatedIds: ids }
+    data: { updatedIds: ids },
   });
 }, 1000);
 
 // In bulk operation
 bulkUpdate.forEach(async (article) => {
   await strapi.entityService.update('api::article.article', article.id, {
-    data: article
+    data: article,
   });
   emitBulkUpdate(article.id);
 });
@@ -3692,22 +3633,22 @@ const { io } = require('socket.io-client');
 
 describe('Content Type Events', () => {
   let socket;
-  
+
   beforeAll(() => {
     socket = io('http://localhost:1337');
   });
-  
+
   afterAll(() => {
     socket.disconnect();
   });
-  
+
   test('should receive article:create event', (done) => {
     socket.on('article:create', (article) => {
       expect(article).toHaveProperty('id');
       expect(article.attributes).toHaveProperty('title');
       done();
     });
-    
+
     // Create article via API
     fetch('http://localhost:1337/api/articles', {
       method: 'POST',
@@ -3715,9 +3656,9 @@ describe('Content Type Events', () => {
       body: JSON.stringify({
         data: {
           title: 'Test Article',
-          content: 'Test content'
-        }
-      })
+          content: 'Test content',
+        },
+      }),
     });
   });
 });
@@ -3743,6 +3684,7 @@ Navigate to **Settings → Socket.IO → Role Permissions** and verify the role 
 **Verify event name:**
 
 Events follow the pattern `{singularName}:{action}`. For `api::article.article`, events are:
+
 - `article:create`
 - `article:update`
 - `article:delete`
@@ -3786,22 +3728,22 @@ module.exports = ({ env }) => ({
           name: 'connection',
           handler({ strapi, io }, socket) {
             strapi.log.info(`[io] Client connected: ${socket.id}`);
-            
+
             // Access user info (if authenticated)
             if (socket.data.user) {
               strapi.log.info(`User: ${socket.data.user.username}`);
             }
-            
+
             // Send welcome message
             socket.emit('welcome', {
               message: 'Connected to Strapi!',
-              serverTime: Date.now()
+              serverTime: Date.now(),
             });
-          }
-        }
-      ]
-    }
-  }
+          },
+        },
+      ],
+    },
+  },
 });
 ```
 
@@ -3815,18 +3757,16 @@ events: [
     name: 'disconnect',
     handler({ strapi }, socket, reason) {
       strapi.log.info(`[io] Client ${socket.id} disconnected: ${reason}`);
-      
+
       // Update user status
       if (socket.data.user) {
-        strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.user.id,
-          { data: { isOnline: false, lastSeen: new Date() } }
-        );
+        strapi.entityService.update('plugin::users-permissions.user', socket.data.user.id, {
+          data: { isOnline: false, lastSeen: new Date() },
+        });
       }
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ---
@@ -3842,9 +3782,9 @@ events: [
     handler({ strapi }, socket) {
       strapi.log.info(`[io] Ping from ${socket.id}`);
       socket.emit('pong', { timestamp: Date.now() });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 **Client:**
@@ -3868,21 +3808,19 @@ events: [
         socket.emit('error', { message: 'Not authenticated' });
         return;
       }
-      
+
       try {
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.user.id,
-          { data: { username: newName } }
-        );
-        
+        await strapi.entityService.update('plugin::users-permissions.user', socket.data.user.id, {
+          data: { username: newName },
+        });
+
         socket.emit('name-updated', { success: true, newName });
       } catch (error) {
         socket.emit('error', { message: error.message });
       }
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 **Client:**
@@ -3913,26 +3851,23 @@ events: [
         socket.emit('error', { message: 'Missing required fields' });
         return;
       }
-      
+
       if (message.length > 500) {
         socket.emit('error', { message: 'Message too long' });
         return;
       }
-      
+
       // Save to database
-      const chatMessage = await strapi.entityService.create(
-        'api::message.message',
-        {
-          data: {
-            content: message,
-            room: roomId,
-            author: socket.data.user.id,
-            publishedAt: new Date()
-          },
-          populate: ['author']
-        }
-      );
-      
+      const chatMessage = await strapi.entityService.create('api::message.message', {
+        data: {
+          content: message,
+          room: roomId,
+          author: socket.data.user.id,
+          publishedAt: new Date(),
+        },
+        populate: ['author'],
+      });
+
       // Broadcast to room
       io.server.to(`room-${roomId}`).emit('chat:message', {
         id: chatMessage.id,
@@ -3940,13 +3875,13 @@ events: [
         author: {
           id: socket.data.user.id,
           username: socket.data.user.username,
-          avatar: socket.data.user.avatar?.url
+          avatar: socket.data.user.avatar?.url,
         },
-        timestamp: Date.now()
+        timestamp: Date.now(),
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 **Client:**
@@ -3955,7 +3890,7 @@ events: [
 // Send message
 socket.emit('chat:send', {
   roomId: '123',
-  message: 'Hello everyone!'
+  message: 'Hello everyone!',
 });
 
 // Receive messages
@@ -3972,27 +3907,27 @@ events: [
     name: 'typing:start',
     handler({ strapi, io }, socket, { roomId }) {
       if (!socket.data.user) return;
-      
+
       // Broadcast to others in room
       socket.to(`room-${roomId}`).emit('user:typing', {
         userId: socket.data.user.id,
         username: socket.data.user.username,
-        roomId
+        roomId,
       });
-    }
+    },
   },
   {
     name: 'typing:stop',
     handler({ strapi, io }, socket, { roomId }) {
       if (!socket.data.user) return;
-      
+
       socket.to(`room-${roomId}`).emit('user:stopped-typing', {
         userId: socket.data.user.id,
-        roomId
+        roomId,
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 **Client:**
@@ -4002,7 +3937,7 @@ let typingTimeout;
 
 messageInput.addEventListener('input', () => {
   socket.emit('typing:start', { roomId: currentRoom });
-  
+
   clearTimeout(typingTimeout);
   typingTimeout = setTimeout(() => {
     socket.emit('typing:stop', { roomId: currentRoom });
@@ -4029,53 +3964,50 @@ events: [
         socket.emit('error', { message: 'Authentication required' });
         return;
       }
-      
+
       // Check permission
       const hasAccess = await checkRoomAccess(socket.data.user.id, roomId);
       if (!hasAccess) {
         socket.emit('error', { message: 'Access denied' });
         return;
       }
-      
+
       // Join room
       socket.join(`room-${roomId}`);
-      
+
       // Notify others
       socket.to(`room-${roomId}`).emit('user:joined', {
         userId: socket.data.user.id,
         username: socket.data.user.username,
-        avatar: socket.data.user.avatar?.url
+        avatar: socket.data.user.avatar?.url,
       });
-      
+
       // Send room history
-      const messages = await strapi.entityService.findMany(
-        'api::message.message',
-        {
-          filters: { room: roomId },
-          sort: { createdAt: 'desc' },
-          limit: 50,
-          populate: ['author']
-        }
-      );
-      
+      const messages = await strapi.entityService.findMany('api::message.message', {
+        filters: { room: roomId },
+        sort: { createdAt: 'desc' },
+        limit: 50,
+        populate: ['author'],
+      });
+
       socket.emit('room:history', { messages });
       socket.emit('room:joined', { roomId, success: true });
-    }
+    },
   },
   {
     name: 'room:leave',
     handler({ strapi, io }, socket, { roomId }) {
       socket.leave(`room-${roomId}`);
-      
+
       socket.to(`room-${roomId}`).emit('user:left', {
         userId: socket.data.user?.id,
-        username: socket.data.user?.username
+        username: socket.data.user?.username,
       });
-      
+
       socket.emit('room:left', { roomId, success: true });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Private Messages
@@ -4086,41 +4018,38 @@ events: [
     name: 'dm:send',
     async handler({ strapi, io }, socket, { toUserId, message }) {
       if (!socket.data.user) return;
-      
+
       // Save message
-      const dm = await strapi.entityService.create(
-        'api::direct-message.direct-message',
-        {
-          data: {
-            from: socket.data.user.id,
-            to: toUserId,
-            content: message,
-            publishedAt: new Date()
-          }
-        }
-      );
-      
+      const dm = await strapi.entityService.create('api::direct-message.direct-message', {
+        data: {
+          from: socket.data.user.id,
+          to: toUserId,
+          content: message,
+          publishedAt: new Date(),
+        },
+      });
+
       // Find recipient's socket
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      const recipientSocket = stats.sockets.find(s => s.user?.id === toUserId);
-      
+      const sockets = await strapi.$io.server.fetchSockets();
+      const recipientSocket = sockets.find((s) => s.data.user?.id === toUserId);
+
       if (recipientSocket) {
         io.server.to(recipientSocket.id).emit('dm:received', {
           id: dm.id,
           from: {
             id: socket.data.user.id,
             username: socket.data.user.username,
-            avatar: socket.data.user.avatar?.url
+            avatar: socket.data.user.avatar?.url,
           },
           content: message,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         });
       }
-      
+
       socket.emit('dm:sent', { success: true, messageId: dm.id });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Online Presence
@@ -4131,57 +4060,53 @@ events: [
     name: 'connection',
     async handler({ strapi, io }, socket) {
       if (!socket.data.user) return;
-      
+
       // Mark user as online
-      await strapi.entityService.update(
-        'plugin::users-permissions.user',
-        socket.data.user.id,
-        { data: { isOnline: true, lastSeen: new Date() } }
-      );
-      
+      await strapi.entityService.update('plugin::users-permissions.user', socket.data.user.id, {
+        data: { isOnline: true, lastSeen: new Date() },
+      });
+
       // Notify friends
       const friends = await getFriendsList(socket.data.user.id);
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      
-      friends.forEach(friend => {
-        const friendSocket = stats.sockets.find(s => s.user?.id === friend.id);
+      const sockets = await strapi.$io.server.fetchSockets();
+
+      friends.forEach((friend) => {
+        const friendSocket = sockets.find((s) => s.data.user?.id === friend.id);
         if (friendSocket) {
           io.server.to(friendSocket.id).emit('friend:online', {
             userId: socket.data.user.id,
-            username: socket.data.user.username
+            username: socket.data.user.username,
           });
         }
       });
-    }
+    },
   },
   {
     name: 'disconnect',
     async handler({ strapi, io }, socket) {
       if (!socket.data.user) return;
-      
+
       // Mark user as offline
-      await strapi.entityService.update(
-        'plugin::users-permissions.user',
-        socket.data.user.id,
-        { data: { isOnline: false, lastSeen: new Date() } }
-      );
-      
+      await strapi.entityService.update('plugin::users-permissions.user', socket.data.user.id, {
+        data: { isOnline: false, lastSeen: new Date() },
+      });
+
       // Notify friends
       const friends = await getFriendsList(socket.data.user.id);
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      
-      friends.forEach(friend => {
-        const friendSocket = stats.sockets.find(s => s.user?.id === friend.id);
+      const sockets = await strapi.$io.server.fetchSockets();
+
+      friends.forEach((friend) => {
+        const friendSocket = sockets.find((s) => s.data.user?.id === friend.id);
         if (friendSocket) {
           io.server.to(friendSocket.id).emit('friend:offline', {
             userId: socket.data.user.id,
-            username: socket.data.user.username
+            username: socket.data.user.username,
           });
         }
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ---
@@ -4200,28 +4125,26 @@ events: [
         if (!data.field || !data.value) {
           throw new Error('Missing required fields');
         }
-        
+
         // Sanitize
         const allowedFields = ['username', 'bio', 'avatar'];
         if (!allowedFields.includes(data.field)) {
           throw new Error('Field not allowed');
         }
-        
+
         // Update
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.user.id,
-          { data: { [data.field]: data.value } }
-        );
-        
+        await strapi.entityService.update('plugin::users-permissions.user', socket.data.user.id, {
+          data: { [data.field]: data.value },
+        });
+
         socket.emit('update:success', { field: data.field });
       } catch (error) {
         strapi.log.error('Update failed:', error);
         socket.emit('update:error', { message: error.message });
       }
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Rate Limiting
@@ -4235,42 +4158,42 @@ events: [
     handler({ strapi }, socket) {
       rateLimiters.set(socket.id, {
         count: 0,
-        resetAt: Date.now() + 60000
+        resetAt: Date.now() + 60000,
       });
-    }
+    },
   },
   {
     name: 'chat:send',
     handler({ strapi, io }, socket, data) {
       const limiter = rateLimiters.get(socket.id);
       const now = Date.now();
-      
+
       // Reset counter
       if (now > limiter.resetAt) {
         limiter.count = 0;
         limiter.resetAt = now + 60000;
       }
-      
+
       limiter.count++;
-      
+
       // Check limit
       if (limiter.count > 20) {
         socket.emit('error', {
-          message: 'Rate limit exceeded. Max 20 messages per minute.'
+          message: 'Rate limit exceeded. Max 20 messages per minute.',
         });
         return;
       }
-      
+
       // Process message...
-    }
+    },
   },
   {
     name: 'disconnect',
     handler({ strapi }, socket) {
       rateLimiters.delete(socket.id);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ---
@@ -4283,31 +4206,31 @@ const { io } = require('socket.io-client');
 
 describe('Custom Events', () => {
   let socket;
-  
+
   beforeAll((done) => {
     socket = io('http://localhost:1337');
     socket.on('connect', done);
   });
-  
+
   afterAll(() => {
     socket.disconnect();
   });
-  
+
   test('should respond to ping', (done) => {
     socket.emit('ping');
-    
+
     socket.on('pong', (data) => {
       expect(data).toHaveProperty('timestamp');
       done();
     });
   });
-  
+
   test('should handle chat message', (done) => {
     socket.emit('chat:send', {
       roomId: 'test',
-      message: 'Hello'
+      message: 'Hello',
     });
-    
+
     socket.on('chat:message', (message) => {
       expect(message.content).toBe('Hello');
       done();
@@ -4363,6 +4286,7 @@ Hooks are similar to Strapi model lifecycles. They are functions called at speci
 ## Init Hook
 
 The `init` hook is triggered immediately after the Socket.IO server instance is constructed. It's perfect for:
+
 - Adding server adapters (Redis, MongoDB)
 - Registering middleware
 - Configuring namespaces
@@ -4395,36 +4319,34 @@ module.exports = ({ env }) => ({
       hooks: {
         async init({ strapi, io }) {
           const pubClient = createClient({
-            url: env('REDIS_URL', 'redis://localhost:6379')
+            url: env('REDIS_URL', 'redis://localhost:6379'),
           });
-          
+
           const subClient = pubClient.duplicate();
-          
-          await Promise.all([
-            pubClient.connect(),
-            subClient.connect()
-          ]);
-          
+
+          await Promise.all([pubClient.connect(), subClient.connect()]);
+
           io.server.adapter(createAdapter(pubClient, subClient));
-          
+
           strapi.log.info('[io] ✅ Redis adapter initialized');
-          
+
           // Handle errors
           pubClient.on('error', (err) => {
             strapi.log.error('[io] Redis pub client error:', err);
           });
-          
+
           subClient.on('error', (err) => {
             strapi.log.error('[io] Redis sub client error:', err);
           });
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 });
 ```
 
 **Benefits:**
+
 - ✅ Horizontal scaling across multiple servers
 - ✅ Load balancing
 - ✅ Session persistence
@@ -4448,20 +4370,20 @@ module.exports = ({ env }) => ({
         async init({ strapi, io }) {
           const mongoClient = new MongoClient(env('MONGO_URL'));
           await mongoClient.connect();
-          
-          const mongoCollection = mongoClient
-            .db('mydb')
-            .collection('socket.io-adapter-events');
-          
-          io.server.adapter(createAdapter(mongoCollection, {
-            addCreatedAtField: true
-          }));
-          
+
+          const mongoCollection = mongoClient.db('mydb').collection('socket.io-adapter-events');
+
+          io.server.adapter(
+            createAdapter(mongoCollection, {
+              addCreatedAtField: true,
+            })
+          );
+
           strapi.log.info('[io] ✅ MongoDB adapter initialized');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 });
 ```
 
@@ -4483,33 +4405,32 @@ module.exports = {
           io.server.use(async (socket, next) => {
             try {
               const token = socket.handshake.auth.token;
-              
+
               if (!token) {
                 return next(new Error('Authentication required'));
               }
-              
+
               // Verify JWT token
-              const user = await strapi.plugins['users-permissions']
-                .services.jwt.verify(token);
-              
+              const user = await strapi.plugins['users-permissions'].services.jwt.verify(token);
+
               if (!user) {
                 return next(new Error('Invalid token'));
               }
-              
+
               // Attach user to socket
               socket.data.user = user;
-              
+
               next();
             } catch (error) {
               next(new Error('Authentication failed'));
             }
           });
-          
+
           strapi.log.info('[io] Authentication middleware registered');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -4525,10 +4446,10 @@ hooks: {
         userAgent: socket.handshake.headers['user-agent'],
         timestamp: new Date().toISOString()
       });
-      
+
       // Add connection timestamp
       socket.data.connectedAt = Date.now();
-      
+
       next();
     });
   }
@@ -4545,15 +4466,15 @@ hooks: {
       '::1',
       '192.168.1.0/24'
     ];
-    
+
     io.server.use((socket, next) => {
       const clientIP = socket.handshake.address;
-      
+
       if (!isIPAllowed(clientIP, allowedIPs)) {
         strapi.log.warn(`[io] Blocked connection from ${clientIP}`);
         return next(new Error('IP not whitelisted'));
       }
-      
+
       next();
     });
   }
@@ -4578,7 +4499,7 @@ hooks: {
         });
       }
     }));
-    
+
     strapi.log.info('[io] Rate limiting enabled');
   }
 }
@@ -4595,40 +4516,40 @@ hooks: {
   init({ strapi, io }) {
     // Admin namespace
     const adminNamespace = io.server.of('/admin');
-    
+
     adminNamespace.use(async (socket, next) => {
       // Admin-only authentication
       const token = socket.handshake.auth.token;
       const user = await verifyAdminToken(token);
-      
+
       if (!user || user.role.type !== 'admin') {
         return next(new Error('Admin access required'));
       }
-      
+
       socket.data.user = user;
       next();
     });
-    
+
     adminNamespace.on('connection', (socket) => {
       strapi.log.info(`[io] Admin connected: ${socket.data.user.username}`);
-      
+
       socket.on('broadcast', (data) => {
         // Broadcast to all users
         io.server.emit('admin:announcement', data);
       });
     });
-    
+
     // Chat namespace
     const chatNamespace = io.server.of('/chat');
-    
+
     chatNamespace.on('connection', (socket) => {
       strapi.log.info('[io] Chat user connected');
-      
+
       socket.on('message', (data) => {
         chatNamespace.emit('message', data);
       });
     });
-    
+
     strapi.log.info('[io] Namespaces configured: /admin, /chat');
   }
 }
@@ -4639,12 +4560,12 @@ hooks: {
 ```javascript
 // Connect to admin namespace
 const adminSocket = io('http://localhost:1337/admin', {
-  auth: { token: adminToken }
+  auth: { token: adminToken },
 });
 
 // Connect to chat namespace
 const chatSocket = io('http://localhost:1337/chat', {
-  auth: { token: userToken }
+  auth: { token: userToken },
 });
 ```
 
@@ -4658,7 +4579,7 @@ const chatSocket = io('http://localhost:1337/chat', {
 hooks: {
   init({ strapi, io }) {
     const connections = new Map();
-    
+
     io.server.on('connection', (socket) => {
       const connectionInfo = {
         socketId: socket.id,
@@ -4667,20 +4588,20 @@ hooks: {
         connectedAt: new Date(),
         userId: socket.data.user?.id
       };
-      
+
       connections.set(socket.id, connectionInfo);
-      
+
       // Log to database
       strapi.entityService.create('api::connection-log.connection-log', {
         data: connectionInfo
       });
-      
+
       socket.on('disconnect', () => {
         const info = connections.get(socket.id);
         const duration = Date.now() - info.connectedAt.getTime();
-        
+
         strapi.log.info(`[io] Session ended: ${socket.id} (${duration}ms)`);
-        
+
         // Update log
         strapi.entityService.update('api::connection-log.connection-log', {
           where: { socketId: socket.id },
@@ -4689,11 +4610,11 @@ hooks: {
             duration
           }
         });
-        
+
         connections.delete(socket.id);
       });
     });
-    
+
     // Periodic stats logging
     setInterval(() => {
       strapi.log.info(`[io] Active connections: ${connections.size}`);
@@ -4708,30 +4629,30 @@ hooks: {
 hooks: {
   init({ strapi, io }) {
     const eventStats = new Map();
-    
+
     // Intercept all events
     io.server.use((socket, next) => {
       socket.use((packet, next) => {
         const [eventName] = packet;
-        
+
         // Track event
         const count = eventStats.get(eventName) || 0;
         eventStats.set(eventName, count + 1);
-        
+
         next();
       });
-      
+
       next();
     });
-    
+
     // Report stats every 5 minutes
     setInterval(() => {
       const stats = Array.from(eventStats.entries())
         .map(([event, count]) => ({ event, count }))
         .sort((a, b) => b.count - a.count);
-      
+
       strapi.log.info('[io] Event statistics:', stats);
-      
+
       // Reset stats
       eventStats.clear();
     }, 300000);
@@ -4750,26 +4671,26 @@ hooks: {
   init({ strapi, io }) {
     io.server.on('connection', async (socket) => {
       if (!socket.data.user) return;
-      
+
       const user = socket.data.user;
-      
+
       // Join user-specific room
       socket.join(`user-${user.id}`);
-      
+
       // Join role-based room
       socket.join(`role-${user.role.type}`);
-      
+
       // Join premium room
       if (user.isPremium) {
         socket.join('premium');
       }
-      
+
       // Join location-based rooms
       if (user.country) {
         socket.join(`country-${user.country}`);
       }
-      
-      strapi.log.info(`[io] User ${user.username} joined rooms:`, 
+
+      strapi.log.info(`[io] User ${user.username} joined rooms:`,
         Array.from(socket.rooms)
       );
     });
@@ -4788,25 +4709,25 @@ hooks: {
   init({ strapi, io }) {
     const shutdown = async (signal) => {
       strapi.log.info(`[io] Received ${signal}, closing connections...`);
-      
+
       // Notify all clients
       io.server.emit('server:shutdown', {
         message: 'Server is restarting',
         reconnectIn: 5000
       });
-      
+
       // Wait for messages to be sent
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Close all connections
       const sockets = await io.server.fetchSockets();
       sockets.forEach(socket => {
         socket.disconnect(true);
       });
-      
+
       strapi.log.info(`[io] Closed ${sockets.length} connections`);
     };
-    
+
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   }
@@ -4830,34 +4751,34 @@ hooks: {
             'api::channel.channel',
             channelId
           );
-          
+
           if (!channel) {
             socket.emit('error', { message: 'Channel not found' });
             return;
           }
-          
+
           // Check password if private
           if (channel.isPrivate && channel.password !== password) {
             socket.emit('error', { message: 'Invalid password' });
             return;
           }
-          
+
           // Check member limit
           const roomSize = (await io.server.in(`channel-${channelId}`).fetchSockets()).length;
           if (channel.maxMembers && roomSize >= channel.maxMembers) {
             socket.emit('error', { message: 'Channel is full' });
             return;
           }
-          
+
           // Join room
           socket.join(`channel-${channelId}`);
-          
+
           // Notify others
           socket.to(`channel-${channelId}`).emit('user:joined', {
             userId: socket.data.user?.id,
             username: socket.data.user?.username
           });
-          
+
           socket.emit('channel:joined', {
             channelId,
             members: roomSize + 1
@@ -4883,23 +4804,23 @@ hooks: {
   init({ strapi, io }) {
     // Add custom helper
     io.kickUser = async (userId, reason) => {
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      const userSocket = stats.sockets.find(s => s.user?.id === userId);
-      
+      const sockets = await strapi.$io.server.fetchSockets();
+      const userSocket = sockets.find((s) => s.data.user?.id === userId);
+
       if (userSocket) {
         io.server.to(userSocket.id).emit('kicked', { reason });
         io.disconnectSocket(userSocket.id, reason);
         return true;
       }
-      
+
       return false;
     };
-    
+
     // Add broadcast to role
     io.broadcastToRole = (roleName, event, data) => {
       io.server.to(`role-${roleName}`).emit(event, data);
     };
-    
+
     strapi.log.info('[io] Custom helpers registered');
   }
 }
@@ -4914,7 +4835,7 @@ await strapi.$io.kickUser(123, 'Violation of terms');
 // Broadcast to all admins
 strapi.$io.broadcastToRole('admin', 'system:alert', {
   level: 'critical',
-  message: 'Database backup required'
+  message: 'Database backup required',
 });
 ```
 
@@ -4929,17 +4850,17 @@ describe('Socket.IO Hooks', () => {
     const adapter = strapi.$io.server.adapter;
     expect(adapter.constructor.name).toBe('RedisAdapter');
   });
-  
+
   test('should have custom helpers', () => {
     expect(typeof strapi.$io.kickUser).toBe('function');
     expect(typeof strapi.$io.broadcastToRole).toBe('function');
   });
-  
+
   test('should auto-join user room', (done) => {
     const socket = io('http://localhost:1337', {
-      auth: { token: userToken }
+      auth: { token: userToken },
     });
-    
+
     socket.on('connect', () => {
       // Verify user joined their room
       socket.emit('get-rooms', (rooms) => {
@@ -4995,9 +4916,11 @@ Discover other powerful Strapi v5 plugins by [@Schero94](https://github.com/Sche
 **Enterprise-grade multi-account email management**
 
 ### Why You'll Love It
+
 Transform your email sending experience with enterprise-grade features. Magic-Mail handles everything from OAuth 2.0 authentication to intelligent routing across multiple providers.
 
 ### Key Highlights
+
 - ✅ **Multi-Provider Support**: Gmail OAuth, Microsoft 365, Yahoo, SMTP, SendGrid, Mailgun
 - ✅ **Smart Routing**: Automatic provider selection based on rules
 - ✅ **OAuth 2.0**: No more app passwords or security risks
@@ -5007,6 +4930,7 @@ Transform your email sending experience with enterprise-grade features. Magic-Ma
 - ✅ **Analytics**: Track delivery status and performance
 
 ### Perfect For
+
 - Transactional emails (confirmations, password resets)
 - Marketing campaigns
 - Multi-tenant applications
@@ -5014,6 +4938,7 @@ Transform your email sending experience with enterprise-grade features. Magic-Ma
 - Teams needing multiple email accounts
 
 ### Get Started
+
 🔗 **[View on GitHub](https://github.com/Schero94/Magic-Mail)**  
 📦 **[Install via NPM](https://www.npmjs.com/package/strapi-plugin-magic-mail-v5)**  
 🌐 **[Live Demo](https://store.magicdx.dev)**
@@ -5025,9 +4950,11 @@ Transform your email sending experience with enterprise-grade features. Magic-Ma
 **Advanced session management and user tracking**
 
 ### Why You'll Love It
+
 Get complete visibility into your user sessions and connections. Perfect for monitoring Socket.IO activity, detecting anomalies, and understanding user behavior.
 
 ### Key Highlights
+
 - ✅ **Real-Time Tracking**: See active sessions as they happen
 - ✅ **Socket.IO Integration**: Monitor WebSocket connections
 - ✅ **IP-Based Analytics**: Track locations and detect suspicious activity
@@ -5037,6 +4964,7 @@ Get complete visibility into your user sessions and connections. Perfect for mon
 - ✅ **Performance Metrics**: Session duration, frequency, patterns
 
 ### Perfect For
+
 - Security monitoring and auditing
 - User activity analytics
 - Concurrent session management
@@ -5044,6 +4972,7 @@ Get complete visibility into your user sessions and connections. Perfect for mon
 - Compliance requirements
 
 ### Get Started
+
 🔗 **[View on GitHub](https://github.com/Schero94/Magic-Sessionmanager)**  
 📦 **NPM Package Coming Soon**
 
@@ -5054,9 +4983,11 @@ Get complete visibility into your user sessions and connections. Perfect for mon
 **Powerful bookmark and link management**
 
 ### Why You'll Love It
+
 Organize, share, and sync bookmarks across your team in real-time. Built with developers in mind, featuring a complete REST API and Socket.IO integration.
 
 ### Key Highlights
+
 - ✅ **Smart Organization**: Tags, categories, collections
 - ✅ **Team Collaboration**: Share with team or make public
 - ✅ **Real-Time Sync**: Instant updates via Socket.IO
@@ -5066,6 +4997,7 @@ Organize, share, and sync bookmarks across your team in real-time. Built with de
 - ✅ **Rich Metadata**: Automatic title, description extraction
 
 ### Perfect For
+
 - Team knowledge bases
 - Research organization
 - Content curation platforms
@@ -5073,6 +5005,7 @@ Organize, share, and sync bookmarks across your team in real-time. Built with de
 - Developer tool collections
 
 ### Get Started
+
 🔗 **[View on GitHub](https://github.com/Schero94/Magicmark)**  
 📦 **NPM Package Coming Soon**
 
@@ -5081,6 +5014,7 @@ Organize, share, and sync bookmarks across your team in real-time. Built with de
 ## Why These Plugins?
 
 All plugins are:
+
 - ✅ **Strapi v5 Native** - Built specifically for the latest Strapi
 - ✅ **Production Ready** - Battle-tested in real applications
 - ✅ **Well Documented** - Comprehensive guides and examples
@@ -5092,13 +5026,13 @@ All plugins are:
 
 ## Plugin Comparison
 
-| Feature | Socket.IO | Magic-Mail | Sessionmanager | Magicmark |
-|---------|-----------|------------|----------------|-----------|
-| **Real-Time** | ✅ Core | - | ✅ Yes | ✅ Yes |
-| **Admin UI** | ✅ Full | ✅ Full | ✅ Dashboard | ✅ Manager |
-| **REST API** | - | ✅ Yes | ✅ Yes | ✅ Full |
-| **OAuth Support** | JWT | ✅ OAuth 2.0 | - | - |
-| **Analytics** | ✅ Stats | ✅ Delivery | ✅ Sessions | ✅ Usage |
+| Feature           | Socket.IO | Magic-Mail   | Sessionmanager | Magicmark  |
+| ----------------- | --------- | ------------ | -------------- | ---------- |
+| **Real-Time**     | ✅ Core   | -            | ✅ Yes         | ✅ Yes     |
+| **Admin UI**      | ✅ Full   | ✅ Full      | ✅ Dashboard   | ✅ Manager |
+| **REST API**      | -         | ✅ Yes       | ✅ Yes         | ✅ Full    |
+| **OAuth Support** | JWT       | ✅ OAuth 2.0 | -              | -          |
+| **Analytics**     | ✅ Stats  | ✅ Delivery  | ✅ Sessions    | ✅ Usage   |
 
 ---
 
