@@ -2,15 +2,19 @@
   "$schema": "https://json.schemastore.org/package",
   "name": "@strapi-community/plugin-io",
   "version": "5.8.3",
-  "description": "Socket.IO plugin for Strapi 5: real-time content events with Strapi permissions, admin presence and monitoring.",
+  "description": "Socket.IO for Strapi 5: sends content changes to connected clients in real time, filtered by role and API token permissions, with live presence and monitoring in the admin panel.",
   "keywords": [
     "strapi",
     "strapi-plugin",
-    "plugin",
-    "strapi plugin",
-    "socket",
-    "socket io",
-    "io"
+    "strapi-v5",
+    "strapi5",
+    "socket.io",
+    "socketio",
+    "websocket",
+    "realtime",
+    "real-time",
+    "events",
+    "presence"
   ],
   "type": "commonjs",
   "exports": {
@@ -116,17 +120,26 @@
     "@socket.io/redis-adapter": {
       "optional": true
     },
+    "@strapi/design-system": {
+      "optional": true
+    },
+    "@strapi/icons": {
+      "optional": true
+    },
     "ioredis": {
       "optional": true
     },
     "pg": {
+      "optional": true
+    },
+    "react-intl": {
       "optional": true
     }
   },
   "strapi": {
     "name": "io",
     "displayName": "IO",
-    "description": "Socket.IO plugin for Strapi 5: real-time content events with Strapi permissions, admin presence and monitoring.",
+    "description": "Socket.IO for Strapi 5: sends content changes to connected clients in real time, filtered by role and API token permissions, with live presence and monitoring in the admin panel.",
     "kind": "plugin"
   },
   "engines": {
@@ -150,7 +163,7 @@
   "homepage": "https://strapi-community.github.io/plugin-io/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/strapi-community/plugin-io.git"
+    "url": "git+https://github.com/strapi-community/plugin-io.git"
   },
   "bugs": {
     "url": "https://github.com/strapi-community/plugin-io/issues"

@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -18,11 +19,47 @@ test('runtime dependencies are declared, so @strapi/utils stays external (#F-08)
 test('engines and peers match Strapi 5.61', () => {
   assert.equal(pkg.engines.node, '^22.21.0 || >=24.9.0 <=26.x.x');
   assert.equal(pkg.peerDependencies['@strapi/design-system'], '^2.2.0');
-  assert.equal(pkg.peerDependenciesMeta['@strapi/design-system'], undefined, 'DS and icons are required peers');
-  assert.equal(pkg.peerDependenciesMeta['@strapi/icons'], undefined);
+  // Strapi apps get these through @strapi/admin (exact versions), so they
+  // are optional peers: no install warning, and no second copy is added.
+  for (const name of ['@strapi/design-system', '@strapi/icons', 'react-intl']) {
+    assert.ok(pkg.peerDependencies[name], `${name} is a declared peer`);
+    assert.equal(pkg.peerDependenciesMeta[name]?.optional, true, `${name} is optional (comes with @strapi/admin)`);
+    assert.equal(pkg.dependencies[name], undefined, `${name} is never bundled as a dependency`);
+  }
+  // Every Strapi app lists these itself (create-strapi-app template), so they stay required.
+  for (const name of ['@strapi/strapi', 'react', 'react-dom', 'react-router-dom', 'styled-components']) {
+    assert.ok(pkg.peerDependencies[name], `${name} is a declared peer`);
+    assert.equal(pkg.peerDependenciesMeta[name], undefined, `${name} is a required peer`);
+  }
   for (const name of ['@socket.io/postgres-adapter', '@socket.io/redis-adapter', 'ioredis', 'pg']) {
     assert.ok(pkg.peerDependencies[name], `${name} is a declared peer`);
     assert.equal(pkg.peerDependenciesMeta[name]?.optional, true, `${name} is optional (multi-instance adapters only)`);
+  }
+});
+
+test('package metadata is complete and points at the docs site', () => {
+  assert.match(pkg.description, /^Socket\.IO for Strapi 5: /);
+  assert.equal(pkg.strapi.description, pkg.description);
+  assert.doesNotMatch(pkg.description, /\b(blazing|ultimate|powerful|seamless|best|enterprise)\b/i, 'no hype');
+  assert.equal(pkg.homepage, 'https://strapi-community.github.io/plugin-io/');
+  assert.deepEqual(pkg.repository, { type: 'git', url: 'git+https://github.com/strapi-community/plugin-io.git' });
+  assert.equal(pkg.bugs.url, 'https://github.com/strapi-community/plugin-io/issues');
+  for (const k of ['strapi', 'strapi-plugin', 'strapi-v5', 'socket.io', 'websocket', 'realtime']) {
+    assert.ok(pkg.keywords.includes(k), `keyword ${k}`);
+  }
+  assert.equal(new Set(pkg.keywords).size, pkg.keywords.length, 'no duplicate keywords');
+  assert.equal(pkg.author.url, 'https://github.com/ComfortablyCoding');
+  assert.equal(existsSync(join(rootDir, 'api-reference.json')), false, 'stale root api-reference.json is gone');
+});
+
+test('npm pkg fix has nothing to change', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'io-pkg-fix-'));
+  try {
+    cpSync(join(rootDir, 'package.json'), join(dir, 'package.json'));
+    execFileSync('npm', ['pkg', 'fix'], { cwd: dir, stdio: 'ignore' });
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')), pkg);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
