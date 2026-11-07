@@ -1,586 +1,265 @@
-# Events Examples
-
-Learn how to register and handle custom Socket.IO events in your Strapi application.
-
+---
+description: Handle your own Socket.IO events in Strapi with config.events. Check who the client is with socket.data.kind, validate input and write with Strapi's APIs.
 ---
 
-## Overview
+# Custom events
 
-The `events` configuration registers [server-side Socket.IO events](https://socket.io/docs/v4/server-api/#events) that clients can emit and your server can handle.
+`config.events` registers handlers for events your clients send. The plugin
+authenticates the socket first, so every handler can check who is talking.
 
----
-
-## Built-in Events
-
-### Connection Event
-
-Automatically triggered whenever a client connects:
-
-```javascript
-module.exports = ({ env }) => ({
+```js
+// config/plugins.js
+module.exports = {
   io: {
     enabled: true,
     config: {
+      contentTypes: ['api::article.article'],
+      events: [
+        { name: 'connection', handler: ({ strapi }, socket) => strapi.log.debug(`[io] ${socket.id} connected`) },
+        { name: 'ping', handler: (_ctx, socket) => socket.emit('pong', { at: Date.now() }) },
+      ],
+    },
+  },
+};
+```
+
+## Handler signature
+
+```ts
+handler(context: { strapi; io }, socket, ...args): void | Promise<void>
+```
+
+| Argument  | What it is                                                                                         |
+| --------- | -------------------------------------------------------------------------------------------------- |
+| `strapi`  | The Strapi instance.                                                                               |
+| `io`      | The plugin wrapper (`strapi.$io`). `io.server` is the Socket.IO `Server`.                          |
+| `socket`  | The client's Socket.IO socket.                                                                     |
+| `...args` | What the client sent. When the client passes an acknowledgement callback, it is the last argument. |
+
+- The name `connection` runs once for every new socket, with no extra arguments.
+- Any other name, including `disconnect`, is registered with `socket.on(name)`.
+- Errors thrown in a handler are caught and logged as `[io] Handler for "<name>" failed`. The socket stays connected.
+- When _Limit client events_ is on (Settings > Socket.IO), each client may send at most the configured number of events per second.
+
+## Who is the client? (`socket.data`)
+
+Always check `socket.data.kind` before you use an id. A Users & Permissions
+user and an admin can have the same numeric id.
+
+| `kind`   | Set by                                      | Keys you can use                                                        |
+| -------- | ------------------------------------------- | ----------------------------------------------------------------------- |
+| `public` | No token (while authentication is optional) | `socket.data.role` (the Public role)                                    |
+| `user`   | Users & Permissions JWT                     | `socket.data.user.id`, `socket.data.user.role`, `socket.data.expiresAt` |
+| `token`  | Content API token                           | `socket.data.token.id`, `socket.data.token.type`                        |
+| `admin`  | The Content Manager presence panel          | `socket.data.admin.id`, `.firstname`, `.lastname`                       |
+
+Admin presence sockets do **not** run your handlers unless the event sets
+`admin: true`:
+
+```js
+{ name: 'admin-note', admin: true, handler: ({ strapi }, socket) => strapi.log.info(`Admin ${socket.data.admin.id}`) }
+```
+
+The plugin's own rooms are `io-role-<role type>`, `io-token-<token id>`,
+`io-admin-<admin id>` and `presence:<uid>:<documentId>`.
+`strapi.$io.joinRoom()` refuses them, so a client never ends up in a room it is
+not entitled to.
+
+## Update the signed-in user
+
+Accept the event from Users & Permissions users only, validate the payload,
+and update the row by id.
+
+```js
+{
+  name: 'profile:rename',
+  async handler({ strapi }, socket, payload, ack) {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    if (socket.data.kind !== 'user') return reply({ ok: false, error: 'Sign in first' });
+
+    const username = typeof payload?.username === 'string' ? payload.username.trim() : '';
+    if (username.length < 3 || username.length > 30) {
+      return reply({ ok: false, error: 'Use 3 to 30 characters' });
+    }
+
+    await strapi.db
+      .query('plugin::users-permissions.user')
+      .update({ where: { id: socket.data.user.id }, data: { username } });
+    reply({ ok: true });
+  },
+}
+```
+
+Client:
+
+```js
+socket.emit('profile:rename', { username: 'ada' }, (result) => console.log(result));
+```
+
+`strapi.db.query()` skips Document Service middlewares, so this write does not
+emit a content event. Use `strapi.documents()` when you want the plugin to
+send one.
+
+## Chat with rooms
+
+Clients join a chat room only after the server checked access. Messages are
+saved with the Document Service and sent to the room.
+
+```js
+const ROOM_ID = /^[a-z0-9-]{1,40}$/;
+
+module.exports = {
+  io: {
+    enabled: true,
+    config: {
+      contentTypes: [],
+      events: [
+        {
+          name: 'chat:join',
+          async handler({ strapi }, socket, roomId, ack) {
+            const reply = typeof ack === 'function' ? ack : () => {};
+            if (socket.data.kind !== 'user' || typeof roomId !== 'string' || !ROOM_ID.test(roomId)) {
+              return reply({ ok: false });
+            }
+            const member = await strapi.documents('api::chat-member.chat-member').findFirst({
+              filters: { room: { slug: roomId }, user: { id: socket.data.user.id } },
+              fields: ['documentId'],
+            });
+            if (!member) return reply({ ok: false });
+            socket.join(`chat:${roomId}`);
+            reply({ ok: true });
+          },
+        },
+        {
+          name: 'chat:message',
+          async handler({ strapi }, socket, input) {
+            const roomId = input?.roomId;
+            const text = typeof input?.text === 'string' ? input.text.trim().slice(0, 2000) : '';
+            if (socket.data.kind !== 'user' || !text || !socket.rooms.has(`chat:${roomId}`)) return;
+
+            const message = await strapi.documents('api::message.message').create({
+              data: { text, roomSlug: roomId, author: socket.data.user.id },
+              fields: ['documentId', 'text', 'createdAt'],
+            });
+            socket.to(`chat:${roomId}`).emit('chat:message', { ...message, authorId: socket.data.user.id });
+          },
+        },
+      ],
+    },
+  },
+};
+```
+
+`socket.rooms.has()` makes sure a client only posts to a room it joined through
+`chat:join`.
+
+## Typing indicator
+
+Typing events are short-lived, so they are not stored. Throttle them on the
+client, for example to one event every two seconds.
+
+```js
+{
+  name: 'chat:typing',
+  handler(_ctx, socket, input) {
+    const room = `chat:${input?.roomId}`;
+    if (socket.data.kind !== 'user' || !socket.rooms.has(room)) return;
+    socket.to(room).emit('chat:typing', { roomId: input.roomId, userId: socket.data.user.id });
+  },
+}
+```
+
+## Online status
+
+Keep online state in memory (or in Redis when you run several instances)
+instead of writing to the database on every connect and disconnect.
+
+```js
+const online = new Map(); // user id -> number of open sockets
+
+module.exports = {
+  io: {
+    enabled: true,
+    config: {
+      contentTypes: [],
       events: [
         {
           name: 'connection',
-          handler({ strapi, io }, socket) {
-            strapi.log.info(`[io] Client connected: ${socket.id}`);
-            
-            // Access user info (if authenticated)
-            if (socket.data.user) {
-              strapi.log.info(`User: ${socket.data.user.username}`);
-            }
-            
-            // Send welcome message
-            socket.emit('welcome', {
-              message: 'Connected to Strapi!',
-              serverTime: Date.now()
-            });
-          }
-        }
-      ]
-    }
-  }
-});
-```
-
-### Disconnect Event
-
-Triggered when a client disconnects:
-
-```javascript
-events: [
-  {
-    name: 'disconnect',
-    handler({ strapi }, socket, reason) {
-      strapi.log.info(`[io] Client ${socket.id} disconnected: ${reason}`);
-      
-      // Update user status
-      if (socket.data.user) {
-        strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.user.id,
-          { data: { isOnline: false, lastSeen: new Date() } }
-        );
-      }
-    }
-  }
-]
-```
-
----
-
-## Custom Events
-
-### Simple Custom Event
-
-```javascript
-events: [
-  {
-    name: 'ping',
-    handler({ strapi }, socket) {
-      strapi.log.info(`[io] Ping from ${socket.id}`);
-      socket.emit('pong', { timestamp: Date.now() });
-    }
-  }
-]
-```
-
-**Client:**
-
-```javascript
-socket.emit('ping');
-
-socket.on('pong', (data) => {
-  console.log('Server responded at:', data.timestamp);
-});
-```
-
-### Event with Parameters
-
-```javascript
-events: [
-  {
-    name: 'update-user-name',
-    async handler({ strapi }, socket, newName) {
-      if (!socket.data.user) {
-        socket.emit('error', { message: 'Not authenticated' });
-        return;
-      }
-      
-      try {
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.user.id,
-          { data: { username: newName } }
-        );
-        
-        socket.emit('name-updated', { success: true, newName });
-      } catch (error) {
-        socket.emit('error', { message: error.message });
-      }
-    }
-  }
-]
-```
-
-**Client:**
-
-```javascript
-socket.emit('update-user-name', 'john_doe');
-
-socket.on('name-updated', ({ success, newName }) => {
-  if (success) {
-    console.log('Name updated to:', newName);
-  }
-});
-```
-
----
-
-## Real-World Examples
-
-### Chat Messages
-
-```javascript
-events: [
-  {
-    name: 'chat:send',
-    async handler({ strapi, io }, socket, { roomId, message }) {
-      // Validate
-      if (!message || !roomId) {
-        socket.emit('error', { message: 'Missing required fields' });
-        return;
-      }
-      
-      if (message.length > 500) {
-        socket.emit('error', { message: 'Message too long' });
-        return;
-      }
-      
-      // Save to database
-      const chatMessage = await strapi.entityService.create(
-        'api::message.message',
-        {
-          data: {
-            content: message,
-            room: roomId,
-            author: socket.data.user.id,
-            publishedAt: new Date()
+          handler({ io }, socket) {
+            if (socket.data.kind !== 'user') return;
+            const id = socket.data.user.id;
+            online.set(id, (online.get(id) ?? 0) + 1);
+            if (online.get(id) === 1) io.server.to('io-role-authenticated').emit('user:online', { id });
           },
-          populate: ['author']
-        }
-      );
-      
-      // Broadcast to room
-      io.server.to(`room-${roomId}`).emit('chat:message', {
-        id: chatMessage.id,
-        content: message,
-        author: {
-          id: socket.data.user.id,
-          username: socket.data.user.username,
-          avatar: socket.data.user.avatar?.url
         },
-        timestamp: Date.now()
-      });
-    }
-  }
-]
-```
-
-**Client:**
-
-```javascript
-// Send message
-socket.emit('chat:send', {
-  roomId: '123',
-  message: 'Hello everyone!'
-});
-
-// Receive messages
-socket.on('chat:message', (message) => {
-  displayMessage(message);
-});
-```
-
-### Typing Indicators
-
-```javascript
-events: [
-  {
-    name: 'typing:start',
-    handler({ strapi, io }, socket, { roomId }) {
-      if (!socket.data.user) return;
-      
-      // Broadcast to others in room
-      socket.to(`room-${roomId}`).emit('user:typing', {
-        userId: socket.data.user.id,
-        username: socket.data.user.username,
-        roomId
-      });
-    }
-  },
-  {
-    name: 'typing:stop',
-    handler({ strapi, io }, socket, { roomId }) {
-      if (!socket.data.user) return;
-      
-      socket.to(`room-${roomId}`).emit('user:stopped-typing', {
-        userId: socket.data.user.id,
-        roomId
-      });
-    }
-  }
-]
-```
-
-**Client:**
-
-```javascript
-let typingTimeout;
-
-messageInput.addEventListener('input', () => {
-  socket.emit('typing:start', { roomId: currentRoom });
-  
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => {
-    socket.emit('typing:stop', { roomId: currentRoom });
-  }, 1000);
-});
-
-socket.on('user:typing', ({ username }) => {
-  showTypingIndicator(username);
-});
-
-socket.on('user:stopped-typing', ({ userId }) => {
-  hideTypingIndicator(userId);
-});
-```
-
-### Room Management
-
-```javascript
-events: [
-  {
-    name: 'room:join',
-    async handler({ strapi, io }, socket, { roomId }) {
-      if (!socket.data.user) {
-        socket.emit('error', { message: 'Authentication required' });
-        return;
-      }
-      
-      // Check permission
-      const hasAccess = await checkRoomAccess(socket.data.user.id, roomId);
-      if (!hasAccess) {
-        socket.emit('error', { message: 'Access denied' });
-        return;
-      }
-      
-      // Join room
-      socket.join(`room-${roomId}`);
-      
-      // Notify others
-      socket.to(`room-${roomId}`).emit('user:joined', {
-        userId: socket.data.user.id,
-        username: socket.data.user.username,
-        avatar: socket.data.user.avatar?.url
-      });
-      
-      // Send room history
-      const messages = await strapi.entityService.findMany(
-        'api::message.message',
         {
-          filters: { room: roomId },
-          sort: { createdAt: 'desc' },
-          limit: 50,
-          populate: ['author']
-        }
-      );
-      
-      socket.emit('room:history', { messages });
-      socket.emit('room:joined', { roomId, success: true });
-    }
-  },
-  {
-    name: 'room:leave',
-    handler({ strapi, io }, socket, { roomId }) {
-      socket.leave(`room-${roomId}`);
-      
-      socket.to(`room-${roomId}`).emit('user:left', {
-        userId: socket.data.user?.id,
-        username: socket.data.user?.username
-      });
-      
-      socket.emit('room:left', { roomId, success: true });
-    }
-  }
-]
-```
-
-### Private Messages
-
-```javascript
-events: [
-  {
-    name: 'dm:send',
-    async handler({ strapi, io }, socket, { toUserId, message }) {
-      if (!socket.data.user) return;
-      
-      // Save message
-      const dm = await strapi.entityService.create(
-        'api::direct-message.direct-message',
-        {
-          data: {
-            from: socket.data.user.id,
-            to: toUserId,
-            content: message,
-            publishedAt: new Date()
-          }
-        }
-      );
-      
-      // Find recipient's socket
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      const recipientSocket = stats.sockets.find(s => s.user?.id === toUserId);
-      
-      if (recipientSocket) {
-        io.server.to(recipientSocket.id).emit('dm:received', {
-          id: dm.id,
-          from: {
-            id: socket.data.user.id,
-            username: socket.data.user.username,
-            avatar: socket.data.user.avatar?.url
+          name: 'disconnect',
+          handler({ io }, socket) {
+            if (socket.data.kind !== 'user') return;
+            const id = socket.data.user.id;
+            const left = (online.get(id) ?? 1) - 1;
+            if (left > 0) return online.set(id, left);
+            online.delete(id);
+            io.server.to('io-role-authenticated').emit('user:offline', { id });
           },
-          content: message,
-          timestamp: Date.now()
-        });
-      }
-      
-      socket.emit('dm:sent', { success: true, messageId: dm.id });
-    }
-  }
-]
-```
-
-### Online Presence
-
-```javascript
-events: [
-  {
-    name: 'connection',
-    async handler({ strapi, io }, socket) {
-      if (!socket.data.user) return;
-      
-      // Mark user as online
-      await strapi.entityService.update(
-        'plugin::users-permissions.user',
-        socket.data.user.id,
-        { data: { isOnline: true, lastSeen: new Date() } }
-      );
-      
-      // Notify friends
-      const friends = await getFriendsList(socket.data.user.id);
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      
-      friends.forEach(friend => {
-        const friendSocket = stats.sockets.find(s => s.user?.id === friend.id);
-        if (friendSocket) {
-          io.server.to(friendSocket.id).emit('friend:online', {
-            userId: socket.data.user.id,
-            username: socket.data.user.username
-          });
-        }
-      });
-    }
+        },
+      ],
+    },
   },
-  {
-    name: 'disconnect',
-    async handler({ strapi, io }, socket) {
-      if (!socket.data.user) return;
-      
-      // Mark user as offline
-      await strapi.entityService.update(
-        'plugin::users-permissions.user',
-        socket.data.user.id,
-        { data: { isOnline: false, lastSeen: new Date() } }
-      );
-      
-      // Notify friends
-      const friends = await getFriendsList(socket.data.user.id);
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      
-      friends.forEach(friend => {
-        const friendSocket = stats.sockets.find(s => s.user?.id === friend.id);
-        if (friendSocket) {
-          io.server.to(friendSocket.id).emit('friend:offline', {
-            userId: socket.data.user.id,
-            username: socket.data.user.username
-          });
-        }
-      });
-    }
-  }
-]
+};
 ```
 
----
+## Validate input
 
-## Error Handling
+Treat every client payload as untrusted. A schema library keeps handlers short;
+the plugin itself uses [zod 4](https://zod.dev/):
 
-### Validate Input
+```js
+const { z } = require('zod');
 
-```javascript
-events: [
-  {
-    name: 'user:update',
-    async handler({ strapi }, socket, data) {
-      try {
-        // Validate
-        if (!data.field || !data.value) {
-          throw new Error('Missing required fields');
-        }
-        
-        // Sanitize
-        const allowedFields = ['username', 'bio', 'avatar'];
-        if (!allowedFields.includes(data.field)) {
-          throw new Error('Field not allowed');
-        }
-        
-        // Update
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.user.id,
-          { data: { [data.field]: data.value } }
-        );
-        
-        socket.emit('update:success', { field: data.field });
-      } catch (error) {
-        strapi.log.error('Update failed:', error);
-        socket.emit('update:error', { message: error.message });
-      }
-    }
-  }
-]
-```
+const Vote = z.object({ pollId: z.string().regex(/^[a-z0-9]{24}$/), option: z.number().int().min(0).max(9) });
 
-### Rate Limiting
-
-```javascript
-const rateLimiters = new Map();
-
-events: [
-  {
-    name: 'connection',
-    handler({ strapi }, socket) {
-      rateLimiters.set(socket.id, {
-        count: 0,
-        resetAt: Date.now() + 60000
-      });
-    }
+const vote = {
+  name: 'poll:vote',
+  async handler(_ctx, socket, input, ack) {
+    const reply = typeof ack === 'function' ? ack : () => {};
+    const parsed = Vote.safeParse(input);
+    if (socket.data.kind !== 'user' || !parsed.success) return reply({ ok: false });
+    // ...save parsed.data
+    reply({ ok: true });
   },
-  {
-    name: 'chat:send',
-    handler({ strapi, io }, socket, data) {
-      const limiter = rateLimiters.get(socket.id);
-      const now = Date.now();
-      
-      // Reset counter
-      if (now > limiter.resetAt) {
-        limiter.count = 0;
-        limiter.resetAt = now + 60000;
-      }
-      
-      limiter.count++;
-      
-      // Check limit
-      if (limiter.count > 20) {
-        socket.emit('error', {
-          message: 'Rate limit exceeded. Max 20 messages per minute.'
-        });
-        return;
-      }
-      
-      // Process message...
-    }
-  },
-  {
-    name: 'disconnect',
-    handler({ strapi }, socket) {
-      rateLimiters.delete(socket.id);
-    }
-  }
-]
+};
 ```
 
----
+Do not send error details or stack traces back to the client.
 
-## Testing
+## Test a handler
 
-```javascript
-// test/events.test.js
-const { io } = require('socket.io-client');
+Handlers are plain functions, so you can call them with a fake socket:
 
-describe('Custom Events', () => {
-  let socket;
-  
-  beforeAll((done) => {
-    socket = io('http://localhost:1337');
-    socket.on('connect', done);
-  });
-  
-  afterAll(() => {
-    socket.disconnect();
-  });
-  
-  test('should respond to ping', (done) => {
-    socket.emit('ping');
-    
-    socket.on('pong', (data) => {
-      expect(data).toHaveProperty('timestamp');
-      done();
-    });
-  });
-  
-  test('should handle chat message', (done) => {
-    socket.emit('chat:send', {
-      roomId: 'test',
-      message: 'Hello'
-    });
-    
-    socket.on('chat:message', (message) => {
-      expect(message.content).toBe('Hello');
-      done();
-    });
-  });
+```js
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const rename = require('../config/plugins.js')().io.config.events.find((e) => e.name === 'profile:rename');
+
+test('profile:rename refuses admin sockets', async () => {
+  let result;
+  const socket = { data: { kind: 'admin', admin: { id: 1 } } };
+  await rename.handler({ strapi: {} }, socket, { username: 'ada' }, (r) => (result = r));
+  assert.deepEqual(result, { ok: false, error: 'Sign in first' });
 });
 ```
 
----
+## Checklist
 
-## Best Practices
+- Check `socket.data.kind` before you use `socket.data.user`.
+- Validate the type and length of every payload field.
+- Use `strapi.documents()` (Document Service) for content. `strapi.entityService` is deprecated in Strapi 5.
+- Answer through the acknowledgement callback instead of throwing.
+- Keep high-frequency events (typing, cursors) out of the database.
 
-### ✅ Do
+## See also
 
-- Always validate and sanitize input
-- Use try-catch for async operations
-- Implement rate limiting
-- Log errors for debugging
-- Send meaningful error messages
-- Use TypeScript for type safety
-
-### ❌ Don't
-
-- Trust client input without validation
-- Expose sensitive data in events
-- Block the event loop with heavy operations
-- Forget to handle disconnections
-- Emit events to wrong rooms
-
----
-
-## See Also
-
-- **[Content Types](/examples/content-types)** - Automatic content events
-- **[Hooks](/examples/hooks)** - Lifecycle hooks
-- **[API Reference](/api/io-class)** - Core API methods
+- [Plugin configuration](/api/plugin-config): every option of `events` and `hooks`
+- [Hooks](/examples/hooks): adapters and middleware
+- [IO class](/api/io-class): the `strapi.$io` helpers

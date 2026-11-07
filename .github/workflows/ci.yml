@@ -1,0 +1,123 @@
+# Checks every pull request and push to a non-main branch: lint, formatting,
+# tests (including the multi-process suites on PostgreSQL 16), type check,
+# build and package verification on the Node versions Strapi 5.61 supports,
+# then the end-to-end suites against a scaffolded
+# Strapi 5.61 app with the packed plugin (scripts/e2e-app.mjs).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    # PostgreSQL for the multi-process suites (tests/cluster*.test.mjs): the
+    # shared tables and several plugin nodes with the real Postgres adapter.
+    # The image is pinned by the digest of its multi-arch index (tag
+    # 16.15-alpine, resolved 2026-11-07). Dependabot does not update service
+    # images in workflows, so CONTRIBUTING.md describes how to refresh it.
+    services:
+      postgres:
+        image: postgres:16.15-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+        env:
+          POSTGRES_USER: io
+          POSTGRES_PASSWORD: io-ci-only
+          POSTGRES_DB: io_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U io -d io_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      # Only the native SQLite binding runs its install script (store tests on SQLite).
+      - name: Build better-sqlite3
+        run: npm rebuild better-sqlite3
+      - name: Lint
+        run: npm run lint
+      - name: Format check
+        run: npm run format:check
+      - name: Build
+        run: npm run build
+      - name: Tests
+        run: npm test
+        env:
+          IO_TEST_PG_URL: postgres://io:io-ci-only@127.0.0.1:5432/io_test
+      - name: Type check (published types)
+        run: npm run test:types
+      - name: Verify package
+        run: npm run verify
+      - name: Package contents
+        run: npm pack --dry-run
+      - name: Production audit
+        run: npm audit --omit=dev --audit-level=high
+
+  e2e:
+    # Scaffolds a Strapi 5.61 app (SQLite, synthetic content types from
+    # tests/e2e/app), installs the packed plugin and runs tests/e2e: the
+    # Playwright admin suite and the socket/API suite. Secrets and admin
+    # passwords are generated per run and never printed. The app installs
+    # from tests/e2e/app/package-lock.json with lifecycle scripts off (only
+    # better-sqlite3 is rebuilt). On Node 24 the app also uses this repo's npm
+    # overrides, to prove Strapi runs with them.
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          # The app installs into the same npm cache, keyed on its lockfile too.
+          cache-dependency-path: |
+            package-lock.json
+            tests/e2e/app/package-lock.json
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      # Playwright advises against caching browsers; install Chromium only.
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Build
+        run: npm run build
+      - name: Scaffold the Strapi app and run tests/e2e
+        run: node scripts/e2e-app.mjs --dir "$RUNNER_TEMP/io-e2e-app" ${{ matrix.node == '24' && '--overrides' || '' }}
+      - name: Server log tail (on failure)
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/io-e2e-app/logs/server.log" || true

@@ -1,126 +1,63 @@
-import { isNil, isPlainObject } from 'lodash/fp';
+const isPlainObject = (value) =>
+	value !== null &&
+	typeof value === 'object' &&
+	(Object.getPrototypeOf(value) === Object.prototype || Object.getPrototypeOf(value) === null);
+const isNil = (value) => value === null || value === undefined;
+const isEntry = (value) => value === null || isPlainObject(value) || Array.isArray(value);
 
+/**
+ * Transform service: wraps entries in the `{ data: { id, attributes }, meta }`
+ * payload format this plugin has always emitted (kept for compatibility).
+ *
+ * @param {{ strapi: import('@strapi/types').Core.Strapi }} deps - Strapi instance.
+ * @returns {{ response: Function }} Transform service API.
+ */
 export default ({ strapi }) => {
+	function transformComponent(data, component) {
+		if (Array.isArray(data)) return data.map((datum) => transformComponent(datum, component));
+		const res = transformEntry(data, component);
+		if (isNil(res)) return res;
+		const { id, attributes } = res;
+		return { id, ...attributes };
+	}
+
+	function transformEntry(entry, type) {
+		if (isNil(entry)) return entry;
+		if (Array.isArray(entry)) return entry.map((single) => transformEntry(single, type));
+		if (!isPlainObject(entry)) return entry;
+
+		const { id, ...properties } = entry;
+		const attributes = {};
+		for (const [key, property] of Object.entries(properties)) {
+			const attribute = type?.attributes?.[key];
+			if (attribute?.type === 'relation' && isEntry(property) && 'target' in attribute) {
+				attributes[key] = { data: transformEntry(property, strapi.contentTypes[attribute.target]) };
+			} else if (attribute?.type === 'component' && isEntry(property)) {
+				attributes[key] = transformComponent(property, strapi.components[attribute.component]);
+			} else if (attribute?.type === 'dynamiczone' && Array.isArray(property)) {
+				attributes[key] = property.map((sub) => transformComponent(sub, strapi.components[sub?.__component]));
+			} else if (attribute?.type === 'media' && isEntry(property)) {
+				attributes[key] = { data: transformEntry(property, strapi.contentTypes['plugin::upload.file']) };
+			} else {
+				attributes[key] = property;
+			}
+		}
+		return { id, attributes };
+	}
+
 	/**
-	 * Transform query response data to API format.
+	 * Transforms a sanitized entry into the emitted payload.
 	 *
-	 * Resolves the full content-type definition from Strapi's registry
-	 * so `transformEntry` has access to `attributes` for each field.
-	 *
-	 * @param {object} param
-	 * @param {object} param.data - The raw entity data
-	 * @param {object} param.schema - Minimal schema with at least `uid`
-	 * @returns {{ data: object, meta: object }}
+	 * @param {object} param - Parameters.
+	 * @param {object} param.data - Sanitized entry.
+	 * @param {{ uid: string }} param.schema - Content type (at least `uid`).
+	 * @returns {{ data: object, meta: object } | null | undefined} Payload.
 	 */
 	function response({ data, schema }) {
-		const contentType = resolveContentType(schema);
-		return transformResponse(data, {}, { contentType });
+		if (isNil(data)) return data;
+		const contentType = schema?.attributes ? schema : strapi.contentTypes?.[schema?.uid];
+		return { data: transformEntry(data, contentType), meta: {} };
 	}
 
-	/**
-	 * Resolves a full Strapi content-type definition from a minimal schema
-	 * that may only contain `{ singularName, uid }`.
-	 *
-	 * @param {object} schema - At minimum `{ uid }` or a full content-type
-	 * @returns {object|undefined} Full content-type with `attributes`, or undefined
-	 */
-	function resolveContentType(schema) {
-		if (!schema) return undefined;
-
-		if (schema.attributes) return schema;
-
-		if (schema.uid) {
-			return strapi.contentTypes[schema.uid] || undefined;
-		}
-
-		return undefined;
-	}
-
-	return {
-		response,
-	};
+	return { response };
 };
-
-function isEntry(property) {
-	return property === null || isPlainObject(property) || Array.isArray(property);
-}
-
-function isDZEntries(property) {
-	return Array.isArray(property);
-}
-
-function transformResponse(resource, meta = {}, opts = {}) {
-	if (isNil(resource)) {
-		return resource;
-	}
-
-	return {
-		data: transformEntry(resource, opts?.contentType),
-		meta,
-	};
-}
-
-function transformComponent(data, component) {
-	if (Array.isArray(data)) {
-		return data.map((datum) => transformComponent(datum, component));
-	}
-
-	const res = transformEntry(data, component);
-
-	if (isNil(res)) {
-		return res;
-	}
-
-	const { id, attributes } = res;
-	return { id, ...attributes };
-}
-
-function transformEntry(entry, type) {
-	if (isNil(entry)) {
-		return entry;
-	}
-
-	if (Array.isArray(entry)) {
-		return entry.map((singleEntry) => transformEntry(singleEntry, type));
-	}
-
-	if (!isPlainObject(entry)) {
-		throw new Error('Entry must be an object');
-	}
-
-	const { id, ...properties } = entry;
-
-	const attributeValues = {};
-
-	for (const key of Object.keys(properties)) {
-		const property = properties[key];
-		const attribute = type?.attributes?.[key];
-
-		if (attribute && attribute.type === 'relation' && isEntry(property) && 'target' in attribute) {
-			const data = transformEntry(property, strapi.contentType(attribute.target));
-
-			attributeValues[key] = { data };
-		} else if (attribute && attribute.type === 'component' && isEntry(property)) {
-			attributeValues[key] = transformComponent(property, strapi.components[attribute.component]);
-		} else if (attribute && attribute.type === 'dynamiczone' && isDZEntries(property)) {
-			if (isNil(property)) {
-				attributeValues[key] = property;
-			}
-
-			attributeValues[key] = property.map((subProperty) => {
-				return transformComponent(subProperty, strapi.components[subProperty.__component]);
-			});
-		} else if (attribute && attribute.type === 'media' && isEntry(property)) {
-			const data = transformEntry(property, strapi.contentType('plugin::upload.file'));
-
-			attributeValues[key] = { data };
-		} else {
-			attributeValues[key] = property;
-		}
-	}
-
-	return {
-		id,
-		attributes: attributeValues,
-	};
-}

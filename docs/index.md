@@ -3,309 +3,115 @@ layout: home
 
 hero:
   name: 'Strapi Plugin IO'
-  text: 'Socket.IO Integration for Strapi v5'
-  tagline: 'Real-time WebSocket connections with authentication, monitoring, and advanced features'
+  text: 'Real-time Strapi 5, permission-aware'
+  tagline: 'Socket.IO events for your content, delivered only to the roles and API tokens that may read it. With admin settings, monitoring and live presence built from the Strapi Design System.'
   actions:
     - theme: brand
-      text: Get Started
+      text: Get started
       link: /guide/getting-started
     - theme: alt
-      text: View Examples
+      text: Examples
       link: /examples/
     - theme: alt
-      text: API Reference
-      link: /api/io-class
+      text: Upgrade from 5.x
+      link: /guide/migration
 
 features:
   - icon: ⚡
-    title: Real-Time Events
-    details: Automatic CRUD event broadcasting for all content types with role-based permissions
-  
+    title: Content events out of the box
+    details: create, update, publish, unpublish, discardDraft and delete, one event per locale, sent after the transaction commits.
   - icon: 🔐
-    title: Built-in Authentication
-    details: JWT and API Token authentication with automatic role-based access control
-  
+    title: Strapi's permissions decide
+    details: Each role and API token gets only types it may find, sanitized by Strapi's own Content API sanitizer. Sanitizing fails closed.
+  - icon: 🪪
+    title: JWT, API tokens, public
+    details: Legacy and refresh-mode JWTs, content API tokens and an optional public room. Sockets end when the token, session or role does.
+  - icon: 🛡️
+    title: Settings that are enforced
+    details: Allowed origins, connection cap, IP allow and block lists, per-client event limit, required authentication. Applied without a restart.
   - icon: 📊
-    title: Admin Dashboard
-    details: Visual configuration panel with live monitoring, connection stats, and event logs
-  
-  - icon: 🚀
-    title: Production Ready
-    details: Redis adapter support, rate limiting, IP whitelisting, and optimized for 2500+ concurrent connections
-  
-  - icon: 🎯
-    title: Developer Friendly
-    details: Full TypeScript support, 7 helper functions, comprehensive documentation
-  
-  - icon: 🔧
-    title: Highly Configurable
-    details: Namespaces, rooms, custom events, hooks, and flexible CORS settings
+    title: Monitoring and widgets
+    details: Connected clients, rooms, events per second, admins online, an event log and two native homepage widgets.
+  - icon: 👥
+    title: Live presence
+    details: See which admins have the same entry open in the Content Manager. No emails, Content Manager read permission required.
 ---
 
-## Quick Start
-
-Install the plugin:
+## Quick start
 
 ```bash
 npm install @strapi-community/plugin-io
 ```
 
-Enable in `config/plugins.js`:
-
-```javascript
+```js
+// config/plugins.js
 module.exports = {
-  'io': {
-    enabled: true,
-    config: {
-      contentTypes: ['api::article.article'],
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: 'http://localhost:3000',
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+  io: { enabled: true, config: { contentTypes: ['api::article.article'] } },
 };
 ```
 
-Connect from your frontend:
+Give the Public role **find** on Article, then:
 
-```javascript
+```js
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:1337', {
-  auth: {
-    strategy: 'jwt',
-    token: 'your-jwt-token'
-  }
-});
-
-socket.on('article:create', (data) => {
-  console.log('New article:', data);
-});
+const socket = io('http://localhost:1337');
+socket.on('article:publish', ({ data }) => console.log('Published:', data.attributes.title));
 ```
 
-## What's New in v5.0
+[Full getting started guide →](/guide/getting-started)
 
-**Strapi v5 Support** - Built for the latest Strapi version with full compatibility
+## Built like a native Strapi screen
 
-**Migration Made Easy** - [See migration guide](/guide/migration) - most projects migrate in under 1 hour!
+Settings and Monitoring live under _Settings > Socket.IO_ and follow the
+layout of Strapi's own settings pages: Save in the header, an unsaved-changes
+guard, inline validation, confirmation dialogs and RBAC-aware actions, in
+light and dark mode and five languages.
 
-**Admin Dashboard** - Visual configuration with live monitoring widget on home page
+![Settings > Socket.IO > Settings](/settings.png)
 
-**Advanced Security** - Rate limiting, IP whitelisting, enhanced authentication
+![Monitoring in dark mode](/monitoring-dark.png)
 
-**Performance Optimizations** - 90% reduction in DB queries, improved caching, parallel processing
+![Monitoring at 390 px width](/monitoring-mobile.png)
 
-**Enhanced API** - 7 helper functions for common tasks, improved TypeScript definitions
+The homepage gets two widgets through Strapi's Widget API, and the Content
+Manager edit view shows who else is editing.
 
-**Better Documentation** - Comprehensive guides, real-world examples, migration path
+![Socket.IO homepage widget](/widget.png)
 
-## Core Features
+![Live presence panel in the edit view](/presence.png)
 
-### 🎯 Automatic Content Type Events
+Screenshots come from a local test host with synthetic data.
 
-Enable any content type for real-time updates:
+## Who receives what
 
-```javascript
-// Backend: config/plugins.js
-contentTypes: [
-  'api::article.article',
-  'api::comment.comment',
-  {
-    uid: 'api::product.product',
-    actions: ['create', 'update']
-  }
-]
-```
+| Client                  | Joins                 | Receives                                                                  |
+| ----------------------- | --------------------- | ------------------------------------------------------------------------- |
+| No token                | `io-role-public`      | Types the Public role may `find` (unless authentication is required)      |
+| Users & Permissions JWT | `io-role-<role type>` | Types the user's role may `find`                                          |
+| Content API token       | `io-token-<id>`       | Read-only and full-access: all watched types; custom: types it may `find` |
+| Admin (presence panel)  | `io-admin-<id>`       | Presence only, never content events                                       |
 
-```javascript
-// Frontend: Automatic events
-socket.on('article:create', (article) => { /* ... */ });
-socket.on('article:update', (article) => { /* ... */ });
-socket.on('article:delete', (article) => { /* ... */ });
-```
+## Security and performance
 
-### 🔐 Role-Based Access Control
-
-Permissions are automatically enforced based on user roles:
-
-```javascript
-// Public users only receive events they have permission to see
-// Authenticated users receive events based on their role
-// API tokens work with their configured permissions
-```
-
-### 📊 Real-Time Monitoring
-
-View live statistics in your admin panel:
-- 🟢 Active connections
-- 💬 Active rooms
-- ⚡ Events per second
-- 📈 Total events processed
-
-### 🚀 Helper Functions
-
-Seven utility functions for common tasks:
-
-```javascript
-// Join/leave rooms
-strapi.$io.joinRoom(socketId, 'premium-users');
-strapi.$io.leaveRoom(socketId, 'premium-users');
-
-// Private messages
-strapi.$io.sendPrivateMessage(socketId, 'notification', data);
-
-// Broadcast to all except sender
-strapi.$io.broadcast(socketId, 'user-joined', data);
-
-// Namespace management
-strapi.$io.emitToNamespace('admin', 'dashboard:update', stats);
-
-// Room info
-const sockets = await strapi.$io.getSocketsInRoom('chat-room');
-
-// Disconnect
-strapi.$io.disconnectSocket(socketId, 'Kicked by admin');
-```
-
-## Use Cases
-
-### Real-Time Blog
-Automatically notify readers when new articles are published
-
-### Live Chat
-Build a chat system with rooms, private messages, and typing indicators
-
-### E-Commerce
-Update product availability, prices, and inventory in real-time
-
-### Collaborative Tools
-Synchronize state across multiple users editing the same document
-
-### Dashboards
-Push live metrics, alerts, and system status to admin panels
-
-### Gaming
-Handle player connections, game state, and multiplayer interactions
-
-### IoT Integration
-Receive and broadcast sensor data and device status updates
-
-## Dashboard Widget
-
-The plugin includes a **live statistics widget** on your Strapi admin home page:
-
-![Socket.IO Dashboard Widget](/widget.png)
-
-📊 **Widget Features:**
-- 🟢 Live connection status with pulsing indicator
-- 👥 Active connections count
-- 💬 Active rooms count
-- ⚡ Events per second
-- 📈 Total events processed
-- 🔄 Auto-updates every 5 seconds
-
-**See it in action:** Navigate to your admin home page after installing the plugin!
-
----
-
-## Visual Configuration
-
-Configure everything visually in the admin panel:
-
-![Socket.IO Settings](/settings.png)
-
-**Settings → Socket.IO** gives you full control over:
-- CORS origins
-- Content type monitoring
-- Role-based permissions
-- Security settings
-- Rate limiting
-
-![Monitoring Dashboard](/monitoringSettings.png)
-
-**Real-time monitoring** shows:
-- Active connections with user details
-- Event logs
-- Performance metrics
-- Connection history
-
----
-
-## Browser Support
-
-- ✅ Chrome/Edge 90+
-- ✅ Firefox 88+
-- ✅ Safari 14+
-- ✅ iOS Safari 14+
-- ✅ Android Chrome 90+
+- Admin routes need an authenticated admin plus the plugin permission. Monitoring responses contain counts and display names only.
+- Content events are sanitized per audience; rooms without listeners are skipped before sanitizing.
+- Socket re-checks run in one batch per kind (one query for all users, tokens or admins), triggered right away when a user, token, admin or Strapi session changes.
+- Strapi's Data Transfer WebSocket (`strapi transfer`) keeps working next to Socket.IO (#112).
 
 ## Requirements
 
-- Node.js 18.0.0 - 22.x
-- Strapi v5.x
-- Socket.IO 4.x
+- Strapi 5.38 or later (tested with 5.61)
+- Node.js 22.21+ or 24.9+ (up to 26)
+- Socket.IO 4.8 clients (`socket.io-client`)
 
-## Community & Support
+## Community
 
-- 📖 [Full Documentation](https://strapi-community.github.io/plugin-io/)
-- 🐛 [Report Issues](https://github.com/strapi-community/plugin-io/issues)
-- 💬 [Discussions](https://github.com/strapi-community/plugin-io/discussions)
-- ⭐ [Star on GitHub](https://github.com/strapi-community/plugin-io)
-
-## Next Steps
-
-- **[View Examples](/examples/)** - Learn common use cases
-- **[API Reference](/api/io-class)** - Explore all available methods
-- **[Configuration](/api/plugin-config)** - Advanced setup options
-- **[Dashboard Widget](/guide/widget)** - Learn about the monitoring widget
-- **[Migration Guide](/guide/migration)** - Upgrade from Strapi v4
+- [Report an issue](https://github.com/strapi-community/plugin-io/issues)
+- [Source on GitHub](https://github.com/strapi-community/plugin-io)
+- [Related plugins](/ecosystem)
 
 ---
 
-## Related Plugins
-
-Check out other powerful Strapi v5 plugins by [@Schero94](https://github.com/Schero94) that complement Socket.IO perfectly:
-
-### 📧 Magic-Mail
-Enterprise-grade multi-account email management with OAuth 2.0 support. Perfect for sending transactional emails triggered by real-time events.
-
-**Features**: Gmail/Microsoft/Yahoo OAuth, SendGrid, Mailgun, smart routing, rate limiting
-
-🔗 **[View on GitHub](https://github.com/Schero94/Magic-Mail)** | 📦 **[NPM Package](https://www.npmjs.com/package/strapi-plugin-magic-mail-v5)**
-
----
-
-### 🔐 Magic-Sessionmanager
-Advanced session tracking and monitoring for Strapi v5. Track Socket.IO connections, monitor active users, and analyze session patterns.
-
-**Features**: Real-time tracking, IP monitoring, active user dashboard, session analytics
-
-🔗 **[View on GitHub](https://github.com/Schero94/Magic-Sessionmanager)**
-
----
-
-### 🔖 Magicmark
-Powerful bookmark management system with real-time sync capabilities. Share bookmarks instantly with your team using Socket.IO integration.
-
-**Features**: Tag organization, team sharing, real-time sync, full REST API
-
-🔗 **[View on GitHub](https://github.com/Schero94/Magicmark)**
-
----
-
-## License
-
-MIT License - see [LICENSE](https://github.com/strapi-community/plugin-io/blob/master/LICENSE) for details
-
----
-
-Made with ❤️ by [@ComfortablyCoding](https://github.com/ComfortablyCoding) and [@hrdunn](https://github.com/hrdunn)
-
-Updated and made it better by: [@Schero94](https://github.com/Schero94)
-
-**Will be maintained till December 2026** 🚀
+Made with ❤️ by [@ComfortablyCoding](https://github.com/ComfortablyCoding) and [@hrdunn](https://github.com/hrdunn).
+Updated and made better by [@Schero94](https://github.com/Schero94).

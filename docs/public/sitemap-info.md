@@ -8,7 +8,7 @@ VitePress automatically generates a sitemap at build time when configured in `co
 
 ```javascript
 sitemap: {
-  hostname: 'https://strapi-community.github.io/plugin-io'
+  hostname: 'https://strapi-community.github.io/plugin-io';
 }
 ```
 
@@ -31,6 +31,6 @@ If you want to manually set priorities, create a `sitemap.xml` in the public fol
 ## Submission
 
 Submit the sitemap to:
+
 - Google Search Console: https://search.google.com/search-console
 - Bing Webmaster Tools: https://www.bing.com/webmasters
-

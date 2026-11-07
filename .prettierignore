@@ -1,2 +1,10 @@
 dist
-.cache
+coverage
+output
+pics
+node_modules
+package-lock.json
+docs/package-lock.json
+docs/.vitepress/cache
+docs/.vitepress/dist
+CHANGELOG.md

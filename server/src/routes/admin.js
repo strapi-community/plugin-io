@@ -1,70 +1,66 @@
+import { PERMISSIONS } from '../utils/constants.js';
+
 /**
- * Admin routes for Socket.IO plugin.
- * All routes require admin authentication.
+ * Builds the route policies: authenticated admin plus the given actions.
+ *
+ * @param {string[]} actions - Required admin actions.
+ * @returns {{ policies: Array<string | object> }} Route config.
+ * @see https://docs.strapi.io/cms/plugins-development/guides/admin-permissions-for-plugins
  */
+const can = (...actions) => ({
+	policies: ['admin::isAuthenticatedAdmin', { name: 'admin::hasPermissions', config: { actions } }],
+});
+
 export default [
-  {
-    method: 'GET',
-    path: '/settings',
-    handler: 'settings.getSettings',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-  {
-    method: 'PUT',
-    path: '/settings',
-    handler: 'settings.updateSettings',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-
-  {
-    method: 'GET',
-    path: '/content-types',
-    handler: 'settings.getContentTypes',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-  {
-    method: 'GET',
-    path: '/roles',
-    handler: 'settings.getRoles',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-
-  {
-    method: 'GET',
-    path: '/stats',
-    handler: 'settings.getStats',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-  {
-    method: 'GET',
-    path: '/event-log',
-    handler: 'settings.getEventLog',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-  {
-    method: 'POST',
-    path: '/test-event',
-    handler: 'settings.sendTestEvent',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-  {
-    method: 'POST',
-    path: '/reset-stats',
-    handler: 'settings.resetStats',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-
-  {
-    method: 'GET',
-    path: '/online-users',
-    handler: 'settings.getOnlineUsers',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
-
-  {
-    method: 'POST',
-    path: '/presence/session',
-    handler: 'presence.createSession',
-    config: { policies: ['admin::isAuthenticatedAdmin'] },
-  },
+	{ method: 'GET', path: '/settings', handler: 'settings.getSettings', config: can(PERMISSIONS.SETTINGS_READ) },
+	{
+		method: 'PUT',
+		path: '/settings',
+		handler: 'settings.updateSettings',
+		config: can(PERMISSIONS.SETTINGS_UPDATE),
+	},
+	{
+		method: 'POST',
+		path: '/settings/validate',
+		handler: 'settings.validateSettings',
+		config: can(PERMISSIONS.SETTINGS_UPDATE),
+	},
+	{
+		method: 'GET',
+		path: '/content-types',
+		handler: 'settings.getContentTypes',
+		config: can(PERMISSIONS.SETTINGS_READ),
+	},
+	{ method: 'GET', path: '/roles', handler: 'settings.getRoles', config: can(PERMISSIONS.SETTINGS_READ) },
+	{ method: 'GET', path: '/stats', handler: 'monitoring.getStats', config: can(PERMISSIONS.MONITORING_READ) },
+	{
+		method: 'GET',
+		path: '/event-log',
+		handler: 'monitoring.getEventLog',
+		config: can(PERMISSIONS.MONITORING_READ),
+	},
+	{
+		method: 'GET',
+		path: '/online-users',
+		handler: 'monitoring.getOnlineUsers',
+		config: can(PERMISSIONS.MONITORING_READ),
+	},
+	{
+		method: 'POST',
+		path: '/test-event',
+		handler: 'monitoring.sendTestEvent',
+		config: can(PERMISSIONS.MONITORING_MANAGE),
+	},
+	{
+		method: 'POST',
+		path: '/reset-stats',
+		handler: 'monitoring.resetStats',
+		config: can(PERMISSIONS.MONITORING_MANAGE),
+	},
+	{
+		method: 'POST',
+		path: '/presence/session',
+		handler: 'presence.createSession',
+		config: { policies: ['admin::isAuthenticatedAdmin'] },
+	},
 ];

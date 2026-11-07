@@ -2,15 +2,19 @@
   "$schema": "https://json.schemastore.org/package",
   "name": "@strapi-community/plugin-io",
   "version": "5.8.3",
-  "description": "Socket.IO plugin for Strapi v5 — real-time events, OAuth, presence, and Redis scaling.",
+  "description": "Socket.IO for Strapi 5: sends content changes to connected clients in real time, filtered by role and API token permissions, with live presence and monitoring in the admin panel.",
   "keywords": [
     "strapi",
     "strapi-plugin",
-    "plugin",
-    "strapi plugin",
-    "socket",
-    "socket io",
-    "io"
+    "strapi-v5",
+    "strapi5",
+    "socket.io",
+    "socketio",
+    "websocket",
+    "realtime",
+    "real-time",
+    "events",
+    "presence"
   ],
   "type": "commonjs",
   "exports": {
@@ -22,6 +26,7 @@
       "default": "./dist/admin/index.js"
     },
     "./strapi-server": {
+      "types": "./types.d.ts",
       "source": "./server/src/index.js",
       "import": "./dist/server/index.mjs",
       "require": "./dist/server/index.js",
@@ -31,71 +36,115 @@
   "files": [
     "dist",
     "types.d.ts",
-    "README.md"
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "prebuild": "npm run clean",
     "build": "strapi-plugin build",
     "watch": "strapi-plugin watch",
     "watch:link": "strapi-plugin watch:link",
     "verify": "strapi-plugin verify",
-    "lint": "eslint . --fix",
-    "format": "prettier --write \"./**/*.{js,json,yml,md}\"",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --test \"tests/**/*.test.{js,mjs}\"",
+    "test:types": "tsc -p tests/types/tsconfig.json",
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
-    "test": "node --test tests/*.test.js"
+    "prepack": "npm run build",
+    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.e2e.mjs\"",
+    "test:e2e:app": "node scripts/e2e-app.mjs",
+    "test:cluster": "node scripts/cluster-acceptance.mjs"
   },
   "dependencies": {
-    "date-fns": "^3.6.0",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
-    "zod": "^3.24.1"
+    "@strapi/utils": "^5.61.0",
+    "socket.io": "^4.8.4",
+    "socket.io-client": "^4.8.4",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/commit-analyzer": "^13.0.0",
-    "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^11.0.2",
-    "@semantic-release/npm": "^12.0.1",
-    "@semantic-release/release-notes-generator": "^14.0.1",
-    "@strapi/design-system": "^2.2.3",
-    "@strapi/icons": "^2.2.3",
-    "@strapi/sdk-plugin": "6.0.1",
-    "@strapi/strapi": "^5.51.1",
-    "eslint": "^8.57.1",
-    "eslint-config-prettier": "^9.1.2",
-    "prettier": "^3.9.6",
+    "@eslint/js": "^10.0.1",
+    "@formatjs/icu-messageformat-parser": "^3.5.22",
+    "@semantic-release/changelog": "^7.0.0",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^11.0.1",
+    "@semantic-release/github": "^12.0.10",
+    "@semantic-release/npm": "^13.2.0",
+    "@semantic-release/release-notes-generator": "^14.1.1",
+    "@socket.io/postgres-adapter": "^0.5.0",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "@strapi/design-system": "^2.2.4",
+    "@strapi/icons": "^2.2.4",
+    "@strapi/sdk-plugin": "^6.1.1",
+    "@strapi/strapi": "^5.61.0",
+    "better-sqlite3": "^13.0.3",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "ioredis": "^6.0.0",
+    "koa": "^3.3.0",
+    "pg": "^8.23.1",
+    "playwright": "^1.65.0",
+    "prettier": "^3.9.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.30.4",
-    "semantic-release": "^24.2.3",
-    "styled-components": "^6.4.4"
+    "react-intl": "^6.8.9",
+    "react-router-dom": "^6.30.6",
+    "semantic-release": "^25.0.9",
+    "styled-components": "^6.6.0",
+    "typescript": "^5.9.3",
+    "ws": "^8.22.1"
   },
   "peerDependencies": {
-    "@strapi/design-system": "^2.0.0-rc.1",
-    "@strapi/icons": "^2.0.0-rc.1",
-    "@strapi/strapi": "^5.0.0",
+    "@socket.io/postgres-adapter": "^0.5.0",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "@strapi/design-system": "^2.2.0",
+    "@strapi/icons": "^2.2.0",
+    "@strapi/strapi": "^5.38.0",
+    "ioredis": "^5.9.0 || ^6.0.0",
+    "pg": "^8.11.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
-    "react-router-dom": "^6.0.0",
+    "react-intl": "^6.6.2",
+    "react-router-dom": "^6.30.0",
     "styled-components": "^6.0.0"
   },
   "peerDependenciesMeta": {
+    "@socket.io/postgres-adapter": {
+      "optional": true
+    },
+    "@socket.io/redis-adapter": {
+      "optional": true
+    },
     "@strapi/design-system": {
       "optional": true
     },
     "@strapi/icons": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    },
+    "pg": {
+      "optional": true
+    },
+    "react-intl": {
       "optional": true
     }
   },
   "strapi": {
     "name": "io",
     "displayName": "IO",
-    "description": "Socket.IO plugin for Strapi v5 — real-time events, OAuth, presence, and Redis scaling.",
+    "description": "Socket.IO for Strapi 5: sends content changes to connected clients in real time, filtered by role and API token permissions, with live presence and monitoring in the admin panel.",
     "kind": "plugin"
   },
   "engines": {
-    "node": ">=18.0.0 <=22.x.x",
-    "npm": ">=6.0.0"
+    "node": "^22.21.0 || >=24.9.0 <=26.x.x"
   },
   "author": {
     "name": "@ComfortablyCoding",
@@ -115,10 +164,21 @@
   "homepage": "https://strapi-community.github.io/plugin-io/",
   "repository": {
     "type": "git",
-    "url": "https://github.com/strapi-community/plugin-io.git"
+    "url": "git+https://github.com/strapi-community/plugin-io.git"
   },
   "bugs": {
     "url": "https://github.com/strapi-community/plugin-io/issues"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "types": "./types.d.ts",
+  "overrides": {
+    "zod@4.4.3": "^4.6.7",
+    "nodemailer": "^10.3.1",
+    "koa-body": {
+      "zod": "^4.6.7"
+    },
+    "@modelcontextprotocol/node": {
+      "@hono/node-server": "^2.1.6"
+    }
+  }
 }

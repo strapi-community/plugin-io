@@ -1,476 +1,146 @@
-# Content Types Examples
-
-Learn how to configure and monitor content types for real-time events.
-
+---
+description: Choose which Strapi content types and actions send Socket.IO events, populate relations, and handle publish, unpublish, delete, drafts and locales on the client.
 ---
 
-## Basic Configuration
+# Content types
 
-The `contentTypes` configuration controls which content types emit events to connected clients. It supports two formats: **string** and **object**.
+A watched content type sends an event after every matching Document Service
+action. The event goes to each Users & Permissions role and content API token
+that may read the type, sanitized with that audience's permissions.
 
-### String Format (Simple)
+## Watch everything
 
-Use the content type UID directly to enable all events:
-
-```javascript
-module.exports = ({ env }) => ({
+```js
+// config/plugins.js
+module.exports = {
   io: {
     enabled: true,
     config: {
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment',
-        'api::product.product'
-      ]
-    }
-  }
-});
+      contentTypes: ['api::article.article', 'api::category.category'],
+    },
+  },
+};
 ```
 
-**This automatically enables:**
-- ✅ Create events (`article:create`)
-- ✅ Update events (`article:update`)
-- ✅ Delete events (`article:delete`)
+A string watches all six actions.
 
----
+| Action         | Event                  | When                                          | Payload                                  |
+| -------------- | ---------------------- | --------------------------------------------- | ---------------------------------------- |
+| `create`       | `article:create`       | A document is created                         | `{ data: { id, attributes }, meta: {} }` |
+| `update`       | `article:update`       | A document is updated                         | `{ data: { id, attributes }, meta: {} }` |
+| `publish`      | `article:publish`      | A draft is published                          | `{ data: { id, attributes }, meta: {} }` |
+| `discardDraft` | `article:discardDraft` | A draft is reset to the published version     | `{ data: { id, attributes }, meta: {} }` |
+| `unpublish`    | `article:unpublish`    | A document is unpublished                     | `{ data: { documentId, locale? } }`      |
+| `delete`       | `article:delete`       | A document, or one of its locales, is deleted | `{ data: { documentId, locale? } }`      |
 
-## Object Format (Advanced)
+The event name uses the content type's `singularName`.
 
-For fine-grained control, use the object format to specify exactly which actions should emit events:
+## Pick actions
 
-```javascript
-module.exports = ({ env }) => ({
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: [
-        // Only create events
-        {
-          uid: 'api::article.article',
-          actions: ['create']
-        },
-        
-        // Create and update, no delete
-        {
-          uid: 'api::product.product',
-          actions: ['create', 'update']
-        },
-        
-        // All events (same as string format)
-        {
-          uid: 'api::comment.comment',
-          actions: ['create', 'update', 'delete']
-        }
-      ]
-    }
-  }
-});
-```
-
-### Available Actions
-
-| Action | Event Name | Description |
-|--------|-----------|-------------|
-| `create` | `{contentType}:create` | Fired when entry is created |
-| `update` | `{contentType}:update` | Fired when entry is updated |
-| `delete` | `{contentType}:delete` | Fired when entry is deleted |
-
----
-
-## Advanced Features
-
-### Include Relations
-
-Populate relations automatically in emitted events:
-
-```javascript
+```js
 contentTypes: [
-  {
-    uid: 'api::article.article',
-    actions: ['create', 'update'],
-    populate: ['author', 'category', 'tags']
-  }
-]
+  { uid: 'api::article.article', actions: ['publish', 'unpublish', 'delete'] },
+  { uid: 'api::order.order', actions: ['create'] },
+],
 ```
 
-**Frontend receives:**
+Editors can also watch API content types and toggle actions in
+_Settings > Socket.IO > Settings > Content events_. Types set in the config
+show there as read-only rows.
 
-```javascript
-socket.on('article:create', (article) => {
-  console.log(article.attributes.author);  // ✅ Populated
-  console.log(article.attributes.category); // ✅ Populated
-  console.log(article.attributes.tags);     // ✅ Populated
-});
-```
+## Populate relations
 
-### Custom Event Names
-
-Override default event naming:
-
-```javascript
+```js
 contentTypes: [
-  {
-    uid: 'api::article.article',
-    actions: ['create'],
-    eventPrefix: 'new-article'  // Emits as 'new-article:create'
-  }
-]
+  { uid: 'api::article.article', populate: ['author', 'cover'] },
+  { uid: 'api::page.page', populate: { seo: { fields: ['metaTitle'] } } },
+  { uid: 'api::product.product', populate: '*' },
+],
 ```
 
-**Frontend listens to:**
+Before the event is sent, the entry is fetched again with the same locale and
+status and the given `populate`. Relations arrive in the v4-style shape
+`{ data: { id, attributes } }`:
 
-```javascript
-socket.on('new-article:create', (data) => {
-  console.log('New article published!', data);
+```js
+socket.on('article:publish', ({ data }) => {
+  const author = data.attributes.author?.data?.attributes;
+  console.log(data.attributes.title, 'by', author?.username);
 });
 ```
 
----
+A role that may not read the related type receives the entry without that
+relation. Populate only what clients need: every relation costs a query per
+event.
 
-## Real-World Examples
+## Drafts
 
-### Blog Platform
+With Draft & Publish, draft versions are not sent while
+_Only published content_ is on (the default). Listen to `:publish` for new
+content. Turn the setting off to send `create` and `update` for drafts to the
+roles that may read them.
 
-```javascript
-// config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: [
-        // Articles - all events with relations
-        {
-          uid: 'api::article.article',
-          actions: ['create', 'update', 'delete'],
-          populate: ['author', 'category', 'coverImage']
-        },
-        
-        // Comments - only create
-        {
-          uid: 'api::comment.comment',
-          actions: ['create'],
-          populate: ['author']
-        },
-        
-        // Categories - all events, no relations
-        'api::category.category'
-      ]
-    }
-  }
-};
+## Locales
+
+Each locale is its own event. Delete and unpublish payloads include `locale`
+for localized content:
+
+```js
+socket.on('article:delete', ({ data }) => removeFromList(data.documentId, data.locale));
 ```
 
-**Frontend:**
+## Keep a list in sync
 
-```javascript
-import { io } from 'socket.io-client';
+```js
+const articles = new Map(); // documentId -> attributes
 
-const socket = io('http://localhost:1337');
+const upsert = ({ data }) => articles.set(data.attributes.documentId, data.attributes);
+const remove = ({ data }) => articles.delete(data.documentId);
 
-// New articles
-socket.on('article:create', (article) => {
-  addArticleToFeed(article);
-  showNotification(`New article: ${article.attributes.title}`);
-});
-
-// Article updates
-socket.on('article:update', (article) => {
-  updateArticleInFeed(article);
-});
-
-// New comments
-socket.on('comment:create', (comment) => {
-  addCommentToArticle(comment);
-  playNotificationSound();
-});
+socket.on('article:publish', upsert);
+socket.on('article:update', upsert);
+socket.on('article:unpublish', remove);
+socket.on('article:delete', remove);
 ```
 
-### E-Commerce Store
+Load the initial list through the REST API, then apply events. After a
+reconnect, reload the list, since events sent while a client was offline are
+not replayed.
 
-```javascript
-// config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: [
-        // Products - create and update only
-        {
-          uid: 'api::product.product',
-          actions: ['create', 'update'],
-          populate: ['images', 'category', 'variants']
-        },
-        
-        // Orders - all events
-        {
-          uid: 'api::order.order',
-          actions: ['create', 'update'],
-          populate: ['customer', 'items']
-        },
-        
-        // Stock updates
-        {
-          uid: 'api::inventory.inventory',
-          actions: ['update']
-        }
-      ]
-    }
-  }
-};
+## What is never sent
+
+- Fields marked `private` and password fields (Strapi's Content API sanitizer).
+- Fields the audience may not read.
+- Built-in secret names (`password`, `resetPasswordToken`, `apiKey`, `secret`, ...), `config.sensitiveFields` and the _Excluded fields_ setting.
+
+If sanitizing fails for an audience, that audience gets nothing. The plugin
+never falls back to the raw entry.
+
+## Events from your own code
+
+Events come from the Document Service, so `strapi.documents(uid).update(...)`
+in your services emits them too. `strapi.db.query()` writes do not. To send
+something yourself:
+
+```js
+// sanitized per audience, like the automatic events
+await strapi.$io.emit({ event: 'update', schema: 'api::article.article', data: entry });
+
+// a custom event, sensitive keys removed
+await strapi.$io.raw({ event: 'stock:low', data: { sku: 'A-1', left: 3 }, rooms: ['io-role-authenticated'] });
 ```
-
-**Frontend:**
-
-```javascript
-// Product page - update price/stock in real-time
-socket.on('product:update', (product) => {
-  if (product.id === currentProductId) {
-    updatePrice(product.attributes.price);
-    updateStock(product.attributes.stock);
-    
-    if (product.attributes.stock === 0) {
-      showOutOfStockBanner();
-    }
-  }
-});
-
-// Cart page - notify about stock changes
-socket.on('inventory:update', (inventory) => {
-  const cartItem = findCartItem(inventory.productId);
-  if (cartItem && inventory.stock < cartItem.quantity) {
-    showLowStockWarning(inventory);
-  }
-});
-```
-
-### Admin Dashboard
-
-```javascript
-// config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: [
-        // Monitor all user activities
-        {
-          uid: 'plugin::users-permissions.user',
-          actions: ['create', 'update'],
-          populate: ['role']
-        },
-        
-        // Track content creation
-        'api::article.article',
-        'api::comment.comment',
-        'api::media.media',
-        
-        // Monitor orders
-        {
-          uid: 'api::order.order',
-          actions: ['create', 'update'],
-          populate: ['customer', 'items']
-        }
-      ]
-    }
-  }
-};
-```
-
-**Admin Frontend:**
-
-```javascript
-const socket = io('http://localhost:1337/admin', {
-  auth: { strategy: 'api-token', token: adminToken }
-});
-
-// Live activity feed
-socket.on('article:create', (article) => {
-  addToActivityFeed('New article published', article);
-});
-
-socket.on('user:create', (user) => {
-  addToActivityFeed('New user registered', user);
-  updateUserCount();
-});
-
-socket.on('order:create', (order) => {
-  addToActivityFeed('New order received', order);
-  playNotificationSound();
-  updateRevenue(order.attributes.total);
-});
-```
-
----
-
-## Filtering Events
-
-### By Published Status
-
-Only emit events for published content:
-
-```javascript
-// src/api/article/content-types/article/lifecycles.js
-module.exports = {
-  async afterCreate(event) {
-    const { result } = event;
-    
-    // Only emit if published
-    if (result.publishedAt) {
-      await strapi.$io.emit({
-        event: 'create',
-        schema: 'api::article.article',
-        data: result
-      });
-    }
-  }
-};
-```
-
-### By User Role
-
-Control which roles receive which events via Admin Panel:
-
-**Settings → Socket.IO → Role Permissions**
-
-1. Select **Public** role:
-   - Enable `article:create` ✅
-   - Disable `article:delete` ❌
-   
-2. Select **Authenticated** role:
-   - Enable all article events ✅
-
----
-
-## Performance Optimization
-
-### Limit Fields
-
-Reduce payload size by excluding heavy fields:
-
-```javascript
-// In Admin Panel Settings
-events: {
-  excludeFields: ['content', 'largeData', 'internalNotes']
-}
-```
-
-Or programmatically:
-
-```javascript
-// src/api/article/content-types/article/lifecycles.js
-module.exports = {
-  async afterCreate(event) {
-    const { result } = event;
-    
-    // Custom emit with limited fields
-    await strapi.$io.raw({
-      event: 'article:create',
-      data: {
-        id: result.id,
-        title: result.title,
-        excerpt: result.excerpt,
-        author: result.author.username
-        // Exclude heavy content field
-      }
-    });
-  }
-};
-```
-
-### Debounce Bulk Operations
-
-Prevent event flooding during imports:
-
-```javascript
-const { debounce } = require('lodash');
-
-const emitBulkUpdate = debounce((ids) => {
-  strapi.$io.raw({
-    event: 'articles:bulk-update',
-    data: { updatedIds: ids }
-  });
-}, 1000);
-
-// In bulk operation
-bulkUpdate.forEach(async (article) => {
-  await strapi.entityService.update('api::article.article', article.id, {
-    data: article
-  });
-  emitBulkUpdate(article.id);
-});
-```
-
----
-
-## Testing
-
-### Test Event Emission
-
-```javascript
-// test/content-types.test.js
-const { io } = require('socket.io-client');
-
-describe('Content Type Events', () => {
-  let socket;
-  
-  beforeAll(() => {
-    socket = io('http://localhost:1337');
-  });
-  
-  afterAll(() => {
-    socket.disconnect();
-  });
-  
-  test('should receive article:create event', (done) => {
-    socket.on('article:create', (article) => {
-      expect(article).toHaveProperty('id');
-      expect(article.attributes).toHaveProperty('title');
-      done();
-    });
-    
-    // Create article via API
-    fetch('http://localhost:1337/api/articles', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: {
-          title: 'Test Article',
-          content: 'Test content'
-        }
-      })
-    });
-  });
-});
-```
-
----
 
 ## Troubleshooting
 
-### Events Not Received
+| Symptom                           | Check                                                                       |
+| --------------------------------- | --------------------------------------------------------------------------- |
+| No events at all                  | The role or token has `find` or `findOne` on the type. The type is watched. |
+| `create` arrives but not drafts   | _Only published content_ is on (default). Listen to `:publish`.             |
+| Relation missing                  | It is not in `populate`, or the audience may not read the related type.     |
+| Writes from a script send nothing | The script uses `strapi.db.query()`. Use `strapi.documents()`.              |
 
-**Check content type is enabled:**
+## See also
 
-```javascript
-const settings = await strapi.plugin('io').service('settings').getSettings();
-console.log('Enabled content types:', settings.contentTypes);
-```
-
-**Check role permissions:**
-
-Navigate to **Settings → Socket.IO → Role Permissions** and verify the role has access.
-
-**Verify event name:**
-
-Events follow the pattern `{singularName}:{action}`. For `api::article.article`, events are:
-- `article:create`
-- `article:update`
-- `article:delete`
-
----
-
-## See Also
-
-- **[Plugin Configuration](/api/plugin-config)** - Complete configuration reference
-- **[Events Examples](/examples/events)** - Custom event handlers
-- **[API Reference](/api/io-class)** - Emit methods and options
+- [Plugin configuration](/api/plugin-config)
+- [IO class](/api/io-class)
+- [Strapi Document Service](https://docs.strapi.io/cms/api/document-service)

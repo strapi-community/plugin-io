@@ -1,0 +1,66 @@
+# Automatic dependency updates. Patch and minor updates are grouped into one weekly PR
+# and merged automatically by .github/workflows/dependency-auto-merge.yml when lint, tests,
+# type checks, build and verify all pass. Major updates get their own PR and wait for review.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    labels: [dependencies]
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # These versions are set by the Strapi 5 admin that hosts the plugin.
+      # A major bump here would break the plugin inside Strapi, so it is never proposed.
+      - dependency-name: 'react'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-intl'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'react-router-dom'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'styled-components'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@strapi/*'
+        update-types: ['version-update:semver-major']
+      # Kept at 5.x: react-intl 6 (Strapi's admin version) only accepts TypeScript <= 5.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: npm
+    directory: /docs
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'docs(deps)'
+    labels: [dependencies]
+    groups:
+      docs-minor-and-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    commit-message:
+      prefix: 'ci'
+    labels: [dependencies]
+    groups:
+      actions:
+        update-types: [minor, patch]

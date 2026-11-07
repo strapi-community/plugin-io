@@ -1,0 +1,10 @@
+{
+  "kind": "collectionType",
+  "collectionName": "notes",
+  "info": { "singularName": "note", "pluralName": "notes", "displayName": "Note" },
+  "options": { "draftAndPublish": false },
+  "attributes": {
+    "text": { "type": "string", "required": true },
+    "secretNote": { "type": "string", "private": true }
+  }
+}

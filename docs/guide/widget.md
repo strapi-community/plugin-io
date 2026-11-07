@@ -1,189 +1,65 @@
-# Dashboard Widget
+# Homepage widgets
 
-Visual guide for the Socket.IO statistics widget in your Strapi admin panel.
+The plugin adds two widgets to the Strapi admin homepage through Strapi's official Widget API. They look and behave like Strapi's own widgets and can be arranged or removed with **Add Widget** on the homepage.
 
----
-
-## Overview
-
-The Socket.IO plugin adds a beautiful, real-time statistics widget to your Strapi admin home page.
-
-![Socket.IO Dashboard Widget](/widget.png)
-
-*The widget automatically appears on your admin dashboard after installing the plugin.*
+Both widgets need the admin permission **Read monitoring** (`plugin::io.monitoring.read`). Super Admins have it; grant it to other roles under _Settings > Administration panel > Roles > Plugins > IO > Monitoring_.
 
 ---
 
-## Features
+## Socket.IO
 
-### 🟢 Live Status Indicator
-A pulsing green dot shows the plugin is active and receiving real-time data. If the indicator turns red, the Socket.IO server is offline or not responding.
+![Socket.IO homepage widget](/widget.png)
 
-### 👥 Active Connections
-Displays the current number of connected Socket.IO clients in real-time.
+Laid out like the native _Project statistics_ widget: four cells, each opening _Settings > Socket.IO > Monitoring_.
 
-### 💬 Active Rooms
-Shows how many Socket.IO rooms are currently active.
+| Cell              | Meaning                                                                     |
+| ----------------- | --------------------------------------------------------------------------- |
+| Connected clients | Sockets connected right now (admins, users, API tokens and public clients). |
+| Admins online     | Admins with the Content Manager open.                                       |
+| Events per second | Average over the last 10 seconds.                                           |
+| Events sent       | Events emitted since the last restart or reset.                             |
 
-### ⚡ Events per Second
-Real-time counter showing the current rate of event emissions.
+The widget refreshes every 15 seconds.
 
-### 📈 Total Events
-Cumulative count of all events processed since the plugin started or was reset.
+## Admins online
 
----
+![Admins online homepage widget](/admins-online-widget.png)
 
-## Auto-Refresh
+Laid out like the native _Last edited entries_ widget: one row per other admin with the Content Manager open, the content type they are editing and when they connected. Click a row or the edit button to open the same entry. Your own session is not listed. The widget refreshes every 15 seconds.
 
-The widget automatically updates every **5 seconds** to provide live statistics without requiring a page refresh.
-
----
-
-## Location
-
-**Navigate to:** Admin Panel → Home (Dashboard)
-
-The widget appears in the main dashboard area below the welcome message.
+The list contains names only. Emails, IP addresses and socket ids are never sent to the browser. Entries in content types you may not read in the Content Manager are not named: the row says _An entry you cannot view_ instead (Monitoring shows a count).
 
 ---
 
-## Visual Design
+## States
 
-![Socket.IO Settings Panel](/settings.png)
+- **Loading** and **error** use Strapi's native widget states. On an error, **Try again** reloads the data.
+- **Admins online** shows "No other admins are editing right now." when nobody else is editing.
+- When the presence feature is off in the settings, nobody appears in _Admins online_.
 
-*Access full settings by clicking the "View Settings" link in the widget or navigating to Settings → Socket.IO*
+## Monitoring page
 
-### Color-Coded Metrics
-- **Blue Cards** - Connection metrics
-- **Green Cards** - Activity metrics  
-- **Orange Cards** - Performance metrics
+![Settings > Socket.IO > Monitoring](/monitoringSettings.png)
 
-### Responsive Layout
-- Desktop: Full-width cards with icons
-- Tablet: 2-column grid
-- Mobile: Single column stack
-
----
-
-## Monitoring Dashboard
-
-![Monitoring Settings](/monitoringSettings.png)
-
-*The monitoring dashboard provides detailed insights into connections, events, and performance.*
-
-### What You Can Monitor
-- **Active Connections** - See who's connected right now
-- **Connection History** - Track connection patterns
-- **Event Logs** - View all emitted events
-- **User Details** - See authenticated user info
-- **IP Addresses** - Monitor connection sources
-- **Performance Metrics** - Events/sec, total events
-
----
-
-## Customization
-
-### Widget Width
-
-Adjust the widget width in your admin configuration:
-
-```javascript
-// admin/src/index.js
-app.addWidget({
-  id: 'io-stats-widget',
-  Component: SocketStatsWidget,
-  width: 8, // Change: 1-12 (12 = full width)
-});
-```
-
-### Refresh Interval
-
-Change the auto-refresh interval:
-
-```javascript
-// Change from 5000ms (5 seconds) to desired interval
-const interval = setInterval(fetchStats, 5000);
-```
-
----
-
-## Benefits
-
-### For Developers
-- 👀 **Visual Monitoring** - See Socket.IO activity at a glance
-- 🐛 **Debug Tool** - Quickly spot connection issues
-- 📊 **Performance Tracking** - Monitor event rates
-
-### For Admins
-- 📈 **Real-Time Insights** - Live connection data
-- 🚨 **Issue Detection** - Notice problems immediately
-- ✅ **System Health** - Confirm Socket.IO is running
-
-### For Teams
-- 👥 **Collaboration** - See team activity
-- 📊 **Metrics Dashboard** - Shared visibility
-- 🎯 **Decision Making** - Data-driven insights
-
----
+_Settings > Socket.IO > Monitoring_ shows the same counters with a breakdown by client type, the admins online with the entries they edit, and the event log (turn on **Keep an event log** in the settings). Roles with **Reset statistics and send test events** (`plugin::io.monitoring.manage`) can send a test event and reset the statistics.
 
 ## Troubleshooting
 
-### Widget Not Showing
+**The widgets do not appear.** Check that your Strapi version is 5.38 or later (the plugin requirement) and that your role has `plugin::io.monitoring.read`. Then rebuild the admin (`npm run build`).
 
-**Check plugin is enabled:**
-```javascript
-// config/plugins.js
-module.exports = {
-  io: { enabled: true }
-};
-```
+**Connected clients stays at 0.** No client is connected. Connect one and wait for the next refresh:
 
-**Restart Strapi:**
-```bash
-npm run develop
-```
-
-### Stats Not Updating
-
-**Check browser console** for errors
-
-**Verify API endpoint:**
-```
-GET /io/monitoring/stats
-```
-
-**Clear cache and refresh:**
-```bash
-rm -rf .cache build
-npm run develop
-```
-
-### Widget Shows Zero Connections
-
-This is normal if:
-- No clients are currently connected
-- Plugin just started
-- All sockets disconnected
-
-**Test connection:**
 ```javascript
 import { io } from 'socket.io-client';
-const socket = io('http://localhost:1337');
-// Check widget - should show 1 connection
+
+const socket = io('http://localhost:1337', { transports: ['websocket'] });
+socket.on('connect', () => console.log('connected', socket.id));
 ```
 
----
+**Admins online is empty while someone edits.** **Show who is editing** must be on (_Settings > Socket.IO > Settings > Live presence_), and the other admin needs read permission for that content type in the Content Manager.
 
-## See Also
+## See also
 
-- **[Getting Started](/guide/getting-started)** - Install and configure
-- **[Monitoring Service](/api/io-class#monitoring-service)** - API for monitoring
-- **[Configuration](/api/plugin-config)** - Admin panel settings
-
----
-
-**Widget Version**: 3.0.0  
-**Compatible with**: Strapi v5.x  
-**Auto-Refresh**: Every 5 seconds  
-**Location**: Admin Dashboard Home Page
-
+- [Getting Started](/guide/getting-started)
+- [IO class](/api/io-class)
+- [Configuration](/api/plugin-config)
