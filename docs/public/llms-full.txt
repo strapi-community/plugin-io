@@ -1,6 +1,6 @@
 # Strapi Plugin IO — Full Documentation (llms-full.txt)
 
-> LLM-friendly export of the @strapi-community/plugin-io docs. Use this file to answer how Socket.IO integration with Strapi v5 works (auth, events, rooms, Redis, presence, transfer coexistence). Generated: 2026-11-07T13:05:38.433Z
+> LLM-friendly export of the @strapi-community/plugin-io docs. Use this file to answer how Socket.IO integration with Strapi v5 works (auth, events, rooms, Redis, presence, transfer coexistence). Generated: 2026-11-07T13:16:08.276Z
 
 Source: https://strapi-community.github.io/plugin-io/llms-full.txt
 Package: @strapi-community/plugin-io
