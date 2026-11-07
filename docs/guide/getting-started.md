@@ -8,11 +8,11 @@ From `npm install` to your first live event in about a minute.
 
 ## Requirements
 
-|                     | Version                                                                |
-| ------------------- | ---------------------------------------------------------------------- |
-| Strapi              | 5.13 or later (tested with 5.61)                                       |
-| Node.js             | 22 or 24 (`>=22 <=26`, like Strapi 5.61). 22.21+ or 24.9+ recommended. |
-| Users & Permissions | Optional. Needed for user JWTs and the Public role room.               |
+|                     | Version                                                  |
+| ------------------- | -------------------------------------------------------- |
+| Strapi              | 5.13 or later (tested with 5.61)                         |
+| Node.js             | 22.21+ or 24.9+ (up to 26, like Strapi 5.61)             |
+| Users & Permissions | Optional. Needed for user JWTs and the Public role room. |
 
 For Strapi 4 use version 2.x of the plugin.
 

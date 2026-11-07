@@ -35,11 +35,11 @@ Full documentation: <https://strapi-community.github.io/plugin-io/>
 
 ## Requirements
 
-|                     | Version                                                              |
-| ------------------- | -------------------------------------------------------------------- |
-| Strapi              | 5.13 or later (tested with 5.61)                                     |
-| Node.js             | 22 or 24 (`>=22 <=26`, like Strapi 5.61); 22.21+ / 24.9+ recommended |
-| Users & Permissions | Optional. Needed for user JWTs and the Public role room.             |
+|                     | Version                                                  |
+| ------------------- | -------------------------------------------------------- |
+| Strapi              | 5.13 or later (tested with 5.61)                         |
+| Node.js             | 22.21+ or 24.9+ (up to 26, like Strapi 5.61)             |
+| Users & Permissions | Optional. Needed for user JWTs and the Public role room. |
 
 ## Quick start
 
@@ -193,14 +193,18 @@ The plugin adds a **Socket.IO** section under _Settings_ with two pages, two hom
 
 **Settings** (`plugin::io.settings.read` / `plugin::io.settings.update`). Every setting applies to new connections without a restart:
 
-| Section        | Settings                                                                                                                                           |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Connections    | Allowed origins, maximum connections (0 = unlimited), ping interval, ping timeout, connection timeout                                              |
-| Security       | Require authentication, limit client events (events per second per client), allowed IP addresses, blocked IP addresses (addresses and CIDR blocks) |
-| Content events | Only published content, excluded fields, actions per content type (rows set in the config are read-only)                                           |
-| Roles          | Whether each Users & Permissions role may connect. What a role receives follows its permissions.                                                   |
-| Live presence  | Show who is editing, show typing                                                                                                                   |
-| Monitoring     | Log connections, keep an in-memory event log, event log size                                                                                       |
+| Section             | Settings                                                                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections         | Allowed origins, maximum connections (0 = unlimited), ping interval, ping timeout, connection timeout                                              |
+| Security            | Require authentication, limit client events (events per second per client), allowed IP addresses, blocked IP addresses (addresses and CIDR blocks) |
+| Content events      | Only published content, excluded fields, actions per content type (rows set in the config are read-only)                                           |
+| Roles               | Whether each Users & Permissions role may connect. What a role receives follows its permissions.                                                   |
+| Entry subscriptions | Allow `subscribe-entity`, subscriptions per client (off by default)                                                                                |
+| Live presence       | Show who is editing, show typing                                                                                                                   |
+| Monitoring          | Log connections, keep an in-memory event log, event log size                                                                                       |
+| Export and import   | Download the saved settings as JSON (no secrets); import a file, review the changed values and save                                                |
+
+Import sends the file to `POST /io/settings/validate` (needs `plugin::io.settings.update`), which checks it with the same strict schema as _Save_ and stores nothing. The changed values are listed in a confirmation dialog and replace the form values; _Save_ stores them.
 
 **Monitoring** (`plugin::io.monitoring.read`; reset and test events need `plugin::io.monitoring.manage`): connected clients by type, active rooms, events per second, events sent, admins online with the entries they edit, and the event log. Entries in content types the viewer may not read in the Content Manager are counted, not named. Test events go to every connected client; names used by content and presence events are refused.
 
@@ -231,13 +235,16 @@ await strapi.$io.emitIdentifier({ event: 'delete', schema: 'api::article.article
 await strapi.$io.raw({ event: 'maintenance', data: { at: '22:00' }, rooms: ['io-role-authenticated'] });
 
 // Helpers
-strapi.$io.joinRoom(socketId, 'premium'); // plugin rooms (io-role-, io-token-, io-admin-, presence:) are refused
+strapi.$io.joinRoom(socketId, 'premium'); // plugin rooms (io-role-, io-token-, io-admin-, io-entity-, presence:) are refused
 strapi.$io.leaveRoom(socketId, 'premium');
 await strapi.$io.getSocketsInRoom('premium');
 strapi.$io.sendPrivateMessage(socketId, 'notice', data);
 strapi.$io.broadcast(socketId, 'notice', data); // everyone except socketId
 strapi.$io.emitToNamespace('chat', 'notice', data);
 strapi.$io.disconnectSocket(socketId);
+await strapi.$io.subscribeToEntity(socketId, 'api::article.article', documentId); // same checks as subscribe-entity
+strapi.$io.unsubscribeFromEntity(socketId, 'api::article.article', documentId);
+strapi.$io.getEntitySubscriptions(socketId);
 await strapi.$io.revalidateSockets(); // every authenticated socket
 await strapi.$io.revalidateSockets(['user'], { ids: [userId] }); // only this user's sockets
 
@@ -251,6 +258,18 @@ monitoring.getEventStats(); // { totalEvents, eventsPerSecond, lastEventAt, tota
 monitoring.getEventLog(50);
 ```
 
+**Entity subscriptions.** With _Entry subscriptions_ on, clients follow single entries:
+
+```js
+socket.emit('subscribe-entity', { uid: 'api::article.article', documentId }, (reply) => {
+  // { success: true, uid, documentId, id } or { success: false, error }
+});
+socket.on('article:update', ({ data }) => render(data.attributes));
+socket.emit('unsubscribe-entity', { uid: 'api::article.article', documentId });
+```
+
+A subscription needs `find` or `findOne` on the client's own role or API token and an existing entry. Every event is sanitized with those permissions, and read permission is checked again for each event. Subscribers also receive events of content types and actions that are not broadcast under _Events_, and a client in both its role room and an entry room gets each event once. Admin sockets cannot subscribe. The [IO class reference](https://strapi-community.github.io/plugin-io/api/io-class#entity-subscriptions) lists the errors.
+
 Namespaces created with `strapi.$io.server.of('/name')`, for example in `hooks.init`, use the same handshake as the default namespace. TypeScript types ship with the package (`types.d.ts`) and add `strapi.$io` to `Core.Strapi`.
 
 ## Security model
@@ -258,6 +277,7 @@ Namespaces created with `strapi.$io.server.of('/name')`, for example in `hooks.i
 - Admin routes require an authenticated admin plus the plugin permission (`admin::hasPermissions`). The presence session route only requires an authenticated admin; it keeps at most five unused tokens per admin and answers `429` when 10,000 are pending. A token holds the admin id and session id only; permissions are loaded from the database when it is used.
 - Monitoring responses contain counts and admin display names only, never IP addresses, emails, tokens or socket ids.
 - The settings document is validated with a strict schema (unknown keys rejected, every list and number bounded). Invalid input returns `400` with field paths.
+- Entity subscriptions need read permission of the client's role or API token, are limited per client and to ten requests per second, use reserved per-audience rooms and are re-checked on every event.
 - Presence events are accepted only from admin sockets, need Content Manager read permission for the content type and are rate limited. Admin sockets are re-checked against the admin's current permissions and Strapi session.
 - Browser origins are checked for polling and WebSocket. An empty _Allowed origins_ list means same origin only.
 - Clients can be rate limited per socket; the connection count, IP rules and origins are checked in the handshake.
@@ -265,7 +285,7 @@ Namespaces created with `strapi.$io.server.of('/name')`, for example in `hooks.i
 
 Report vulnerabilities privately through GitHub security advisories.
 
-`npm audit --omit=dev` reports 0 vulnerabilities for the published package. The development tree (Strapi itself, used to build and test) currently reports advisories in `@strapi/strapi` 5.61.0 dependencies such as `koa-body`, `koa-session` and its bundled `zod` 3; they are not shipped with the plugin and are fixed by Strapi upstream.
+`npm audit --omit=dev` reports 0 vulnerabilities for the published package. The development tree overrides `nodemailer`, the `zod` of `koa-body` and `@hono/node-server` to patched releases. The advisories left in it (`zod` 3 inside `koa-session`, `stream-json`, `react-router` 6, `minimatch`/`glob` in build tools, `deepmerge`) have no compatible fix and are not shipped with the plugin; the [migration guide](https://strapi-community.github.io/plugin-io/guide/migration#dependency-advisories-development-tree) lists each one and why it stays.
 
 ## Performance
 
@@ -313,21 +333,20 @@ Keep the Redis URL in an environment variable. The admin panel does not store it
 3. **Drafts are not sent by default.** Turn off _Only published content_ to send drafts.
 4. **Delete events go to readers only** and include `locale` for localized content.
 5. **Rooms:** API-token rooms are `io-token-<id>`; custom role rooms are `io-role-<role type>` (`io-role-public` and `io-role-authenticated` are unchanged).
-6. **Settings are enforced.** Settings stored by 5.x were never applied. On the first start, unused keys (Redis, namespaces, entity subscriptions, live preview, field-level changes) are dropped, and the old default origin `http://localhost:3000` and the old default connection limit of 1000 are reset. Review _Settings > Socket.IO_ after upgrading.
+6. **Settings are enforced.** Settings stored by 5.x were never applied. On the first start, unused keys (Redis, namespaces, live preview, field-level changes) are dropped, entity subscriptions stay off until you turn them on, and the old default origin `http://localhost:3000` and the old default connection limit of 1000 are reset. Review _Settings > Socket.IO_ after upgrading.
 7. **Admin permissions.** Only Super Admins can open the plugin pages until you grant the new permissions to other roles.
-8. **Removed:** the `security` service, the scaffold route `GET /api/io`, settings export and import, and the entity subscription API, which was never part of the published 5.4 to 5.8 builds.
+8. **Removed:** the `security` service, the scaffold route `GET /api/io`, live preview field events and field-level diffs (the migration guide explains why). **Restored:** entity subscriptions (with permission checks, off by default; clients pass the `documentId`) and settings export and import.
 9. **Message size.** `maxHttpBufferSize` defaults to 100 KB. Raise it in `socket.serverOptions` if clients send larger messages.
 10. **Allowed origins apply to WebSocket too.** 5.x accepted WebSocket clients from any origin. With an empty list only same-origin browsers (plus `server.url` / `admin.url`) may connect; list your frontends.
 11. **Admin sockets use `socket.data.admin`.** Presence sockets no longer appear as `socket.data.user`, and `config.events` handlers skip them unless the event sets `admin: true`.
-12. **`hooks.init`** receives `{ strapi, $io, io }` and runs before the plugin handshake, as in 5.x. Middleware added there runs before authentication.
+12. **Node.js 22.21+ or 24.9+** is required.
+13. **`hooks.init`** receives `{ strapi, $io, io }` and runs before the plugin handshake, as in 5.x. Middleware added there runs before authentication.
 
 The [migration guide](https://strapi-community.github.io/plugin-io/guide/migration) explains each step with code.
 
 ## Troubleshooting
 
-**`strapi transfer` fails with 504 or 524 behind a proxy (#112).** Socket.IO's upgrade listener stopped Node from passing the Data Transfer WebSocket to Strapi. On Node 22.21+ / 24.9+ the plugin tells Node (`shouldUpgradeCallback`) to accept upgrades only on the Socket.IO path, so every other request reaches Strapi exactly as without the plugin. On older Node versions bodyless upgrades are forwarded to Strapi. If you attach your own `upgrade` listener, the plugin leaves those upgrades to you.
-
-**REST `POST` with an `Upgrade: h2c` header returns 400.** Some HTTP clients (for example Java's `HttpClient`) send an h2c upgrade header on plain-HTTP requests. On Node 22.21+ / 24.9+ these requests work normally. On older Node versions the plugin cannot pass their body on and answers `400` with a hint; upgrade Node or turn off h2c in the client.
+**`strapi transfer` fails with 504 or 524 behind a proxy (#112).** Socket.IO's upgrade listener stopped Node from passing the Data Transfer WebSocket to Strapi. The plugin tells Node (`shouldUpgradeCallback`, Node 22.21+ / 24.9+) to accept upgrades only on the Socket.IO path, so every other request, including a `POST` with an `Upgrade: h2c` header and a body, reaches Strapi exactly as without the plugin. If you attach your own `upgrade` listener, the plugin leaves those upgrades to you. On an older, unsupported Node.js the plugin logs a warning at startup.
 
 **`strapi ts:generate-types` or shutdown hangs (#109).** The plugin no longer closes Strapi's HTTP server, and all its timers are released on destroy.
 
@@ -348,11 +367,14 @@ npm run format:check  # Prettier
 npm run build         # @strapi/sdk-plugin
 npm test              # node --test
 npm run test:types    # checks types.d.ts with tsc
-npm run test:e2e      # Playwright browser tests against a running Strapi app (see below)
+npm run test:e2e      # e2e suites against a running Strapi app (see below)
+npm run test:e2e:app  # scaffolds a Strapi 5.61 app with the packed plugin and runs the e2e suites (as CI does)
 npm run verify
 ```
 
-`npm run test:e2e` runs the admin regression suite (Settings form, unsaved-changes guard, Monitoring, homepage widgets, 390 px and dark mode, read-only RBAC) in a standalone Chromium. Point it at a Strapi app with the plugin installed: `IO_E2E_URL=http://127.0.0.1:1337 IO_E2E_EMAIL=... IO_E2E_PASSWORD=... npm run test:e2e` (optionally `IO_E2E_VIEWER_EMAIL` / `IO_E2E_VIEWER_PASSWORD` for an admin with read-only plugin permissions). Run `npx playwright install chromium` once. Without `IO_E2E_URL` the tests are skipped.
+`npm run test:e2e` runs the admin regression suite (Settings form, unsaved-changes guard, export and import, Monitoring, homepage widgets, 390 px and dark mode, read-only RBAC) in a standalone Chromium and the socket/API suite (per-audience delivery, entity subscriptions, settings import check, #112 upgrades, `Upgrade: h2c` bodies). Point it at a Strapi app with the plugin installed: `IO_E2E_URL=http://127.0.0.1:1337 IO_E2E_EMAIL=... IO_E2E_PASSWORD=... IO_E2E_TOKEN=<full-access API token> npm run test:e2e` (optionally `IO_E2E_VIEWER_EMAIL` / `IO_E2E_VIEWER_PASSWORD` for an admin with read-only plugin permissions). Run `npx playwright install chromium` once. Without these variables the tests are skipped.
+
+`npm run build && npm run test:e2e:app` does all of that for you: it scaffolds a Strapi 5.61 app outside the repository (SQLite, the synthetic content types in `tests/e2e/app`, loopback-only egress), installs the packed plugin, seeds admins and a token with random per-run secrets that are never printed, and runs both suites. Options: `--port` (default 1357), `--dir`, `--overrides` (apply this repo's npm overrides to the app) and `--keep`. CI runs it on Node 22 and 24.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/). semantic-release publishes releases from `main` and folds the `[Unreleased]` section of `CHANGELOG.md` into the release notes (`scripts/release-unreleased.mjs`).
 

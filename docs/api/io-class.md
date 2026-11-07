@@ -1,5 +1,5 @@
 ---
-description: Reference for strapi.$io in the Strapi Socket.IO plugin - emit, emitIdentifier, raw, room helpers, revalidateSockets, server and namespaces, with TypeScript types.
+description: Reference for strapi.$io in the Strapi Socket.IO plugin - emit, emitIdentifier, raw, room helpers, entity subscriptions, revalidateSockets, server and namespaces, with TypeScript types.
 ---
 
 # IO class (`strapi.$io`)
@@ -22,6 +22,9 @@ strapi.$io.broadcast(socketId, event, data); // everyone except socketId
 strapi.$io.emitToNamespace('chat', event, data);
 strapi.$io.disconnectSocket(socketId);
 await strapi.$io.revalidateSockets(kinds?, { ids? });
+await strapi.$io.subscribeToEntity(socketId, uid, documentId); // same checks as subscribe-entity
+strapi.$io.unsubscribeFromEntity(socketId, uid, documentId);
+strapi.$io.getEntitySubscriptions(socketId);
 
 strapi.$io.server; // Socket.IO Server
 strapi.$io.namespaces; // { '': Namespace, chat: Namespace }
@@ -91,7 +94,7 @@ await strapi.$io.raw({ event: 'report:ready', data: { id }, rooms: [`user-${user
 | `emitToNamespace(namespace, event, data)`   | `void`              | `namespace` with or without the leading slash.                          |
 | `disconnectSocket(socketId)`                | `boolean`           | Closes the connection.                                                  |
 
-Plugin rooms (`io-role-`, `io-token-`, `io-admin-`, `presence:`) cannot be
+Plugin rooms (`io-role-`, `io-token-`, `io-admin-`, `io-entity-`, `presence:`) cannot be
 joined with `joinRoom()`.
 
 ## `revalidateSockets()`
@@ -159,19 +162,51 @@ const handler = (_ctx: unknown, socket: { data: SocketData }) => {
 };
 ```
 
-## Removed in 6.0
+## Entity subscriptions
 
-`subscribeToEntity`, `unsubscribeFromEntity`, `getEntitySubscriptions`,
-`emitToEntity`, `getEntityRoomSockets` and the client events
-`subscribe-entity` / `unsubscribe-entity` were only in an unpublished source
-tree; the npm builds 5.4.0 to 5.8.3 did not contain them. Filter content
-events by `documentId` on the client instead:
+Clients can follow single entries once _Settings > Socket.IO > Entry
+subscriptions_ is on. Each subscription is checked against the read
+permission of the client's own role or API token, and every event is
+sanitized with those permissions. Subscribers also receive events of content
+types and actions that are not broadcast under _Events_; a client that is in
+both its role room and an entry room receives each event once.
 
 ```js
-socket.on('article:update', ({ data }) => {
-  if (data.attributes.documentId === currentDocumentId) render(data);
+// client
+socket.emit('subscribe-entity', { uid: 'api::article.article', documentId }, (reply) => {
+  // { success: true, uid, documentId, id } or { success: false, error }
 });
+socket.on('article:update', ({ data }) => render(data.attributes));
+socket.emit('unsubscribe-entity', { uid: 'api::article.article', documentId });
+socket.emit('get-entity-subscriptions', ({ subscriptions }) => console.log(subscriptions));
 ```
+
+| Error                                                 | Meaning                                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `Entity subscriptions are disabled`                   | The setting is off.                                                            |
+| `Invalid parameters: uid and documentId are required` | `uid` is not an `api::` uid or `documentId` is not a document id.              |
+| `Not allowed`                                         | Admin socket, unknown content type, or no `find`/`findOne` for the role/token. |
+| `Entity not found`                                    | No such entry (published only, while _Only published content_ is on).          |
+| `Maximum subscriptions (n) reached`                   | The per-client limit from the settings.                                        |
+| `Rate limit exceeded`                                 | More than ten subscribe requests per second.                                   |
+
+Server code can use the same checks:
+
+| Method                                             | Returns                                                           |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| `subscribeToEntity(socketId, uid, documentId)`     | `Promise<{ success, uid, documentId, id } \| { success, error }>` |
+| `unsubscribeFromEntity(socketId, uid, documentId)` | `{ success, uid, documentId, id } \| { success, error }`          |
+| `getEntitySubscriptions(socketId)`                 | `{ success, subscriptions: [{ uid, documentId, id }] }`           |
+
+`emit()` and `emitIdentifier()` accept `broadcast: false` to reach only the
+subscribers of `data.documentId`.
+
+## Not part of 6.0
+
+`emitToEntity`, `getEntityRoomSockets`, live preview field events
+(`preview:*`) and field-level diffs. See the
+[migration guide](../guide/migration.md#_11-restored-changed-and-removed) for
+the reasons.
 
 ## See also
 

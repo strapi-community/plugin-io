@@ -162,9 +162,16 @@ restart. Stored in Strapi's plugin store and validated with a strict schema.
 | Excluded fields              | none                 | Field names never sent.                                                                                                                                                                                                   |
 | Content types and actions    | none                 | Watch more API content types without a deploy.                                                                                                                                                                            |
 | Roles: allow connection      | all allowed          | Refuse sockets of a Users & Permissions role. What a role receives follows its permissions.                                                                                                                               |
+| Entry subscriptions, limit   | off, `100`           | Let clients follow single entries with `subscribe-entity` (1 to 1,000 per client). Needs read permission of the client's role or token.                                                                                   |
 | Show who is editing / typing | on / on              | Live presence in the Content Manager.                                                                                                                                                                                     |
 | Log connections              | off                  | Info log line per connect and disconnect (no IPs or tokens).                                                                                                                                                              |
 | Event log, size              | off, `100`           | In-memory list of recent events for _Monitoring_.                                                                                                                                                                         |
+
+The section _Export and import_ downloads the saved settings as JSON (no
+secrets) and imports such a file: the server checks it with the same schema
+(`POST /io/settings/validate`, needs _Update settings_), the changed values
+are listed for confirmation and fill the form, and nothing is stored until
+_Save_.
 
 ## Environment variables
 

@@ -4,7 +4,7 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ### Bug Fixes
 
-* **socket:** Strapi Data Transfer works again behind proxies. Engine.IO's `upgrade` listener stopped Node from passing `/admin/transfer/runner/*` upgrades to Strapi, so they timed out (504/524). On Node 22.21+ / 24.9+ the plugin wraps `shouldUpgradeCallback` so Node accepts upgrades only on the Socket.IO path and every other request (including `POST` with an `Upgrade: h2c` header and a body) reaches Strapi untouched; older Node versions forward bodyless upgrades and answer upgrades with a body with a clear `400`. Closes #112.
+* **socket:** Strapi Data Transfer works again behind proxies. Engine.IO's `upgrade` listener stopped Node from passing `/admin/transfer/runner/*` upgrades to Strapi, so they timed out (504/524). The plugin wraps the HTTP server's `shouldUpgradeCallback` (Node.js 22.21+ / 24.9+) so Node accepts upgrades only on the Socket.IO path and every other request (including `POST` with an `Upgrade: h2c` header and a body) reaches Strapi untouched. Closes #112.
 * **lifecycle:** `destroy()` no longer closes Strapi's HTTP server and releases every timer, so shutdown and `strapi ts:generate-types` exit (#109).
 * **events:** content events use the Document Service middleware. Publishing emits `:publish` instead of `:delete` plus `:create`, populated refetches use the same locale and status, and delete emits one event per locale.
 * **security:** Content API sanitizing fails closed. If sanitizing an entry fails, that audience is skipped instead of receiving the raw entry (class of #111). Sensitive keys are matched exactly, so `tokenCount` or an upload `hash` are no longer dropped.
@@ -36,6 +36,9 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ### Features
 
+* **subscriptions:** entity subscriptions are back, rebuilt on the per-audience delivery. Clients send `subscribe-entity` with `{ uid, documentId }` (`{ uid, id }` still works), `unsubscribe-entity` and `get-entity-subscriptions`; server code can call `strapi.$io.subscribeToEntity()`, `unsubscribeFromEntity()` and `getEntitySubscriptions()`. Each subscription needs read permission of the client's own role or API token and an existing entry, the payload is sanitized with that audience's permissions at every emit, and read permission is checked again on every event. Subscribers also receive events of content types and actions that are not broadcast. Off by default; turn it on under Settings > Socket.IO > Entry subscriptions (limit per client 1 to 1,000, default 100).
+* **admin:** settings export and import are back. Export downloads the saved settings as JSON (no secrets). Import checks the file with the server's strict schema (`POST /io/settings/validate`, needs `settings.update`), lists the changed values in a confirmation dialog and fills the form; nothing is stored until Save.
+* **admin:** clicking a setting's title toggles its switch (the title is the switch's label), which enlarges the click target.
 * **events:** new actions `publish`, `unpublish` and `discardDraft`; content types and actions can also be chosen in the admin settings.
 * **admin:** Settings, Monitoring, homepage widgets and the Live presence panel were rebuilt with the Strapi Design System 2 following native Strapi patterns (Save in the header, unsaved-changes guard, inline validation, confirmation dialogs, loading, empty and error states, RBAC-aware links and pages, five languages).
 * **api:** `strapi.$io.emitIdentifier()`, `revalidateSockets()`, `namespaces`, and `emit()` accepts a content type uid.
@@ -43,11 +46,12 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 ### Chores
 
 * Dependencies updated to their latest versions: socket.io and socket.io-client 4.8.4, zod 4.6.7 (fixes GHSA-mrhx-c7xc-m3w5), @strapi/strapi and @strapi/utils 5.61.0, @strapi/sdk-plugin 6.1.1, Design System and icons 2.2.4, styled-components 6.6.0, ESLint 10, semantic-release 25. `date-fns` and the implicit `lodash` use were removed. TypeScript stays on 5.9 because react-intl 6 (Strapi's admin version) only accepts TypeScript up to 5.
-* Node.js engines follow Strapi 5.61 (`>=22.0.0 <=26.x.x`); peers are `@strapi/strapi ^5.13.0` and Design System/icons `^2.2.0`.
+* Node.js engines are `^22.21.0 || >=24.9.0 <=26.x.x` (Strapi 5.61's range, from the releases that have `shouldUpgradeCallback`); peers are `@strapi/strapi ^5.13.0` and Design System/icons `^2.2.0`.
 * The legacy `server/` tree, the root `strapi-server.js`/`strapi-admin.js` shims, unreachable admin components and the manual root test scripts were removed. `dist/` is no longer tracked; `package-lock.json` is.
 * semantic-release folds this `[Unreleased]` section into the release notes and removes it from CHANGELOG.md (`scripts/release-unreleased.mjs`), so no stale block is left behind.
-* The development tree's `npm audit` reports advisories inside `@strapi/strapi` 5.61.0 (`koa-body`, `koa-session`, its bundled `zod` 3, `@strapi/core`/`@strapi/types`). They are dev-only and upstream; `npm audit --omit=dev` is clean.
+* Dev-tree npm overrides to patched releases: `nodemailer` ^10.3.1, `zod` ^4.6.7 under `koa-body` and `@hono/node-server` ^2.1.6 under `@modelcontextprotocol/node` (71 advisories with 5 high before, 67 with 3 high after). The remaining ones have no compatible fix and are listed in the migration guide; none of them is in the published package (`npm audit --omit=dev` is clean).
 * `npm run test:e2e`: Playwright 1.65 browser regression suite for Settings, Monitoring, the homepage widgets, 390 px, dark mode and read-only RBAC, run against a real Strapi app. The Socket.IO forwarding tests use a real Koa app, including `POST` bodies with an `Upgrade` header.
+* CI `e2e` job (Node 22 and 24): `scripts/e2e-app.mjs` scaffolds a Strapi 5.61 app with SQLite, synthetic content types and the packed plugin, and runs the Playwright admin suite and the new socket/API suite (`tests/e2e/socket.e2e.mjs`). Run it locally with `npm run build && npm run test:e2e:app`.
 * The Allowed origins hint in the settings matches the enforced rule (five languages).
 * ESLint 10 flat config, Prettier check, `node --test` suite and published-types check; CI on Node 22 and 24, hardened release workflow (SHA-pinned actions, lockfile install without scripts, npm OIDC with `NPM_TOKEN` fallback and provenance), Dependabot with verified auto-merge.
 
@@ -59,9 +63,10 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **Room names.** API-token rooms are `io-token-<id>` and custom role rooms are `io-role-<role type>`. `io-role-public` and `io-role-authenticated` are unchanged.
 * **Settings.** Stored 5.x settings are migrated on the first start: keys that were never implemented are dropped, the old default origin `http://localhost:3000` and the old default limit of 1000 connections are reset. Review the settings after upgrading because they are now enforced.
 * **Permissions.** Grant the new plugin permissions to non-Super-Admin roles that need the Socket.IO pages.
-* **Removed APIs:** the `security` service, settings export and import, the entity subscription helpers (never part of the published 5.4 to 5.8 builds) and `GET /api/io`.
+* **Removed APIs:** the `security` service and `GET /api/io`. Live preview field events (`preview:*`), field-level diffs and the Redis toggle are not part of 6.0; see the migration guide for the reasons and replacements.
+* **Entity subscriptions** are off until you turn them on in the settings. Clients now pass the `documentId`; numeric ids are not accepted. Rooms are named `io-entity-<audience>|<uid>|<documentId>` and cannot be joined with `joinRoom()`.
 * **Message size.** `maxHttpBufferSize` defaults to 100 KB; set it in `socket.serverOptions` if clients send larger messages.
-* **Node.js 22** or later is required; 22.21+ or 24.9+ is recommended (native upgrade routing, see #112).
+* **Node.js 22.21+ or 24.9+** is required (`shouldUpgradeCallback`, see #112). Node.js 22.0 to 22.20 and 23 are not supported, and the 400 answer for upgrade requests with a body on older versions is gone.
 * **Allowed origins.** An empty list now means "same origin only" for WebSocket too. Add every browser frontend origin under Settings > Socket.IO > Allowed origins.
 * **Admin sockets.** Presence sockets carry `socket.data.admin` (not `socket.data.user`) and do not run `config.events` handlers unless the event sets `admin: true`. Check `socket.data.kind` in your handlers.
 * **hooks.init** runs before the plugin handshake and receives `{ strapi, $io, io }`. Middleware you add there runs before authentication, so `socket.data.kind` is not set yet; use a `connection` event for logic that needs the authenticated client.
