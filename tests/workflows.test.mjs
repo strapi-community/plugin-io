@@ -30,6 +30,14 @@ test('CI is read-only and runs the e2e suites against a scaffolded Strapi app on
   assert.match(e2e, /tests\/e2e\/app\/package-lock\.json/);
 });
 
+test('CI runs the multi-process suites against PostgreSQL and SQLite', () => {
+  const ci = workflows.find(([f]) => f === 'ci.yml')[1];
+  const verify = ci.slice(ci.indexOf('\n  verify:'), ci.indexOf('\n  e2e:'));
+  assert.match(verify, /image: postgres:16/);
+  assert.match(verify, /IO_TEST_PG_URL: postgres:\/\/[^@]+@127\.0\.0\.1:5432\//);
+  assert.match(verify, /npm rebuild better-sqlite3/);
+});
+
 test('the e2e app installs from its committed lockfile with lifecycle scripts off', () => {
   const source = readFileSync(script, 'utf8');
   assert.match(source, /'ci',\s*'--ignore-scripts'/);

@@ -1,6 +1,7 @@
 # Checks every pull request and push to a non-main branch: lint, formatting,
-# tests, type check, build and package verification on the Node versions
-# Strapi 5.61 supports, then the end-to-end suites against a scaffolded
+# tests (including the multi-process suites on PostgreSQL 16), type check,
+# build and package verification on the Node versions Strapi 5.61 supports,
+# then the end-to-end suites against a scaffolded
 # Strapi 5.61 app with the packed plugin (scripts/e2e-app.mjs).
 name: CI
 
@@ -26,6 +27,22 @@ jobs:
       fail-fast: false
       matrix:
         node: ['22', '24']
+    # PostgreSQL for the multi-process suites (tests/cluster*.test.mjs): the
+    # shared tables and several plugin nodes with the real Postgres adapter.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: io
+          POSTGRES_PASSWORD: io-ci-only
+          POSTGRES_DB: io_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U io -d io_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -38,6 +55,9 @@ jobs:
           cache: npm
       - name: Install dependencies (no lifecycle scripts)
         run: npm ci --ignore-scripts
+      # Only the native SQLite binding runs its install script (store tests on SQLite).
+      - name: Build better-sqlite3
+        run: npm rebuild better-sqlite3
       - name: Lint
         run: npm run lint
       - name: Format check
@@ -46,6 +66,8 @@ jobs:
         run: npm run build
       - name: Tests
         run: npm test
+        env:
+          IO_TEST_PG_URL: postgres://io:io-ci-only@127.0.0.1:5432/io_test
       - name: Type check (published types)
         run: npm run test:types
       - name: Verify package

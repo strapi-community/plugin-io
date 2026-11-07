@@ -13,6 +13,17 @@ import { createNodeId, detectClusterEnv, isClusterAdapter } from '../server/src/
  */
 const PG_URL = process.env.IO_TEST_PG_URL;
 
+/**
+ * better-sqlite3 is a native module; installs with --ignore-scripts (some
+ * workflows) have no binding until `npm rebuild better-sqlite3`.
+ */
+const sqliteAvailable = await import('better-sqlite3')
+  .then(({ default: Database }) => {
+    new Database(':memory:').close();
+    return true;
+  })
+  .catch(() => false);
+
 const token = (adminId, now, extra = {}) => ({
   adminId: String(adminId),
   firstname: 'Ada',
@@ -121,25 +132,32 @@ function contract(name, open, { shared = true } = {}) {
 
 contract('memory', async () => ({ store: createMemoryStore(), close: async () => {} }), { shared: false });
 
-contract('sqlite', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'io-store-'));
-  const knex = knexFactory({
-    client: 'better-sqlite3',
-    connection: { filename: join(dir, 'db.sqlite') },
-    useNullAsDefault: true,
+if (!sqliteAvailable) {
+  test(
+    'sqlite store contract (run npm rebuild better-sqlite3)',
+    { skip: 'better-sqlite3 binding not built' },
+    () => {}
+  );
+} else
+  contract('sqlite', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'io-store-'));
+    const knex = knexFactory({
+      client: 'better-sqlite3',
+      connection: { filename: join(dir, 'db.sqlite') },
+      useNullAsDefault: true,
+    });
+    const store = createDatabaseStore({ knex, dialect: 'sqlite' });
+    await store.ensure();
+    await store.ensure();
+    return {
+      store,
+      knex,
+      close: async () => {
+        await knex.destroy();
+        rmSync(dir, { recursive: true, force: true });
+      },
+    };
   });
-  const store = createDatabaseStore({ knex, dialect: 'sqlite' });
-  await store.ensure();
-  await store.ensure();
-  return {
-    store,
-    knex,
-    close: async () => {
-      await knex.destroy();
-      rmSync(dir, { recursive: true, force: true });
-    },
-  };
-});
 
 if (PG_URL) {
   contract('postgres', async () => {
