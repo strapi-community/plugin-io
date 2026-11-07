@@ -73,7 +73,15 @@ export function createBalancer({ upstreams, port, host = '127.0.0.1' }) {
 
   return {
     stats,
-    listen: () => new Promise((resolve) => server.listen(port, host, resolve)),
+    /** Starts listening; rejects (for example with EADDRINUSE) instead of throwing an unhandled error. */
+    listen: () =>
+      new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(port, host, () => {
+          server.off('error', reject);
+          resolve();
+        });
+      }),
     /** Cuts every proxied WebSocket, like an edge restart. */
     dropAll() {
       const n = live.size;

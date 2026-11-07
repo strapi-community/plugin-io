@@ -32,6 +32,7 @@
  */
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
 import {
   cpSync,
   createWriteStream,
@@ -84,6 +85,17 @@ for (const port of [...PORTS, LB]) {
   if (!Number.isInteger(port) || port < 1024 || RESERVED_PORTS.has(port)) usage(`Refusing port ${port}.`);
 }
 if (PORTS.length !== 2) usage('--ports takes two ports.');
+// Every port must be free before anything starts: a busy replica port would
+// make the health waits run into their 3-minute timeouts.
+const portFree = (port) =>
+  new Promise((done) => {
+    const probe = createServer();
+    probe.once('error', () => done(false));
+    probe.listen(port, '127.0.0.1', () => probe.close(() => done(true)));
+  });
+for (const port of [...PORTS, LB]) {
+  if (!(await portFree(port))) usage(`Port ${port} is in use on 127.0.0.1. Pass free ports with --ports and --lb.`);
+}
 const RUNS = Number(args.runs);
 if (!Number.isInteger(RUNS) || RUNS < 1 || RUNS > 20) usage('--runs takes 1 to 20.');
 const APP = resolve(ROOT, args.dir);
