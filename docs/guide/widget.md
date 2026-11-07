@@ -10,25 +10,30 @@ The Socket.IO plugin adds a beautiful, real-time statistics widget to your Strap
 
 ![Socket.IO Dashboard Widget](/widget.png)
 
-*The widget automatically appears on your admin dashboard after installing the plugin.*
+_The widget automatically appears on your admin dashboard after installing the plugin._
 
 ---
 
 ## Features
 
 ### 🟢 Live Status Indicator
+
 A pulsing green dot shows the plugin is active and receiving real-time data. If the indicator turns red, the Socket.IO server is offline or not responding.
 
 ### 👥 Active Connections
+
 Displays the current number of connected Socket.IO clients in real-time.
 
 ### 💬 Active Rooms
+
 Shows how many Socket.IO rooms are currently active.
 
 ### ⚡ Events per Second
+
 Real-time counter showing the current rate of event emissions.
 
 ### 📈 Total Events
+
 Cumulative count of all events processed since the plugin started or was reset.
 
 ---
@@ -51,14 +56,16 @@ The widget appears in the main dashboard area below the welcome message.
 
 ![Socket.IO Settings Panel](/settings.png)
 
-*Access full settings by clicking the "View Settings" link in the widget or navigating to Settings → Socket.IO*
+_Access full settings by clicking the "View Settings" link in the widget or navigating to Settings → Socket.IO_
 
 ### Color-Coded Metrics
+
 - **Blue Cards** - Connection metrics
-- **Green Cards** - Activity metrics  
+- **Green Cards** - Activity metrics
 - **Orange Cards** - Performance metrics
 
 ### Responsive Layout
+
 - Desktop: Full-width cards with icons
 - Tablet: 2-column grid
 - Mobile: Single column stack
@@ -69,9 +76,10 @@ The widget appears in the main dashboard area below the welcome message.
 
 ![Monitoring Settings](/monitoringSettings.png)
 
-*The monitoring dashboard provides detailed insights into connections, events, and performance.*
+_The monitoring dashboard provides detailed insights into connections, events, and performance._
 
 ### What You Can Monitor
+
 - **Active Connections** - See who's connected right now
 - **Connection History** - Track connection patterns
 - **Event Logs** - View all emitted events
@@ -110,16 +118,19 @@ const interval = setInterval(fetchStats, 5000);
 ## Benefits
 
 ### For Developers
+
 - 👀 **Visual Monitoring** - See Socket.IO activity at a glance
 - 🐛 **Debug Tool** - Quickly spot connection issues
 - 📊 **Performance Tracking** - Monitor event rates
 
 ### For Admins
+
 - 📈 **Real-Time Insights** - Live connection data
 - 🚨 **Issue Detection** - Notice problems immediately
 - ✅ **System Health** - Confirm Socket.IO is running
 
 ### For Teams
+
 - 👥 **Collaboration** - See team activity
 - 📊 **Metrics Dashboard** - Shared visibility
 - 🎯 **Decision Making** - Data-driven insights
@@ -131,14 +142,16 @@ const interval = setInterval(fetchStats, 5000);
 ### Widget Not Showing
 
 **Check plugin is enabled:**
+
 ```javascript
 // config/plugins.js
 module.exports = {
-  io: { enabled: true }
+  io: { enabled: true },
 };
 ```
 
 **Restart Strapi:**
+
 ```bash
 npm run develop
 ```
@@ -148,11 +161,13 @@ npm run develop
 **Check browser console** for errors
 
 **Verify API endpoint:**
+
 ```
 GET /io/monitoring/stats
 ```
 
 **Clear cache and refresh:**
+
 ```bash
 rm -rf .cache build
 npm run develop
@@ -161,11 +176,13 @@ npm run develop
 ### Widget Shows Zero Connections
 
 This is normal if:
+
 - No clients are currently connected
 - Plugin just started
 - All sockets disconnected
 
 **Test connection:**
+
 ```javascript
 import { io } from 'socket.io-client';
 const socket = io('http://localhost:1337');
@@ -186,4 +203,3 @@ const socket = io('http://localhost:1337');
 **Compatible with**: Strapi v5.x  
 **Auto-Refresh**: Every 5 seconds  
 **Location**: Admin Dashboard Home Page
-

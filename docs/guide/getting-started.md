@@ -44,45 +44,39 @@ module.exports = ({ env }) => ({
     enabled: true,
     config: {
       // Enable automatic events for content types
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment'
-      ],
-      
+      contentTypes: ['api::article.article', 'api::comment.comment'],
+
       // Socket.IO server options
       socket: {
         serverOptions: {
           cors: {
             origin: env('CLIENT_URL', 'http://localhost:3000'),
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 });
 ```
 
 ```typescript [TypeScript]
 export default ({ env }) => ({
-	io: {
-		enabled: true,
-		config: {
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment'
-      ],
-      
+  io: {
+    enabled: true,
+    config: {
+      contentTypes: ['api::article.article', 'api::comment.comment'],
+
       socket: {
         serverOptions: {
           cors: {
             origin: env('CLIENT_URL', 'http://localhost:3000'),
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 });
 ```
 
@@ -129,15 +123,15 @@ socket.on('connect', () => {
 });
 
 // Listen for article events
-	socket.on('article:create', (data) => {
+socket.on('article:create', (data) => {
   console.log('New article created:', data);
-	});
+});
 
-	socket.on('article:update', (data) => {
+socket.on('article:update', (data) => {
   console.log('Article updated:', data);
-	});
+});
 
-	socket.on('article:delete', (data) => {
+socket.on('article:delete', (data) => {
   console.log('Article deleted:', data);
 });
 ```
@@ -149,10 +143,10 @@ import { io } from 'socket.io-client';
 const jwtToken = 'your-jwt-token-here';
 
 const socket = io('http://localhost:1337', {
-	auth: {
-		strategy: 'jwt',
-    token: jwtToken
-  }
+  auth: {
+    strategy: 'jwt',
+    token: jwtToken,
+  },
 });
 
 socket.on('connect', () => {
@@ -160,7 +154,7 @@ socket.on('connect', () => {
 });
 
 // Listen for events based on user role permissions
-	socket.on('article:create', (data) => {
+socket.on('article:create', (data) => {
   console.log('New article:', data);
 });
 ```
@@ -173,17 +167,17 @@ import { io } from 'socket.io-client';
 const apiToken = 'your-api-token-here';
 
 const socket = io('http://localhost:1337', {
-	auth: {
+  auth: {
     strategy: 'api-token',
-    token: apiToken
-  }
+    token: apiToken,
+  },
 });
 
 socket.on('connect', () => {
   console.log('✅ API Token authenticated:', socket.id);
 });
 
-	socket.on('article:create', (data) => {
+socket.on('article:create', (data) => {
   console.log('New article:', data);
 });
 ```
@@ -194,11 +188,11 @@ socket.on('connect', () => {
 
 The plugin automatically handles authentication and places connections in rooms based on their role or token:
 
-| Strategy | Use Case | Room Assignment |
-|----------|----------|----------------|
-| **None** | Public access | `Public` role room |
-| **JWT** | User-Permissions plugin | User's role room (e.g., `Authenticated`) |
-| **API Token** | Server-to-server | Token's configured permissions |
+| Strategy      | Use Case                | Room Assignment                          |
+| ------------- | ----------------------- | ---------------------------------------- |
+| **None**      | Public access           | `Public` role room                       |
+| **JWT**       | User-Permissions plugin | User's role room (e.g., `Authenticated`) |
+| **API Token** | Server-to-server        | Token's configured permissions           |
 
 ::: tip Role-Based Events
 Users only receive events for content types their role has permission to access. This is enforced automatically!
@@ -218,7 +212,7 @@ After installation, configure the plugin visually:
 
 ![Socket.IO Settings Panel](/settings.png)
 
-*The visual settings panel makes configuration easy - no code required for most settings!*
+_The visual settings panel makes configuration easy - no code required for most settings!_
 
 ---
 
@@ -229,6 +223,7 @@ After installation, you'll see a live statistics widget on your admin home page:
 ![Socket.IO Dashboard Widget](/widget.png)
 
 **Widget Features:**
+
 - 🟢 Live connection status with pulsing indicator
 - 👥 Active connections count
 - 💬 Active rooms count
@@ -245,35 +240,32 @@ Test your setup with this simple HTML file:
 ```html
 <!DOCTYPE html>
 <html>
-<head>
-  <title>Socket.IO Test</title>
-  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
-</head>
-<body>
-  <h1>Socket.IO Test</h1>
-  <div id="status">Connecting...</div>
-  <div id="events"></div>
+  <head>
+    <title>Socket.IO Test</title>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>Socket.IO Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="events"></div>
 
-  <script>
-    const socket = io('http://localhost:1337');
-    
-    socket.on('connect', () => {
-      document.getElementById('status').innerHTML = 
-        '✅ Connected: ' + socket.id;
-    });
-    
-    socket.on('article:create', (data) => {
-      const div = document.getElementById('events');
-      div.innerHTML += '<p>📝 New article: ' + 
-        JSON.stringify(data) + '</p>';
-    });
-    
-    socket.on('disconnect', () => {
-      document.getElementById('status').innerHTML = 
-        '❌ Disconnected';
-    });
-  </script>
-</body>
+    <script>
+      const socket = io('http://localhost:1337');
+
+      socket.on('connect', () => {
+        document.getElementById('status').innerHTML = '✅ Connected: ' + socket.id;
+      });
+
+      socket.on('article:create', (data) => {
+        const div = document.getElementById('events');
+        div.innerHTML += '<p>📝 New article: ' + JSON.stringify(data) + '</p>';
+      });
+
+      socket.on('disconnect', () => {
+        document.getElementById('status').innerHTML = '❌ Disconnected';
+      });
+    </script>
+  </body>
 </html>
 ```
 

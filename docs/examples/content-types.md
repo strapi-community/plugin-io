@@ -17,17 +17,14 @@ module.exports = ({ env }) => ({
   io: {
     enabled: true,
     config: {
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment',
-        'api::product.product'
-      ]
-    }
-  }
+      contentTypes: ['api::article.article', 'api::comment.comment', 'api::product.product'],
+    },
+  },
 });
 ```
 
 **This automatically enables:**
+
 - ✅ Create events (`article:create`)
 - ✅ Update events (`article:update`)
 - ✅ Delete events (`article:delete`)
@@ -47,30 +44,30 @@ module.exports = ({ env }) => ({
         // Only create events
         {
           uid: 'api::article.article',
-          actions: ['create']
+          actions: ['create'],
         },
-        
+
         // Create and update, no delete
         {
           uid: 'api::product.product',
-          actions: ['create', 'update']
+          actions: ['create', 'update'],
         },
-        
+
         // All events (same as string format)
         {
           uid: 'api::comment.comment',
-          actions: ['create', 'update', 'delete']
-        }
-      ]
-    }
-  }
+          actions: ['create', 'update', 'delete'],
+        },
+      ],
+    },
+  },
 });
 ```
 
 ### Available Actions
 
-| Action | Event Name | Description |
-|--------|-----------|-------------|
+| Action   | Event Name             | Description                 |
+| -------- | ---------------------- | --------------------------- |
 | `create` | `{contentType}:create` | Fired when entry is created |
 | `update` | `{contentType}:update` | Fired when entry is updated |
 | `delete` | `{contentType}:delete` | Fired when entry is deleted |
@@ -88,18 +85,18 @@ contentTypes: [
   {
     uid: 'api::article.article',
     actions: ['create', 'update'],
-    populate: ['author', 'category', 'tags']
-  }
-]
+    populate: ['author', 'category', 'tags'],
+  },
+];
 ```
 
 **Frontend receives:**
 
 ```javascript
 socket.on('article:create', (article) => {
-  console.log(article.attributes.author);  // ✅ Populated
+  console.log(article.attributes.author); // ✅ Populated
   console.log(article.attributes.category); // ✅ Populated
-  console.log(article.attributes.tags);     // ✅ Populated
+  console.log(article.attributes.tags); // ✅ Populated
 });
 ```
 
@@ -112,9 +109,9 @@ contentTypes: [
   {
     uid: 'api::article.article',
     actions: ['create'],
-    eventPrefix: 'new-article'  // Emits as 'new-article:create'
-  }
-]
+    eventPrefix: 'new-article', // Emits as 'new-article:create'
+  },
+];
 ```
 
 **Frontend listens to:**
@@ -142,21 +139,21 @@ module.exports = {
         {
           uid: 'api::article.article',
           actions: ['create', 'update', 'delete'],
-          populate: ['author', 'category', 'coverImage']
+          populate: ['author', 'category', 'coverImage'],
         },
-        
+
         // Comments - only create
         {
           uid: 'api::comment.comment',
           actions: ['create'],
-          populate: ['author']
+          populate: ['author'],
         },
-        
+
         // Categories - all events, no relations
-        'api::category.category'
-      ]
-    }
-  }
+        'api::category.category',
+      ],
+    },
+  },
 };
 ```
 
@@ -198,24 +195,24 @@ module.exports = {
         {
           uid: 'api::product.product',
           actions: ['create', 'update'],
-          populate: ['images', 'category', 'variants']
+          populate: ['images', 'category', 'variants'],
         },
-        
+
         // Orders - all events
         {
           uid: 'api::order.order',
           actions: ['create', 'update'],
-          populate: ['customer', 'items']
+          populate: ['customer', 'items'],
         },
-        
+
         // Stock updates
         {
           uid: 'api::inventory.inventory',
-          actions: ['update']
-        }
-      ]
-    }
-  }
+          actions: ['update'],
+        },
+      ],
+    },
+  },
 };
 ```
 
@@ -227,7 +224,7 @@ socket.on('product:update', (product) => {
   if (product.id === currentProductId) {
     updatePrice(product.attributes.price);
     updateStock(product.attributes.stock);
-    
+
     if (product.attributes.stock === 0) {
       showOutOfStockBanner();
     }
@@ -256,23 +253,23 @@ module.exports = {
         {
           uid: 'plugin::users-permissions.user',
           actions: ['create', 'update'],
-          populate: ['role']
+          populate: ['role'],
         },
-        
+
         // Track content creation
         'api::article.article',
         'api::comment.comment',
         'api::media.media',
-        
+
         // Monitor orders
         {
           uid: 'api::order.order',
           actions: ['create', 'update'],
-          populate: ['customer', 'items']
-        }
-      ]
-    }
-  }
+          populate: ['customer', 'items'],
+        },
+      ],
+    },
+  },
 };
 ```
 
@@ -280,7 +277,7 @@ module.exports = {
 
 ```javascript
 const socket = io('http://localhost:1337/admin', {
-  auth: { strategy: 'api-token', token: adminToken }
+  auth: { strategy: 'api-token', token: adminToken },
 });
 
 // Live activity feed
@@ -313,16 +310,16 @@ Only emit events for published content:
 module.exports = {
   async afterCreate(event) {
     const { result } = event;
-    
+
     // Only emit if published
     if (result.publishedAt) {
       await strapi.$io.emit({
         event: 'create',
         schema: 'api::article.article',
-        data: result
+        data: result,
       });
     }
-  }
+  },
 };
 ```
 
@@ -335,7 +332,7 @@ Control which roles receive which events via Admin Panel:
 1. Select **Public** role:
    - Enable `article:create` ✅
    - Disable `article:delete` ❌
-   
+
 2. Select **Authenticated** role:
    - Enable all article events ✅
 
@@ -350,7 +347,7 @@ Reduce payload size by excluding heavy fields:
 ```javascript
 // In Admin Panel Settings
 events: {
-  excludeFields: ['content', 'largeData', 'internalNotes']
+  excludeFields: ['content', 'largeData', 'internalNotes'];
 }
 ```
 
@@ -361,7 +358,7 @@ Or programmatically:
 module.exports = {
   async afterCreate(event) {
     const { result } = event;
-    
+
     // Custom emit with limited fields
     await strapi.$io.raw({
       event: 'article:create',
@@ -369,11 +366,11 @@ module.exports = {
         id: result.id,
         title: result.title,
         excerpt: result.excerpt,
-        author: result.author.username
+        author: result.author.username,
         // Exclude heavy content field
-      }
+      },
     });
-  }
+  },
 };
 ```
 
@@ -387,14 +384,14 @@ const { debounce } = require('lodash');
 const emitBulkUpdate = debounce((ids) => {
   strapi.$io.raw({
     event: 'articles:bulk-update',
-    data: { updatedIds: ids }
+    data: { updatedIds: ids },
   });
 }, 1000);
 
 // In bulk operation
 bulkUpdate.forEach(async (article) => {
   await strapi.entityService.update('api::article.article', article.id, {
-    data: article
+    data: article,
   });
   emitBulkUpdate(article.id);
 });
@@ -412,22 +409,22 @@ const { io } = require('socket.io-client');
 
 describe('Content Type Events', () => {
   let socket;
-  
+
   beforeAll(() => {
     socket = io('http://localhost:1337');
   });
-  
+
   afterAll(() => {
     socket.disconnect();
   });
-  
+
   test('should receive article:create event', (done) => {
     socket.on('article:create', (article) => {
       expect(article).toHaveProperty('id');
       expect(article.attributes).toHaveProperty('title');
       done();
     });
-    
+
     // Create article via API
     fetch('http://localhost:1337/api/articles', {
       method: 'POST',
@@ -435,9 +432,9 @@ describe('Content Type Events', () => {
       body: JSON.stringify({
         data: {
           title: 'Test Article',
-          content: 'Test content'
-        }
-      })
+          content: 'Test content',
+        },
+      }),
     });
   });
 });
@@ -463,6 +460,7 @@ Navigate to **Settings → Socket.IO → Role Permissions** and verify the role 
 **Verify event name:**
 
 Events follow the pattern `{singularName}:{action}`. For `api::article.article`, events are:
+
 - `article:create`
 - `article:update`
 - `article:delete`

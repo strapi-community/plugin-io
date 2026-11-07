@@ -1,1483 +1,303 @@
 # @strapi-community/plugin-io
 
-> Real-time WebSocket integration for Strapi v5 with Socket.IO
+> Real-time content events for Strapi 5 with Socket.IO, scoped by Strapi's own permissions.
 
 [![NPM Version](https://img.shields.io/npm/v/@strapi-community/plugin-io?style=flat-square)](https://www.npmjs.com/package/@strapi-community/plugin-io)
 [![NPM Downloads](https://img.shields.io/npm/dm/@strapi-community/plugin-io?style=flat-square)](https://www.npmjs.com/package/@strapi-community/plugin-io)
 [![License](https://img.shields.io/npm/l/@strapi-community/plugin-io?style=flat-square)](https://github.com/strapi-community/plugin-io/blob/main/LICENSE)
 [![Strapi Version](https://img.shields.io/badge/strapi-v5-blueviolet?style=flat-square)](https://strapi.io)
 
-Add real-time capabilities to your Strapi application with WebSocket support. Automatically broadcast content changes, manage user connections, and build live features like chat, notifications, and collaborative editing.
+The plugin attaches a Socket.IO server to Strapi's HTTP server and sends an event whenever a watched document is created, updated, published, unpublished, has its draft discarded or is deleted. Each client receives only what its role or API token may read through the REST API, sanitized with the same Content API sanitizer Strapi uses.
 
----
+Full documentation: <https://strapi-community.github.io/plugin-io/>
 
-## Table of Contents
+## Contents
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage Examples](#usage-examples)
-- [Helper Functions](#helper-functions)
+- [Requirements](#requirements)
+- [Quick start](#quick-start)
+- [Content events](#content-events)
 - [Authentication](#authentication)
-- [Admin Panel](#admin-panel)
-- [Monitoring Service](#monitoring-service)
-- [TypeScript Support](#typescript-support)
-- [Performance](#performance)
-- [Migration Guide](#migration-guide)
-- [Documentation](#documentation)
-- [Contributing](#contributing)
-- [License](#license)
+- [Configuration](#configuration)
+- [Admin panel](#admin-panel)
+- [Server API](#server-api)
+- [Security model](#security-model)
+- [Scaling with Redis](#scaling-with-redis)
+- [Upgrading from 5.x](#upgrading-from-5x)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
 
----
+## Requirements
 
-## Features
+|                     | Version                                                  |
+| ------------------- | -------------------------------------------------------- |
+| Strapi              | 5.13 or later (tested with 5.61)                         |
+| Node.js             | 22 or 24 (same range as Strapi 5.61: `>=22 <=26`)        |
+| Users & Permissions | Optional. Needed for user JWTs and the Public role room. |
 
-### Core Functionality
-- **Automatic Real-Time Events** - CRUD operations broadcast automatically to connected clients
-- **Entity-Specific Subscriptions** - Subscribe to individual entities for targeted updates
-- **Role-Based Access Control** - Built-in permission checks for JWT and API tokens
-- **Multi-Client Support** - Handle 2500+ concurrent connections efficiently
-
-### Live Presence (NEW)
-- **Real-Time Presence Awareness** - See who else is editing the same content
-- **Typing Indicator** - See when someone is typing and in which field
-- **Admin Panel Sidebar** - Live presence panel integrated into Content Manager
-- **Session-Based Auth** - Secure admin authentication for Socket.IO connections
-
-### Developer Experience
-- **Visual Admin Panel** - Configure everything through the Strapi admin interface
-- **TypeScript Support** - Full type definitions for IntelliSense
-- **Helper Functions** - 12 utility methods for common tasks
-- **Comprehensive Documentation** - Detailed guides and examples
-
-### Production Ready
-- **Redis Adapter** - Scale horizontally across multiple servers
-- **Rate Limiting** - Prevent abuse with configurable limits
-- **Monitoring Dashboard** - Live connection stats and event logs
-- **Security Features** - IP whitelisting, authentication, input validation
-
----
-
-## Quick Start
-
-### 1. Install the plugin
+## Quick start
 
 ```bash
 npm install @strapi-community/plugin-io
 ```
 
-### 2. Enable in your Strapi project
+`config/plugins.js`:
 
-Create or update `config/plugins.js`:
-
-```javascript
+```js
 module.exports = {
   io: {
     enabled: true,
     config: {
       contentTypes: ['api::article.article'],
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: 'http://localhost:3000',
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
-};
-```
-
-### 3. Start your Strapi server
-
-```bash
-npm run develop
-```
-
-### 4. Connect from your frontend
-
-```javascript
-import { io } from 'socket.io-client';
-
-const socket = io('http://localhost:1337');
-
-socket.on('article:create', (article) => {
-  console.log('New article published:', article);
-});
-
-socket.on('article:update', (article) => {
-  console.log('Article updated:', article);
-});
-```
-
-That's it! Your application now has real-time updates.
-
----
-
-## Installation
-
-### Requirements
-
-- **Node.js**: 18.x - 22.x
-- **Strapi**: v5.x
-- **npm**: 6.x or higher
-
-### Install the package
-
-```bash
-# Using npm
-npm install @strapi-community/plugin-io
-
-# Using yarn
-yarn add @strapi-community/plugin-io
-
-# Using pnpm
-pnpm add @strapi-community/plugin-io
-```
-
----
-
-## Configuration
-
-### Basic Configuration
-
-The simplest setup to get started:
-
-```javascript
-// config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      // Monitor these content types for changes
-      contentTypes: [
-        'api::article.article',
-        'api::comment.comment'
-      ]
-    }
-  }
-};
-```
-
-### Advanced Configuration
-
-Fine-tune the plugin behavior:
-
-```javascript
-// config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      // Content types with specific actions and populate
-      contentTypes: [
-        {
-          uid: 'api::article.article',
-          actions: ['create', 'update'],  // Only these events
-          populate: '*'                    // Include all relations
-        },
-        {
-          uid: 'api::comment.comment',
-          actions: ['create', 'delete'],
-          populate: ['author', 'article']  // Only specific relations
-        },
-        {
-          uid: 'api::order.order',
-          populate: {                      // Strapi populate syntax
-            customer: { fields: ['name', 'email'] },
-            items: { populate: ['product'] }
-          }
-        }
-      ],
-      
-      // Socket.IO server configuration
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: process.env.CLIENT_URL || 'http://localhost:3000',
-            methods: ['GET', 'POST'],
-            credentials: true
-          },
-          pingTimeout: 60000,
-          pingInterval: 25000
-        }
-      },
-      
-      // Custom event handlers
-      events: [
-        {
-          name: 'connection',
-          handler: ({ strapi, io }, socket) => {
-            strapi.log.info(`Client connected: ${socket.id}`);
-          }
-        },
-        {
-          name: 'disconnect',
-          handler: ({ strapi, io }, socket) => {
-            strapi.log.info(`Client disconnected: ${socket.id}`);
-          }
-        }
-      ],
-      
-      // Initialization hook
-      hooks: {
-        init: ({ strapi, $io }) => {
-          strapi.log.info('[Socket.IO] Server initialized');
-        }
-      }
-    }
-  }
-};
-```
-
-### Populate Configuration
-
-Include relations in emitted events by adding the `populate` option to content types. When configured, the plugin refetches entities with populated relations after create/update operations.
-
-#### Populate Formats
-
-| Format | Example | Description |
-|--------|---------|-------------|
-| `'*'` or `true` | `populate: '*'` | Include all relations (1 level deep) |
-| String array | `populate: ['author', 'category']` | Only specific relations |
-| Object | `populate: { author: { fields: ['name'] } }` | Full Strapi populate syntax |
-
-#### Examples
-
-```javascript
-contentTypes: [
-  // All relations with wildcard
-  { uid: 'api::article.article', populate: '*' },
-  
-  // Specific relations only
-  { 
-    uid: 'api::comment.comment', 
-    populate: ['author', 'post'] 
+    },
   },
-  
-  // Strapi populate syntax with field selection
-  { 
-    uid: 'api::order.order', 
-    populate: { 
-      customer: { fields: ['username', 'email'] },
-      items: { 
-        populate: { product: { fields: ['name', 'price'] } }
-      }
-    } 
-  },
-  
-  // No populate (only base fields)
-  { uid: 'api::log.log' }  // populate not set = no relations
-]
-```
-
-> **Note**: The `populate` option only affects `create` and `update` events. Delete events always contain minimal data (id, documentId) since the entity no longer exists.
-
-### Sensitive Fields Protection
-
-The plugin automatically removes sensitive fields from all emitted data for security. This works in addition to Strapi's built-in `private: true` field filtering.
-
-#### Default Blocked Fields
-
-The following fields are **always removed** from emitted data:
-
-- `password`, `salt`, `hash`
-- `resetPasswordToken`, `confirmationToken`
-- `refreshToken`, `accessToken`, `token`
-- `secret`, `apiKey`, `api_key`
-- `privateKey`, `private_key`
-
-#### Custom Sensitive Fields
-
-Add your own sensitive fields to the block list:
-
-```javascript
-// config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: ['api::user.user'],
-      
-      // Additional fields to never emit
-      sensitiveFields: [
-        'creditCard',
-        'ssn',
-        'socialSecurityNumber',
-        'bankAccount',
-        'internalNotes'
-      ]
-    }
-  }
 };
 ```
 
-#### How It Works
+Give the Public role (or any role) the **find** permission for Article in _Settings > Users & Permissions > Roles_, then connect from a frontend:
 
-1. **Schema-level filtering**: Strapi's `sanitize.contentAPI` removes `private: true` fields
-2. **Blocklist filtering**: Plugin removes all sensitive field names recursively
-3. **Applies to all emits**: Both `emit()` and `raw()` methods are protected
-
-```javascript
-// Even with populate, sensitive fields are stripped
-contentTypes: [
-  {
-    uid: 'api::user.user',
-    populate: '*'  // Relations included, but passwords etc. still removed
-  }
-]
-```
-
-> **Security Note**: Fields are matched case-insensitively and also partial matches work (e.g., `apiKey` blocks `myApiKey`, `user_api_key`, etc.)
-
-### Environment Variables
-
-Recommended environment-based configuration:
-
-```javascript
-// config/plugins.js
-module.exports = ({ env }) => ({
-  io: {
-    enabled: env.bool('SOCKET_IO_ENABLED', true),
-    config: {
-      contentTypes: env.json('SOCKET_IO_CONTENT_TYPES', []),
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: env('CLIENT_URL', 'http://localhost:3000')
-          }
-        }
-      }
-    }
-  }
-});
-```
-
-```env
-# .env
-SOCKET_IO_ENABLED=true
-CLIENT_URL=https://your-app.com
-SOCKET_IO_CONTENT_TYPES=["api::article.article","api::comment.comment"]
-```
-
----
-
-## Usage Examples
-
-### Server-Side Usage
-
-Access the Socket.IO instance anywhere in your Strapi application:
-
-```javascript
-// In a controller, service, or lifecycle
-const io = strapi.$io;
-
-// Emit to all connected clients
-strapi.$io.raw({
-  event: 'notification',
-  data: {
-    message: 'Server maintenance in 5 minutes',
-    type: 'warning'
-  }
-});
-
-// Send private message to a specific socket
-strapi.$io.sendPrivateMessage(socketId, 'order:updated', {
-  orderId: 123,
-  status: 'shipped'
-});
-
-// Emit to all clients in a room
-strapi.$io.server.to('admin-room').emit('dashboard:update', {
-  activeUsers: 42,
-  revenue: 15000
-});
-
-// Emit to a specific namespace
-strapi.$io.emitToNamespace('admin', 'alert', {
-  message: 'New user registered'
-});
-```
-
-### Client-Side Usage
-
-#### Basic Connection
-
-```javascript
+```js
 import { io } from 'socket.io-client';
 
-const socket = io('http://localhost:1337');
+const socket = io('https://cms.example.com');
 
-socket.on('connect', () => {
-  console.log('Connected to server');
-});
-
-socket.on('disconnect', () => {
-  console.log('Disconnected from server');
-});
-
-// Listen for content type events
-socket.on('article:create', (data) => {
-  console.log('New article:', data);
-});
-
-socket.on('article:update', (data) => {
-  console.log('Article updated:', data);
-});
-
-socket.on('article:delete', (data) => {
-  console.log('Article deleted:', data.documentId);
-});
+socket.on('article:publish', ({ data }) => console.log('Published', data.attributes.title));
+socket.on('article:delete', ({ data }) => console.log('Deleted', data.documentId, data.locale));
 ```
 
-#### With React
+Browsers that connect from another origin must be listed under _Settings > Socket.IO > Settings > Allowed origins_ (or in `socket.serverOptions.cors`).
 
-```jsx
-import { useEffect, useState } from 'react';
-import { io } from 'socket.io-client';
+## Content events
 
-function ArticlesList() {
-  const [articles, setArticles] = useState([]);
-  
-  useEffect(() => {
-    const socket = io('http://localhost:1337');
-    
-    // Listen for new articles
-    socket.on('article:create', (article) => {
-      setArticles(prev => [article, ...prev]);
-    });
-    
-    // Listen for updates
-    socket.on('article:update', (article) => {
-      setArticles(prev => 
-        prev.map(a => a.documentId === article.documentId ? article : a)
-      );
-    });
-    
-    // Listen for deletions
-    socket.on('article:delete', (data) => {
-      setArticles(prev => 
-        prev.filter(a => a.documentId !== data.documentId)
-      );
-    });
-    
-    return () => socket.disconnect();
-  }, []);
-  
-  return (
-    <div>
-      {articles.map(article => (
-        <div key={article.documentId}>{article.title}</div>
-      ))}
-    </div>
-  );
-}
-```
+Events are named `<singularName>:<action>`. Content types are watched from the config (fixed) or chosen in the admin settings (editable).
 
-#### With Vue 3
+| Action         | When                                      | Payload                              |
+| -------------- | ----------------------------------------- | ------------------------------------ |
+| `create`       | A document is created                     | `{ data: { id, attributes }, meta }` |
+| `update`       | A document is updated                     | `{ data: { id, attributes }, meta }` |
+| `publish`      | A draft is published                      | `{ data: { id, attributes }, meta }` |
+| `discardDraft` | A draft is reset to the published version | `{ data: { id, attributes }, meta }` |
+| `unpublish`    | A document is unpublished                 | `{ data: { documentId, locale? } }`  |
+| `delete`       | A document (locale) is deleted            | `{ data: { documentId, locale? } }`  |
 
-```vue
-<script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
-import { io } from 'socket.io-client';
+- **Who receives an event:** every Users & Permissions role and content API token with `find` or `findOne` permission on the content type. Read-only and full-access tokens receive all events. Roles that may only create or update receive nothing.
+- **Drafts:** with Draft & Publish, draft versions are not sent while _Only published content_ is on (the default). Turn it off to send drafts to the roles that may read them.
+- **Locales:** one event per locale. Events are emitted after the database transaction commits.
+- **Populate:** `populate` refetches the entry with the same locale and status before it is sent.
+- **Sanitizing:** each audience gets the entry sanitized with its own permissions. Private fields, password fields, built-in secrets (`password`, `resetPasswordToken`, `apiKey`, `secret`, ...), `config.sensitiveFields` and the _Excluded fields_ setting are removed. If sanitizing fails, that audience is skipped and nothing is sent.
 
-const articles = ref([]);
-let socket;
-
-onMounted(() => {
-  socket = io('http://localhost:1337');
-  
-  socket.on('article:create', (article) => {
-    articles.value = [article, ...articles.value];
-  });
-  
-  socket.on('article:update', (article) => {
-    const index = articles.value.findIndex(a => a.documentId === article.documentId);
-    if (index !== -1) {
-      articles.value[index] = article;
-    }
-  });
-  
-  socket.on('article:delete', (data) => {
-    articles.value = articles.value.filter(a => a.documentId !== data.documentId);
-  });
-});
-
-onUnmounted(() => {
-  socket?.disconnect();
-});
-</script>
-
-<template>
-  <div v-for="article in articles" :key="article.documentId">
-    {{ article.title }}
-  </div>
-</template>
-```
-
-### Entity-Specific Subscriptions
-
-Subscribe to updates for specific entities only:
-
-```javascript
-// Client-side: Subscribe to a specific article
-socket.emit('subscribe-entity', {
-  uid: 'api::article.article',
-  id: 123
-}, (response) => {
-  if (response.success) {
-    console.log('Subscribed to article 123');
-  }
-});
-
-// Now you only receive updates for article 123
-socket.on('article:update', (data) => {
-  console.log('Article 123 was updated:', data);
-});
-
-// Unsubscribe when done
-socket.emit('unsubscribe-entity', {
-  uid: 'api::article.article',
-  id: 123
-});
-```
-
-**Benefits:**
-- Reduced bandwidth - only receive relevant updates
-- Better performance - less client-side processing
-- Built-in permission checks - respects user roles
-
-### Room Management
-
-Organize connections into rooms:
-
-```javascript
-// Server-side: Add socket to a room
-strapi.$io.joinRoom(socketId, 'premium-users');
-
-// Get all sockets in a room
-const sockets = await strapi.$io.getSocketsInRoom('premium-users');
-console.log(`${sockets.length} premium users online`);
-
-// Broadcast to a specific room
-strapi.$io.server.to('premium-users').emit('exclusive-offer', {
-  discount: 20,
-  expiresIn: '24h'
-});
-
-// Remove socket from a room
-strapi.$io.leaveRoom(socketId, 'premium-users');
-
-// Disconnect a specific socket
-strapi.$io.disconnectSocket(socketId, 'Kicked by admin');
-```
-
----
-
-## Helper Functions
-
-The plugin provides 12 utility functions available on `strapi.$io`:
-
-### Room Management
-
-#### `joinRoom(socketId, roomName)`
-Add a socket to a room.
-
-```javascript
-const success = strapi.$io.joinRoom(socketId, 'premium-users');
-// Returns: true if socket found and joined, false otherwise
-```
-
-#### `leaveRoom(socketId, roomName)`
-Remove a socket from a room.
-
-```javascript
-const success = strapi.$io.leaveRoom(socketId, 'premium-users');
-// Returns: true if socket found and left, false otherwise
-```
-
-#### `getSocketsInRoom(roomName)`
-Get all sockets in a specific room.
-
-```javascript
-const sockets = await strapi.$io.getSocketsInRoom('premium-users');
-// Returns: [{ id: 'socket-id', user: { username: 'john' } }, ...]
-```
-
-### Messaging
-
-#### `sendPrivateMessage(socketId, event, data)`
-Send a message to a specific socket.
-
-```javascript
-strapi.$io.sendPrivateMessage(socketId, 'order:shipped', {
-  orderId: 123,
-  trackingNumber: 'ABC123'
-});
-```
-
-#### `broadcast(socketId, event, data)`
-Broadcast from a socket to all other connected clients.
-
-```javascript
-strapi.$io.broadcast(socketId, 'user:typing', {
-  username: 'john',
-  channel: 'general'
-});
-```
-
-#### `emitToNamespace(namespace, event, data)`
-Emit an event to all clients in a namespace.
-
-```javascript
-strapi.$io.emitToNamespace('admin', 'alert', {
-  message: 'New user registered',
-  level: 'info'
-});
-```
-
-### Connection Management
-
-#### `disconnectSocket(socketId, reason)`
-Force disconnect a specific socket.
-
-```javascript
-const success = strapi.$io.disconnectSocket(socketId, 'Session expired');
-// Returns: true if socket found and disconnected, false otherwise
-```
-
-### Entity Subscriptions
-
-#### `subscribeToEntity(socketId, uid, id)`
-Subscribe a socket to a specific entity (server-side).
-
-```javascript
-const result = await strapi.$io.subscribeToEntity(socketId, 'api::article.article', 123);
-// Returns: { success: true, room: 'api::article.article:123', uid, id }
-// or: { success: false, error: 'Socket not found' }
-```
-
-#### `unsubscribeFromEntity(socketId, uid, id)`
-Unsubscribe a socket from a specific entity.
-
-```javascript
-const result = strapi.$io.unsubscribeFromEntity(socketId, 'api::article.article', 123);
-// Returns: { success: true, room: 'api::article.article:123', uid, id }
-```
-
-#### `getEntitySubscriptions(socketId)`
-Get all entity subscriptions for a socket.
-
-```javascript
-const result = strapi.$io.getEntitySubscriptions(socketId);
-// Returns: { 
-//   success: true, 
-//   subscriptions: [
-//     { uid: 'api::article.article', id: '123', room: 'api::article.article:123' }
-//   ]
-// }
-```
-
-#### `emitToEntity(uid, id, event, data)`
-Emit an event to all clients subscribed to a specific entity.
-
-```javascript
-strapi.$io.emitToEntity('api::article.article', 123, 'article:commented', {
-  commentId: 456,
-  author: 'jane'
-});
-```
-
-#### `getEntityRoomSockets(uid, id)`
-Get all sockets subscribed to a specific entity.
-
-```javascript
-const sockets = await strapi.$io.getEntityRoomSockets('api::article.article', 123);
-// Returns: [{ id: 'socket-id', user: { username: 'john' } }, ...]
-```
-
----
+Events come from Strapi's Document Service middleware (`strapi.documents.use`). Writes made directly with `strapi.db.query()` do not emit events.
 
 ## Authentication
 
-The plugin supports multiple authentication strategies.
+Clients authenticate in the Socket.IO handshake:
 
-### Public Access (No Authentication)
+```js
+// Users & Permissions JWT (legacy and refresh mode)
+io(url, { auth: { strategy: 'jwt', token: userJwt } });
 
-```javascript
-const socket = io('http://localhost:1337');
-// No auth - placed in 'Public' role room
+// Content API token
+io(url, { auth: { strategy: 'api-token', token: apiToken } });
+
+// No token: the client joins the Public role (unless "Require authentication" is on)
+io(url);
 ```
 
-### JWT Authentication (Users & Permissions)
+| Strategy                               | Room                                                | Notes                                                                                                                                 |
+| -------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `jwt`                                  | `io-role-<role type>`, e.g. `io-role-authenticated` | Blocked and unconfirmed users are rejected. The socket is disconnected when the JWT expires, the user is blocked or the role changes. |
+| `api-token` (also `apiToken`, `token`) | `io-token-<token id>`                               | Content API tokens only; admin tokens are rejected. Disconnected when the token is deleted or expires.                                |
+| none                                   | `io-role-public`                                    | Only while _Require authentication_ is off.                                                                                           |
 
-```javascript
-// 1. Get JWT token from login
-const response = await fetch('http://localhost:1337/api/auth/local', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    identifier: 'user@example.com',
-    password: 'password123'
-  })
-});
+Failed handshakes return one generic message (`Authentication failed`). After 20 failures from the same IP within a minute, that IP is locked out for the rest of the minute. The client IP follows Strapi's `server.proxy` settings.
 
-const { jwt } = await response.json();
+For refresh-mode JWTs, pass a function so that reconnects use a fresh access token:
 
-// 2. Connect with JWT
-const socket = io('http://localhost:1337', {
-  auth: {
-    strategy: 'jwt',
-    token: jwt
-  }
-});
-
-// User is placed in their role room (e.g., 'Authenticated')
+```js
+io(url, { auth: (cb) => getAccessToken().then((token) => cb({ strategy: 'jwt', token })) });
 ```
 
-### API Token Authentication
+## Configuration
 
-```javascript
-// 1. Create API token in Strapi Admin:
-//    Settings > Global Settings > API Tokens > Create new token
-
-// 2. Connect with API token
-const socket = io('http://localhost:1337', {
-  auth: {
-    strategy: 'api-token',
-    token: 'your-api-token-here'
-  }
-});
-```
-
-### Permission Enforcement
-
-Events are automatically filtered based on the user's role:
-
-```javascript
-// Authenticated user with 'Editor' role
-socket.on('article:create', (data) => {
-  // Only receives events for content types they have permission to access
-});
-```
-
-Configure permissions in the Strapi admin panel:
-1. Go to **Settings > Users & Permissions > Roles**
-2. Select a role (e.g., "Authenticated")
-3. Configure Socket.IO permissions per content type
-
----
-
-## Security
-
-The plugin implements multiple security layers to protect your real-time connections.
-
-### Admin Session Tokens
-
-For admin panel connections (Live Presence), the plugin uses secure session tokens:
-
-```
-+------------------+      +------------------+      +------------------+
-|  Admin Browser   | ---> |  Session Endpoint| ---> |   Socket.IO      |
-|  (Strapi Admin)  |      |  /io/presence/   |      |   Server         |
-+------------------+      +------------------+      +------------------+
-        |                         |                         |
-        | 1. Request session      |                         |
-        | (Admin JWT in header)   |                         |
-        +------------------------>|                         |
-        |                         |                         |
-        | 2. Return session token |                         |
-        | (UUID, 10 min TTL)      |                         |
-        |<------------------------+                         |
-        |                         |                         |
-        | 3. Connect Socket.IO    |                         |
-        | (Session token in auth) |                         |
-        +-------------------------------------------------->|
-        |                         |                         |
-        | 4. Validate & connect   |                         |
-        |<--------------------------------------------------+
-```
-
-**Security Features:**
-- **Token Hashing**: Tokens stored as SHA-256 hashes (plaintext never persisted)
-- **Short TTL**: 10-minute expiration with automatic refresh at 70%
-- **Usage Limits**: Max 10 reconnects per token to prevent replay attacks
-- **Rate Limiting**: 30-second cooldown between token requests
-- **Minimal Data**: Only essential user info stored (ID, firstname, lastname)
-
-### Rate Limiting
-
-Prevent abuse with configurable rate limits:
-
-```javascript
-// In config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      security: {
-        rateLimit: {
-          enabled: true,
-          maxEventsPerSecond: 10,    // Max events per socket per second
-          maxConnectionsPerIp: 50    // Max connections from single IP
-        }
-      }
-    }
-  }
-};
-```
-
-### IP Whitelisting/Blacklisting
-
-Restrict access by IP address:
-
-```javascript
-// In config/plugins.js
-module.exports = {
-  io: {
-    enabled: true,
-    config: {
-      security: {
-        ipWhitelist: ['192.168.1.0/24', '10.0.0.1'],  // Only these IPs allowed
-        ipBlacklist: ['203.0.113.50'],                 // These IPs blocked
-        requireAuthentication: true                    // Require JWT/API token
-      }
-    }
-  }
-};
-```
-
-### Security Monitoring API
-
-Monitor active sessions via admin API:
-
-```bash
-# Get session statistics
-GET /io/security/sessions
-Authorization: Bearer <admin-jwt>
-
-# Response:
-{
-  "data": {
-    "activeSessions": 5,
-    "expiringSoon": 1,
-    "activeSocketConnections": 3,
-    "sessionTTL": 600000,
-    "refreshCooldown": 30000
-  }
-}
-
-# Force logout a user (invalidate all their sessions)
-POST /io/security/invalidate/:userId
-Authorization: Bearer <admin-jwt>
-
-# Response:
-{
-  "data": {
-    "userId": 1,
-    "invalidatedSessions": 2,
-    "message": "Successfully invalidated 2 session(s)"
-  }
-}
-```
-
-### Best Practices
-
-1. **Always use HTTPS** in production for encrypted WebSocket connections
-2. **Enable authentication** for sensitive content types
-3. **Configure CORS** to only allow your frontend domains
-4. **Monitor connections** via the admin dashboard
-5. **Set reasonable rate limits** based on your use case
-6. **Review access logs** periodically for suspicious activity
-
----
-
-## Admin Panel
-
-The plugin provides a full admin interface for configuration and monitoring.
-
-### Dashboard Widgets
-
-> **Requires Strapi v5.13+**
-
-After installation, live statistics widgets appear on your Strapi admin homepage:
-
-#### Socket.IO Statistics Widget
-
-![Socket.IO Statistics Widget](./pics/widget.png)
-
-**Shows:**
-- Live connection status (pulsing indicator when active)
-- Active connections count
-- Active rooms count
-- Events per second
-- Total events processed since startup
-
-Updates automatically every 5 seconds.
-
-#### Who's Online Widget
-
-![Who's Online Widget](./pics/whoisonlinewidget.png)
-
-**Shows:**
-- List of currently online admin users
-- User avatars with role badges
-- Online status and last activity
-- Quick access to view all activity
-
-### Settings Page
-
-Navigate to **Settings > Socket.IO > Settings** for visual configuration:
-
-**Path:** `/admin/settings/io/settings`
-
-![Socket.IO Settings](./pics/settings.png)
-
-#### General Settings
-- Enable/disable the plugin
-- Configure CORS origins
-- Set server options (ping timeout, etc.)
-
-#### Content Types
-- Enable automatic events for content types per role
-- Select specific actions (create, update, delete)
-- Configure role-based permissions
-
-#### Events
-- Include relations in events (`includeRelations`)
-- Custom event names
-- Exclude specific fields
-- Only published content mode
-
-#### Security
-- Require authentication
-- Rate limiting configuration
-- IP whitelisting/blacklisting
-- Input validation rules
-
-#### Rooms
-- Auto-join by role configuration
-- Enable/disable private rooms
-
-#### Advanced
-- Configure namespaces
-- Redis adapter settings for scaling
-- Entity subscription limits
-
-### Monitoring Page
-
-Navigate to **Settings > Socket.IO > Monitoring** for live statistics:
-
-**Path:** `/admin/settings/io/monitoring`
-
-![Monitoring & Logging](./pics/monitoringSettings.png)
-
-- View active connections with user details
-- See event logs in real-time
-- Monitor performance metrics (events/second)
-- View entity subscription statistics
-- Send test events
-- Reset statistics
-
-### Live Presence Panel
-
-When editing content in the Content Manager, a **Live Presence** panel appears in the sidebar showing:
-
-- **Connection Status** - Live indicator showing real-time sync is active
-- **Active Editors** - List of other users editing the same content
-- **Typing Indicator** - Shows when someone is typing and in which field
-
-![Live Presence Panel](./pics/livepresenceindi.png)
-
-**How It Works:**
-
-1. When you open a content entry, the panel connects via Socket.IO
-2. Other editors on the same entry appear in the panel
-3. Typing in any field broadcasts a typing indicator to others
-4. When you leave, others are notified
-
----
-
-## Monitoring Service
-
-Access monitoring data programmatically via the monitoring service:
-
-```javascript
-const monitoringService = strapi.plugin('io').service('monitoring');
-```
-
-### Available Methods
-
-#### `getConnectionStats()`
-Get current connection statistics.
-
-```javascript
-const stats = monitoringService.getConnectionStats();
-// Returns:
-// {
-//   connected: 42,
-//   rooms: [
-//     { name: 'Authenticated', members: 35, isEntityRoom: false },
-//     { name: 'api::article.article:123', members: 5, isEntityRoom: true }
-//   ],
-//   sockets: [
-//     {
-//       id: 'abc123',
-//       connected: true,
-//       rooms: ['Authenticated'],
-//       entitySubscriptions: [{ uid: 'api::article.article', id: '123', room: '...' }],
-//       handshake: { address: '::1', time: '...', query: {} },
-//       user: { id: 1, username: 'john' }
-//     }
-//   ],
-//   entitySubscriptions: {
-//     total: 15,
-//     byContentType: { 'api::article.article': 10, 'api::comment.comment': 5 },
-//     rooms: ['api::article.article:123', ...]
-//   }
-// }
-```
-
-#### `getEventStats()`
-Get event statistics.
-
-```javascript
-const stats = monitoringService.getEventStats();
-// Returns:
-// {
-//   totalEvents: 1234,
-//   eventsByType: { 'create': 500, 'update': 600, 'delete': 134 },
-//   lastReset: 1703123456789,
-//   eventsPerSecond: '2.50'
-// }
-```
-
-#### `getEventLog(limit)`
-Get recent event log entries.
-
-```javascript
-const logs = monitoringService.getEventLog(50);
-// Returns:
-// [
-//   { timestamp: 1703123456789, type: 'create', data: {...} },
-//   { timestamp: 1703123456790, type: 'connect', data: {...} }
-// ]
-```
-
-#### `logEvent(type, data)`
-Manually log an event.
-
-```javascript
-monitoringService.logEvent('custom-event', {
-  action: 'user-action',
-  userId: 123
-});
-```
-
-#### `resetStats()`
-Reset all statistics and clear event log.
-
-```javascript
-monitoringService.resetStats();
-```
-
-#### `sendTestEvent(eventName, data)`
-Send a test event to all connected clients.
-
-```javascript
-const result = monitoringService.sendTestEvent('test', { message: 'Hello!' });
-// Returns:
-// {
-//   success: true,
-//   eventName: 'test',
-//   data: { message: 'Hello!', timestamp: 1703123456789, test: true },
-//   recipients: 42
-// }
-```
-
-### Use Cases
-
-**Custom Analytics Dashboard:**
-
-```javascript
-// In a custom controller
-async getAnalytics(ctx) {
-  const monitoring = strapi.plugin('io').service('monitoring');
-  
-  ctx.body = {
-    connections: monitoring.getConnectionStats(),
-    events: monitoring.getEventStats(),
-    recentActivity: monitoring.getEventLog(10)
-  };
-}
-```
-
-**Health Check Endpoint:**
-
-```javascript
-async healthCheck(ctx) {
-  const monitoring = strapi.plugin('io').service('monitoring');
-  const stats = monitoring.getConnectionStats();
-  
-  ctx.body = {
-    status: 'healthy',
-    websocket: {
-      connected: stats.connected,
-      rooms: stats.rooms.length
-    }
-  };
-}
-```
-
----
-
-## TypeScript Support
-
-Full TypeScript definitions are included for excellent IDE support.
-
-### Import Types
-
-```typescript
-import type { 
-  SocketIO, 
-  SocketIOConfig,
-  EmitOptions,
-  RawEmitOptions,
-  PluginSettings,
-  MonitoringService,
-  SettingsService,
-  ConnectionStats,
-  EventStats
-} from '@strapi-community/plugin-io/types';
-```
-
-### Configuration Example
-
-```typescript
-// config/plugins.ts
-import type { SocketIOConfig } from '@strapi-community/plugin-io/types';
-
-export default {
-  io: {
-    enabled: true,
-    config: {
-      contentTypes: [
-        {
-          uid: 'api::article.article',
-          actions: ['create', 'update', 'delete']
-        }
-      ],
-      socket: {
-        serverOptions: {
-          cors: {
-            origin: process.env.CLIENT_URL || 'http://localhost:3000',
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    } satisfies SocketIOConfig
-  }
-};
-```
-
-### Usage Example
-
-```typescript
-// In your Strapi code
-import type { SocketIO } from '@strapi-community/plugin-io/types';
-
-// Type-safe access
-const io: SocketIO = strapi.$io;
-
-// All methods have full IntelliSense
-await io.emit({
-  event: 'create',
-  schema: strapi.contentTypes['api::article.article'],
-  data: { title: 'New Article' }
-});
-
-// Helper functions are typed
-const sockets = await io.getSocketsInRoom('premium-users');
-io.sendPrivateMessage(sockets[0].id, 'welcome', { message: 'Hello!' });
-```
-
----
-
-## Performance
-
-The plugin is optimized for production environments.
-
-### Benchmarks
-
-- **Concurrent Connections**: 2500+ simultaneous connections
-- **Memory Usage**: ~17KB per connection
-- **Event Throughput**: 10,000+ events/second
-- **Latency**: <10ms for local broadcasts
-
-### Optimizations
-
-#### Intelligent Caching
-Role and permission data is cached for 5 minutes, reducing database queries by up to 90%.
-
-#### Debouncing
-Bulk operations are automatically debounced to prevent event flooding during data imports.
-
-#### Parallel Processing
-All event emissions are processed in parallel for maximum throughput.
-
-#### Connection Pooling
-Efficient connection management with automatic cleanup of stale connections.
-
-### Production Configuration
-
-```javascript
-// config/plugins.js (production)
+```js
+// config/plugins.js
 module.exports = ({ env }) => ({
   io: {
     enabled: true,
     config: {
-      contentTypes: env.json('SOCKET_IO_CONTENT_TYPES'),
-      
+      // Fixed watch list. Strings watch every action.
+      contentTypes: [
+        'api::article.article',
+        { uid: 'api::page.page', actions: ['publish', 'unpublish', 'delete'], populate: ['seo', 'cover'] },
+      ],
+
+      // Extra field names that are never sent.
+      sensitiveFields: ['internalNotes'],
+
+      // Custom client events.
+      events: [
+        { name: 'connection', handler: ({ strapi }, socket) => strapi.log.debug(`[io] ${socket.id} connected`) },
+        { name: 'ping', handler: (_ctx, socket) => socket.emit('pong') },
+      ],
+
+      // Runs once during bootstrap (awaited). Use it for adapters or custom namespaces.
+      hooks: {
+        async init({ strapi, $io }) {},
+      },
+
+      // Socket.IO server options. Values here win over the admin settings.
       socket: {
         serverOptions: {
-          cors: {
-            origin: env('CLIENT_URL'),
-            credentials: true
-          },
-          // Optimize for production
-          pingTimeout: 60000,
-          pingInterval: 25000,
-          maxHttpBufferSize: 1e6,
-          transports: ['websocket', 'polling']
-        }
+          // cors: { origin: ['https://app.example.com'] },
+          // maxHttpBufferSize: 1e6,
+        },
       },
-      
-      // Use Redis for horizontal scaling
-      hooks: {
-        init: async ({ strapi, $io }) => {
-          const { createAdapter } = require('@socket.io/redis-adapter');
-          const { createClient } = require('redis');
-          
-          const pubClient = createClient({ url: env('REDIS_URL') });
-          const subClient = pubClient.duplicate();
-          
-          await Promise.all([pubClient.connect(), subClient.connect()]);
-          
-          $io.server.adapter(createAdapter(pubClient, subClient));
-          
-          strapi.log.info('[Socket.IO] Redis adapter connected');
-        }
-      }
-    }
-  }
+    },
+  },
 });
 ```
 
----
+Defaults the plugin sets unless you override them in `socket.serverOptions`:
 
-## Migration Guide
+| Option                                          | Default                 | Why                                                                                                             |
+| ----------------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `destroyUpgrade`                                | `false`                 | Foreign upgrades (Strapi Data Transfer) are forwarded to Strapi instead of being closed.                        |
+| `maxHttpBufferSize`                             | `1e5` (100 KB)          | Limits the size of messages clients send. Socket.IO's default is 1 MB.                                          |
+| `cors` / `allowRequest`                         | from _Allowed origins_  | Applies the same origin rule to polling and WebSocket upgrades. The Strapi admin (same host) is always allowed. |
+| `pingInterval`, `pingTimeout`, `connectTimeout` | from the admin settings | Applied to new connections without a restart.                                                                   |
 
-### From v2 (Strapi v4) to v5 (Strapi v5)
+## Admin panel
 
-**Good news:** The API is 100% compatible! Most projects migrate in under 1 hour.
+The plugin adds a **Socket.IO** section under _Settings_ with two pages, two homepage widgets and a side panel in the Content Manager. All screens use the Strapi Design System and follow the layout of the native settings pages.
 
-#### Quick Migration Steps
+**Settings** (`plugin::io.settings.read` / `plugin::io.settings.update`). Every setting applies to new connections without a restart:
 
-1. **Update Strapi to v5**
-   ```bash
-   npm install @strapi/strapi@5 @strapi/plugin-users-permissions@5
-   ```
+| Section        | Settings                                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Connections    | Allowed origins, maximum connections (0 = unlimited), ping interval, ping timeout, connection timeout                                              |
+| Security       | Require authentication, limit client events (events per second per client), allowed IP addresses, blocked IP addresses (addresses and CIDR blocks) |
+| Content events | Only published content, excluded fields, actions per content type (rows set in the config are read-only)                                           |
+| Roles          | Whether each Users & Permissions role may connect. What a role receives follows its permissions.                                                   |
+| Live presence  | Show who is editing, show typing                                                                                                                   |
+| Monitoring     | Log connections, keep an in-memory event log, event log size                                                                                       |
 
-2. **Update the plugin**
-   ```bash
-   npm uninstall strapi-plugin-io
-   npm install @strapi-community/plugin-io@latest
-   ```
+**Monitoring** (`plugin::io.monitoring.read`; reset and test events need `plugin::io.monitoring.manage`): connected clients by type, active rooms, events per second, events sent, admins online with the entries they edit, and the event log. Test events go to every connected client; names used by content and presence events are refused.
 
-3. **Test your application**
-   ```bash
-   npm run develop
-   ```
+**Homepage widgets** (Strapi 5.13+): _Socket.IO_ (four counters) and _Admins online_. Both need `plugin::io.monitoring.read`.
 
-Your configuration stays the same - no code changes needed!
+**Live presence panel** in the Content Manager edit view: shows the other admins editing the same entry and, optionally, which field they are typing in. Admins only join the presence room of content types they may read in the Content Manager. The panel connects with a one-time token per connection attempt and shows no email addresses.
 
-#### What Changed
+Strapi grants new permissions to Super Admins only. Give other roles access in _Settings > Administration Panel > Roles > Plugins > IO_.
 
-- **Package name**: `strapi-plugin-io` -> `@strapi-community/plugin-io`
-- **Package structure**: Uses new Strapi v5 Plugin SDK
-- **Dependencies**: Updated to Strapi v5 peer dependencies
-- **Build process**: Optimized build with modern tooling
+## Server API
 
-#### What Stayed the Same
+```js
+// Content events (also used internally)
+await strapi.$io.emit({ event: 'publish', schema: 'api::article.article', data: entry });
+await strapi.$io.emitIdentifier({ event: 'delete', schema: 'api::article.article', data: { documentId, locale } });
 
-- All API methods work identically
-- Configuration format unchanged
-- Client-side code works as-is
-- Same helper functions
-- Same event format
+// Custom events (sensitive fields removed). Without rooms they go to every client.
+await strapi.$io.raw({ event: 'maintenance', data: { at: '22:00' }, rooms: ['io-role-authenticated'] });
 
-For detailed migration instructions, see [docs/guide/migration.md](./docs/guide/migration.md).
+// Helpers
+strapi.$io.joinRoom(socketId, 'premium'); // plugin rooms (io-role-, io-token-, io-admin-, presence:) are refused
+strapi.$io.leaveRoom(socketId, 'premium');
+await strapi.$io.getSocketsInRoom('premium');
+strapi.$io.sendPrivateMessage(socketId, 'notice', data);
+strapi.$io.broadcast(socketId, 'notice', data); // everyone except socketId
+strapi.$io.emitToNamespace('chat', 'notice', data);
+strapi.$io.disconnectSocket(socketId);
+await strapi.$io.revalidateSockets();
 
----
+strapi.$io.server; // the Socket.IO Server
+strapi.$io.namespaces; // { '': Namespace, chat: Namespace, ... }
 
-## Documentation
+// Monitoring service (counts only)
+const monitoring = strapi.plugin('io').service('monitoring');
+await monitoring.getConnectionStats(); // { connected, rooms, byKind: { admin, user, token, public } }
+monitoring.getEventStats(); // { totalEvents, eventsPerSecond, lastEventAt, totalConnections, since }
+monitoring.getEventLog(50);
+```
 
-### Official Documentation
+Namespaces created with `strapi.$io.server.of('/name')`, for example in `hooks.init`, use the same handshake as the default namespace. TypeScript types ship with the package (`types.d.ts`) and add `strapi.$io` to `Core.Strapi`.
 
-- **[Online Documentation](https://strapi-community.github.io/plugin-io/)** - Complete interactive docs
-- **[API Reference](./docs/api/io-class.md)** - All methods and properties
-- **[Configuration Guide](./docs/api/plugin-config.md)** - Detailed configuration options
-- **[Usage Examples](./docs/examples/)** - Real-world use cases
-- **[Migration Guide](./docs/guide/migration.md)** - Upgrade from v4 to v5
+## Security model
 
-### Guides
+- Admin routes require an authenticated admin plus the plugin permission (`admin::hasPermissions`). The presence session route only requires an authenticated admin.
+- Monitoring responses contain counts and admin display names only, never IP addresses, emails, tokens or socket ids.
+- The settings document is validated with a strict schema (unknown keys rejected, every list and number bounded). Invalid input returns `400` with field paths.
+- Presence events are accepted only from admin sockets and are rate limited.
+- Clients can be rate limited per socket; the connection count, IP rules and origins are checked in the handshake.
+- Logs never contain tokens, emails or IP addresses.
 
-- **[Getting Started](./docs/guide/getting-started.md)** - Step-by-step setup
-- **[Widget Guide](./docs/guide/widget.md)** - Dashboard widget configuration
+Report vulnerabilities privately through GitHub security advisories.
 
-### Examples
+## Scaling with Redis
 
-- **[Content Types](./docs/examples/content-types.md)** - Automatic CRUD events
-- **[Custom Events](./docs/examples/events.md)** - Server-client communication
-- **[Hooks & Adapters](./docs/examples/hooks.md)** - Redis, MongoDB integration
+To run several Strapi instances behind a load balancer, use the official Redis adapter. Install `@socket.io/redis-adapter` and `redis` in your project and attach the adapter in `hooks.init`:
 
----
+```js
+const { createAdapter } = require('@socket.io/redis-adapter');
+const { createClient } = require('redis');
 
-## Related Plugins
+module.exports = ({ env }) => ({
+  io: {
+    enabled: true,
+    config: {
+      contentTypes: ['api::article.article'],
+      hooks: {
+        async init({ strapi, $io }) {
+          const pubClient = createClient({ url: env('REDIS_URL') });
+          const subClient = pubClient.duplicate();
+          await Promise.all([pubClient.connect(), subClient.connect()]);
+          $io.server.adapter(createAdapter(pubClient, subClient));
+          strapi.log.info('[io] Redis adapter ready');
+        },
+      },
+    },
+  },
+});
+```
 
-Build complete real-time applications with these complementary Strapi v5 plugins:
+Keep the Redis URL in an environment variable. The admin panel does not store it.
 
-### [Magic-Mail](https://github.com/Schero94/Magic-Mail)
-Enterprise email management with OAuth 2.0 support. Perfect for sending transactional emails triggered by Socket.IO events.
+## Upgrading from 5.x
 
-**Use case:** Send email notifications when real-time events occur.
+6.0 contains breaking changes. The full list is in [CHANGELOG.md](./CHANGELOG.md). In short:
 
-### [Magic-Sessionmanager](https://github.com/Schero94/Magic-Sessionmanager)
-Advanced session tracking and monitoring. Track Socket.IO connections, monitor active users, and analyze session patterns.
+1. **Delivery follows read permissions.** Give roles and tokens `find` (or `findOne`) on the content types they should receive. Create or update permissions alone no longer deliver events.
+2. **Publish is its own event.** Publishing used to emit `:delete` and `:create`; it now emits `:publish`. Unpublish and discard draft emit `:unpublish` and `:discardDraft`. If you limit `actions` in the config, add the new ones you need.
+3. **Drafts are not sent by default.** Turn off _Only published content_ to send drafts.
+4. **Delete events go to readers only** and include `locale` for localized content.
+5. **Rooms:** API-token rooms are `io-token-<id>`; custom role rooms are `io-role-<role type>` (`io-role-public` and `io-role-authenticated` are unchanged).
+6. **Settings are enforced.** Settings stored by 5.x were never applied. On the first start, unused keys (Redis, namespaces, entity subscriptions, live preview, field-level changes) are dropped, and the old default origin `http://localhost:3000` and the old default connection limit of 1000 are reset. Review _Settings > Socket.IO_ after upgrading.
+7. **Admin permissions.** Only Super Admins can open the plugin pages until you grant the new permissions to other roles.
+8. **Removed:** the `security` service, the scaffold route `GET /api/io`, settings export and import, and the entity subscription API, which was never part of the published 5.4 to 5.8 builds.
+9. **Message size.** `maxHttpBufferSize` defaults to 100 KB. Raise it in `socket.serverOptions` if clients send larger messages.
 
-**Use case:** Monitor who's connected to your WebSocket server in real-time.
+## Troubleshooting
 
-### [Magicmark](https://github.com/Schero94/Magicmark)
-Bookmark management system with real-time sync. Share bookmarks instantly with your team using Socket.IO integration.
+**`strapi transfer` fails with 504 or 524 behind a proxy (#112).** Socket.IO's upgrade listener stopped Node from passing the Data Transfer WebSocket to Strapi. The plugin now forwards every upgrade outside the Socket.IO path back to Strapi. If you attach your own `upgrade` listener, the plugin leaves those upgrades to you.
 
-**Use case:** Collaborative bookmark management with live updates.
+**`strapi ts:generate-types` or shutdown hangs (#109).** The plugin no longer closes Strapi's HTTP server, and all its timers are released on destroy.
 
----
+**Clients receive nothing.** Check that the role or token has `find` on the content type, that the content type is watched (config or settings) and, for Draft & Publish, that you listen to `:publish` or turned off _Only published content_.
 
-## Contributing
+**Browser connection fails with a CORS or 400 error.** Add the frontend origin under _Allowed origins_, or set `socket.serverOptions.cors`.
 
-We welcome contributions! Here's how you can help:
-
-### Report Bugs
-
-Found a bug? [Open an issue](https://github.com/strapi-community/plugin-io/issues) with:
-- Strapi version
-- Plugin version
-- Steps to reproduce
-- Expected vs actual behavior
-
-### Suggest Features
-
-Have an idea? [Start a discussion](https://github.com/strapi-community/plugin-io/discussions) to:
-- Describe the feature
-- Explain the use case
-- Discuss implementation
-
-### Submit Pull Requests
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Setup
+## Development
 
 ```bash
-# Clone the repository
-git clone https://github.com/strapi-community/plugin-io.git
-cd strapi-plugin-io
-
-# Install dependencies
-npm install
-
-# Build the plugin
-npm run build
-
-# Run in watch mode
-npm run watch
-
-# Verify structure
+npm ci
+npm run lint          # ESLint 10 flat config
+npm run format:check  # Prettier
+npm run build         # @strapi/sdk-plugin
+npm test              # node --test
+npm run test:types    # checks types.d.ts with tsc
 npm run verify
 ```
 
----
-
-## Support
-
-- **Documentation**: https://strapi-community.github.io/plugin-io/
-- **GitHub Issues**: https://github.com/strapi-community/plugin-io/issues
-- **GitHub Discussions**: https://github.com/strapi-community/plugin-io/discussions
-- **Strapi Discord**: https://discord.strapi.io
-
----
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/). semantic-release publishes releases from `main`.
 
 ## License
 
-[MIT License](./LICENSE)
-
-Copyright (c) 2024 Strapi Community
-
----
-
-## Credits
-
-**Original Authors:**
-- [@ComfortablyCoding](https://github.com/ComfortablyCoding)
-- [@hrdunn](https://github.com/hrdunn)
-
-**Enhanced and Maintained by:**
-- [@Schero94](https://github.com/Schero94)
-
-**Maintained until:** December 2026
-
----
-
-## Changelog
-
-### v5.1.0 (Latest)
-- **Live Presence System** - Real-time presence awareness in Content Manager
-- **Typing Indicator** - See when others are typing and in which field
-- **Admin Panel Sidebar** - Live presence panel integrated into edit view
-- **Admin Session Authentication** - Secure session tokens for Socket.IO
-- **Admin JWT Strategy** - New authentication strategy for admin users
-- **Enhanced Security** - Token hashing (SHA-256), usage limits, rate limiting
-- **Automatic Token Refresh** - Tokens auto-refresh at 70% of TTL
-- **Security Monitoring API** - Session stats and force-logout endpoints
-
-### v5.0.0
-- Strapi v5 support
-- Package renamed to `@strapi-community/plugin-io`
-- Enhanced TypeScript support
-- Entity-specific subscriptions
-- 12 helper functions
-- Admin panel with monitoring dashboard
-- Performance optimizations
-- Updated documentation
-
-For full changelog, see [CHANGELOG.md](./CHANGELOG.md).
-
----
-
-<div align="center">
-  
-**[Documentation](https://strapi-community.github.io/plugin-io/)** | 
-**[API Reference](./docs/api/io-class.md)** | 
-**[Examples](./docs/examples/)** | 
-**[GitHub](https://github.com/strapi-community/plugin-io)**
-
-Made with love for the Strapi community
-
-</div>
+[MIT](./LICENSE)

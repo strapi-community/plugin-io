@@ -28,18 +28,12 @@ io.broadcast(socketId, event, data);
 io.emitToNamespace(namespace, event, data);
 
 // Connection management
-io.disconnectSocket(socketId, reason);
-
-// Entity subscriptions (new in v5.0)
-io.subscribeToEntity(socketId, uid, id);
-io.unsubscribeFromEntity(socketId, uid, id);
-io.getEntitySubscriptions(socketId);
-io.emitToEntity(uid, id, event, data);
-io.getEntityRoomSockets(uid, id);
+io.disconnectSocket(socketId);
+io.revalidateSockets(); // re-check JWTs, API tokens and admin accounts
 
 // Properties
-io.server;           // Raw Socket.IO server
-io.namespaces;       // All namespaces
+io.server; // Raw Socket.IO server
+io.namespaces; // All namespaces
 ```
 
 ---
@@ -59,7 +53,7 @@ console.log(`Connected clients: ${sockets.size}`);
 
 // Broadcast to everyone
 strapi.$io.server.emit('announcement', {
-  message: 'Server maintenance in 10 minutes'
+  message: 'Server maintenance in 10 minutes',
 });
 
 // Access adapter and rooms
@@ -69,7 +63,7 @@ console.log('Active rooms:', Array.from(rooms.keys()));
 
 ### `strapi.$io.namespaces`
 
-Access all configured namespaces.
+All namespaces created on the server, keyed by name without the leading slash (`''` is the default namespace). Namespaces created with `strapi.$io.server.of('/name')` use the same handshake as the default namespace.
 
 **Type:** `Record<string, Namespace>`
 
@@ -78,12 +72,12 @@ Access all configured namespaces.
 if (strapi.$io.namespaces.admin) {
   strapi.$io.namespaces.admin.emit('dashboard:update', {
     users: 1234,
-    activeNow: 56
+    activeNow: 56,
   });
 }
 
 // List all namespaces
-Object.keys(strapi.$io.namespaces).forEach(ns => {
+Object.keys(strapi.$io.namespaces).forEach((ns) => {
   console.log(`Namespace: ${ns}`);
 });
 ```
@@ -94,25 +88,26 @@ Object.keys(strapi.$io.namespaces).forEach(ns => {
 
 ### `emit()`
 
-Sends data to all roles/tokens with permission for the content type action. Automatically sanitizes and transforms data based on role permissions.
+Sends data to every role and API token that may **read** the content type (`find` or `findOne` permission). Each audience receives the entry sanitized with its own permissions; if sanitizing fails for an audience, that audience is skipped and nothing raw is sent.
 
 **Signature:**
 
 ```typescript
-emit(options: EmitOptions): Promise<void>
+emit(options: EmitOptions): Promise<number> // number of rooms reached
 
 interface EmitOptions {
-  event: string;      // Action: 'create' | 'update' | 'delete' | custom
-  schema: object;     // Content type schema
-  data: any;          // Data to emit
+  event: string;                        // 'create' | 'update' | 'publish' | 'discardDraft' | custom
+  schema: string | { uid: string };     // Content type uid or schema
+  data: any;                            // Entry from the Document Service
 }
 ```
 
-**Supported Actions:** `create`, `update`, `delete` (or custom actions)
+**Built-in actions:** `create`, `update`, `delete`, `publish`, `unpublish`, `discardDraft` (or custom actions)
 
 **Event Format:** `{contentType}:{action}` (e.g., `article:create`)
 
 **Features:**
+
 - ✅ Automatic permission checking
 - ✅ Data sanitization per role
 - ✅ Relation population (if configured)
@@ -125,10 +120,10 @@ interface EmitOptions {
 strapi.$io.emit({
   event: 'create',
   schema: 'api::article.article',
-  data: articleData
+  data: articleData,
 });
 
-// Only users with 'create' permission on articles receive this
+// Only roles and tokens with find/findOne permission on articles receive this
 ```
 
 ```javascript [Custom Action]
@@ -136,7 +131,7 @@ strapi.$io.emit({
 strapi.$io.emit({
   event: 'publish',
   schema: 'api::article.article',
-  data: { id: 123, status: 'published' }
+  data: { id: 123, status: 'published' },
 });
 
 // Receives as: socket.on('article:publish', ...)
@@ -145,10 +140,9 @@ strapi.$io.emit({
 ```javascript [Controller Integration]
 // In your controller
 async create(ctx) {
-  const entry = await strapi.entityService.create(
-    'api::article.article',
-    { data: ctx.request.body }
-  );
+  const entry = await strapi.documents('api::article.article').create({
+    data: ctx.request.body,
+  });
 
   // Emit to all permitted users
   await strapi.$io.emit({
@@ -156,7 +150,7 @@ async create(ctx) {
     schema: 'api::article.article',
     data: entry
   });
-  
+
   return entry;
 }
 ```
@@ -191,8 +185,8 @@ strapi.$io.raw({
   event: 'notification',
   data: {
     type: 'info',
-    message: 'System maintenance completed'
-  }
+    message: 'System maintenance completed',
+  },
 });
 ```
 
@@ -203,8 +197,8 @@ strapi.$io.raw({
   rooms: ['premium', 'vip'],
   data: {
     discount: 50,
-    expiresIn: '24h'
-  }
+    expiresIn: '24h',
+  },
 });
 ```
 
@@ -215,8 +209,8 @@ strapi.$io.raw({
   data: {
     page: '/products',
     timestamp: Date.now(),
-    visitors: 42
-  }
+    visitors: 42,
+  },
 });
 ```
 
@@ -243,7 +237,7 @@ joinRoom(socketId: string, roomName: string): boolean
 strapi.$io.joinRoom(socket.id, 'premium-users');
 
 // Add to multiple rooms
-['notifications', 'chat', 'updates'].forEach(room => {
+['notifications', 'chat', 'updates'].forEach((room) => {
   strapi.$io.joinRoom(socket.id, room);
 });
 ```
@@ -267,8 +261,9 @@ strapi.$io.leaveRoom(socket.id, 'premium-users');
 // Leave all custom rooms
 const socket = strapi.$io.server.sockets.sockets.get(socketId);
 if (socket) {
-  socket.rooms.forEach(room => {
-    if (room !== socket.id) {  // Don't leave own room
+  socket.rooms.forEach((room) => {
+    if (room !== socket.id) {
+      // Don't leave own room
       strapi.$io.leaveRoom(socket.id, room);
     }
   });
@@ -297,7 +292,7 @@ interface SocketInfo {
 const sockets = await strapi.$io.getSocketsInRoom('chat-lobby');
 console.log(`${sockets.length} users in lobby`);
 
-sockets.forEach(socket => {
+sockets.forEach((socket) => {
   console.log(`Socket ${socket.id}, User: ${socket.userId}`);
 });
 
@@ -323,25 +318,17 @@ sendPrivateMessage(
 
 ```javascript
 // Send private notification
-strapi.$io.sendPrivateMessage(
-  socket.id,
-  'private-notification',
-  {
-    type: 'success',
-    message: 'Your payment was processed'
-  }
-);
+strapi.$io.sendPrivateMessage(socket.id, 'private-notification', {
+  type: 'success',
+  message: 'Your payment was processed',
+});
 
 // Send user-specific data
-strapi.$io.sendPrivateMessage(
-  socket.id,
-  'user-stats',
-  {
-    points: 1250,
-    level: 15,
-    achievements: ['first-post', 'verified']
-  }
-);
+strapi.$io.sendPrivateMessage(socket.id, 'user-stats', {
+  points: 1250,
+  level: 15,
+  achievements: ['first-post', 'verified'],
+});
 ```
 
 ### `broadcast()`
@@ -364,19 +351,19 @@ broadcast(
 // User joined - notify others
 strapi.$io.broadcast(socket.id, 'user-joined', {
   username: 'john_doe',
-  avatar: '/avatars/john.png'
+  avatar: '/avatars/john.png',
 });
 
 // User typing indicator
 strapi.$io.broadcast(socket.id, 'typing', {
   userId: 123,
-  chatRoom: 'general'
+  chatRoom: 'general',
 });
 
 // Collaborative editing - sync changes to others
 strapi.$io.broadcast(socket.id, 'document:update', {
   documentId: 456,
-  changes: [{ op: 'insert', pos: 10, text: 'Hello' }]
+  changes: [{ op: 'insert', pos: 10, text: 'Hello' }],
 });
 ```
 
@@ -399,12 +386,12 @@ emitToNamespace(
 strapi.$io.emitToNamespace('admin', 'dashboard:stats', {
   onlineUsers: 1234,
   revenue: 56789,
-  orders: 42
+  orders: 42,
 });
 
 // Send to chat namespace
 strapi.$io.emitToNamespace('chat', 'announcement', {
-  message: 'New features available!'
+  message: 'New features available!',
 });
 ```
 
@@ -436,145 +423,13 @@ strapi.$io.disconnectSocket(socket.id, 'Session expired');
 
 ---
 
-## Entity Subscription Functions
+## Entity Subscriptions (removed in 6.0)
 
-Entity subscriptions allow targeted updates for specific entities rather than receiving all events for a content type.
-
-### `subscribeToEntity()`
-
-Subscribe a socket to a specific entity (server-side).
-
-**Signature:**
-
-```typescript
-subscribeToEntity(
-  socketId: string,
-  uid: string,
-  id: string | number
-): Promise<EntitySubscriptionResult>
-
-interface EntitySubscriptionResult {
-  success: boolean;
-  room?: string;
-  uid?: string;
-  id?: string | number;
-  error?: string;
-}
-```
+`subscribeToEntity`, `unsubscribeFromEntity`, `getEntitySubscriptions`, `emitToEntity`, `getEntityRoomSockets` and the client events `subscribe-entity` / `unsubscribe-entity` were only part of an unpublished source tree; the npm builds 5.4.0 to 5.8.3 did not contain them. They are not part of 6.0. Filter content events by `documentId` on the client instead:
 
 ```javascript
-// Subscribe user to article updates
-const result = await strapi.$io.subscribeToEntity(
-  socket.id,
-  'api::article.article',
-  123
-);
-
-if (result.success) {
-  console.log(`Subscribed to room: ${result.room}`);
-}
-```
-
-### `unsubscribeFromEntity()`
-
-Unsubscribe a socket from a specific entity.
-
-**Signature:**
-
-```typescript
-unsubscribeFromEntity(
-  socketId: string,
-  uid: string,
-  id: string | number
-): EntitySubscriptionResult
-```
-
-```javascript
-// Unsubscribe when user leaves article page
-const result = strapi.$io.unsubscribeFromEntity(
-  socket.id,
-  'api::article.article',
-  123
-);
-```
-
-### `getEntitySubscriptions()`
-
-Get all entity subscriptions for a socket.
-
-**Signature:**
-
-```typescript
-getEntitySubscriptions(socketId: string): {
-  success: boolean;
-  subscriptions?: Array<{ uid: string; id: string; room: string }>;
-  error?: string;
-}
-```
-
-```javascript
-// Check what entities a user is watching
-const result = strapi.$io.getEntitySubscriptions(socket.id);
-
-if (result.success) {
-  result.subscriptions.forEach(sub => {
-    console.log(`Watching: ${sub.uid} #${sub.id}`);
-  });
-}
-```
-
-### `emitToEntity()`
-
-Emit an event to all clients subscribed to a specific entity.
-
-**Signature:**
-
-```typescript
-emitToEntity(
-  uid: string,
-  id: string | number,
-  event: string,
-  data: any
-): void
-```
-
-```javascript
-// Notify all subscribers when article gets a new comment
-strapi.$io.emitToEntity(
-  'api::article.article',
-  123,
-  'article:commented',
-  {
-    commentId: 456,
-    author: 'jane_doe',
-    text: 'Great article!'
-  }
-);
-```
-
-### `getEntityRoomSockets()`
-
-Get all sockets subscribed to a specific entity.
-
-**Signature:**
-
-```typescript
-getEntityRoomSockets(
-  uid: string,
-  id: string | number
-): Promise<Array<{ id: string; user: any }>>
-```
-
-```javascript
-// Check who's watching an article
-const sockets = await strapi.$io.getEntityRoomSockets(
-  'api::article.article',
-  123
-);
-
-console.log(`${sockets.length} users watching this article`);
-sockets.forEach(s => {
-  console.log(`User: ${s.user?.username || 'anonymous'}`);
+socket.on('article:update', ({ data }) => {
+  if (data.attributes.documentId === currentDocumentId) render(data);
 });
 ```
 
@@ -612,9 +467,9 @@ events: [
     name: 'custom-event',
     handler({ strapi, io }, socket, data) {
       console.log('Received:', data);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ---
@@ -633,7 +488,7 @@ const io: SocketIO = strapi.$io;
 const options: EmitOptions = {
   event: 'create',
   schema: 'api::article.article',
-  data: articleData
+  data: articleData,
 };
 
 await io.emit(options);
@@ -650,13 +505,13 @@ await io.emit(options);
 strapi.$io.emit({
   event: 'update',
   schema: 'api::article.article',
-  data: updatedArticle
+  data: updatedArticle,
 });
 
 // ❌ Bad - no permission checking
 strapi.$io.raw({
   event: 'article:update',
-  data: updatedArticle
+  data: updatedArticle,
 });
 ```
 
@@ -666,7 +521,7 @@ strapi.$io.raw({
 // ✅ Good - doesn't relate to content type
 strapi.$io.raw({
   event: 'server:status',
-  data: { uptime: process.uptime() }
+  data: { uptime: process.uptime() },
 });
 ```
 
@@ -690,7 +545,7 @@ if (sockets.length > 0) {
   strapi.$io.raw({
     event: 'stats:update',
     rooms: ['dashboard'],
-    data: stats
+    data: stats,
   });
 }
 ```

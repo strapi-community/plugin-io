@@ -7,16 +7,19 @@ Real-world use cases and implementation patterns for Socket.IO Plugin.
 ## 📚 Available Examples
 
 ### Content Types
+
 Learn how to monitor content types and emit real-time events automatically.
 
 **[View Content Types Examples →](./content-types)**
 
-### Events  
+### Events
+
 Custom event handlers and client-server communication patterns.
 
 **[View Events Examples →](./events)**
 
 ### Hooks
+
 Use lifecycle hooks for initialization, adapters, and middleware.
 
 **[View Hooks Examples →](./hooks)**
@@ -35,9 +38,9 @@ module.exports = {
   io: {
     enabled: true,
     config: {
-      contentTypes: ['api::article.article']
-    }
-  }
+      contentTypes: ['api::article.article'],
+    },
+  },
 };
 ```
 
@@ -65,31 +68,28 @@ events: [
     name: 'chat:send',
     async handler({ strapi, io }, socket, message) {
       // Save message
-      const saved = await strapi.entityService.create(
-        'api::message.message',
-        { data: message }
-      );
-      
+      const saved = await strapi.entityService.create('api::message.message', { data: message });
+
       // Broadcast to room
       io.server.to(message.room).emit('chat:message', saved);
-    }
+    },
   },
   {
     name: 'room:join',
     handler({ strapi, io }, socket, roomId) {
       socket.join(roomId);
       socket.to(roomId).emit('user:joined', {
-        userId: socket.data.userId
+        userId: socket.data.userId,
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
 // Frontend
 const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken }
+  auth: { strategy: 'jwt', token: userToken },
 });
 
 // Join room
@@ -98,7 +98,7 @@ socket.emit('room:join', 'general');
 // Send message
 socket.emit('chat:send', {
   room: 'general',
-  text: 'Hello everyone!'
+  text: 'Hello everyone!',
 });
 
 // Receive messages
@@ -119,14 +119,14 @@ async updateProduct(id, data) {
     id,
     { data, populate: ['images', 'category'] }
   );
-  
+
   // Notify all watching users
   await strapi.$io.emit({
     event: 'update',
     schema: 'api::product.product',
     data: product
   });
-  
+
   // If out of stock, send special alert
   if (product.stock === 0) {
     strapi.$io.raw({
@@ -134,7 +134,7 @@ async updateProduct(id, data) {
       data: { id: product.id, name: product.name }
     });
   }
-  
+
   return product;
 }
 ```
@@ -168,17 +168,17 @@ events: [
       // Broadcast to others editing same document
       socket.to(`document:${docId}`).emit('document:changes', {
         userId: socket.data.userId,
-        changes
+        changes,
       });
-    }
+    },
   },
   {
     name: 'document:open',
     handler({ strapi, io }, socket, docId) {
       socket.join(`document:${docId}`);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
@@ -190,7 +190,7 @@ socket.emit('document:open', documentId);
 editor.on('change', (changes) => {
   socket.emit('document:edit', {
     docId: documentId,
-    changes
+    changes,
   });
 });
 
@@ -213,12 +213,12 @@ hooks: {
     setInterval(async () => {
       const stats = {
         users: await strapi.db.query('plugin::users-permissions.user').count(),
-        orders: await strapi.db.query('api::order.order').count({ 
-          where: { status: 'pending' } 
+        orders: await strapi.db.query('api::order.order').count({
+          where: { status: 'pending' }
         }),
         revenue: await calculateRevenue()
       };
-      
+
       // Send to admin namespace
       io.namespaces.admin?.emit('dashboard:stats', stats);
     }, 5000);
@@ -229,7 +229,7 @@ hooks: {
 ```javascript
 // Frontend: Admin Dashboard
 const socket = io('http://localhost:1337/admin', {
-  auth: { strategy: 'api-token', token: adminToken }
+  auth: { strategy: 'api-token', token: adminToken },
 });
 
 socket.on('dashboard:stats', (stats) => {
@@ -251,20 +251,20 @@ events: [
     handler({ io }, socket, { room }) {
       socket.to(room).emit('user:typing', {
         userId: socket.data.userId,
-        room
+        room,
       });
-    }
+    },
   },
   {
     name: 'typing:stop',
     handler({ io }, socket, { room }) {
       socket.to(room).emit('user:stopped-typing', {
         userId: socket.data.userId,
-        room
+        room,
       });
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
@@ -274,10 +274,10 @@ let typingTimeout;
 messageInput.addEventListener('input', () => {
   // Emit typing start
   socket.emit('typing:start', { room: currentRoom });
-  
+
   // Clear previous timeout
   clearTimeout(typingTimeout);
-  
+
   // Set timeout to stop typing
   typingTimeout = setTimeout(() => {
     socket.emit('typing:stop', { room: currentRoom });
@@ -305,41 +305,37 @@ events: [
     async handler({ strapi, io }, socket) {
       if (socket.data.userId) {
         // Mark user as online
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.userId,
-          { data: { isOnline: true } }
-        );
-        
+        await strapi.entityService.update('plugin::users-permissions.user', socket.data.userId, {
+          data: { isOnline: true },
+        });
+
         // Notify others
         socket.broadcast.emit('user:online', {
-          userId: socket.data.userId
+          userId: socket.data.userId,
         });
       }
-    }
+    },
   },
   {
     name: 'disconnect',
     async handler({ strapi }, socket) {
       if (socket.data.userId) {
         // Mark user as offline
-        await strapi.entityService.update(
-          'plugin::users-permissions.user',
-          socket.data.userId,
-          { data: { 
+        await strapi.entityService.update('plugin::users-permissions.user', socket.data.userId, {
+          data: {
             isOnline: false,
-            lastSeen: new Date()
-          }}
-        );
-        
+            lastSeen: new Date(),
+          },
+        });
+
         // Notify others
         socket.broadcast.emit('user:offline', {
-          userId: socket.data.userId
+          userId: socket.data.userId,
         });
       }
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ```javascript
@@ -455,7 +451,7 @@ const { socket, connected } = useSocket('http://localhost:1337');
 
 watch(socket, (newSocket) => {
   if (!newSocket) return;
-  
+
   newSocket.on('article:create', (article) => {
     articles.value = [article, ...articles.value];
   });
@@ -538,7 +534,7 @@ describe('Socket.IO Connection', () => {
 
   test('should emit custom event', (done) => {
     socket.emit('ping', { timestamp: Date.now() });
-    
+
     socket.on('pong', (data) => {
       expect(data).toHaveProperty('timestamp');
       done();

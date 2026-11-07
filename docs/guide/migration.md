@@ -1,4 +1,28 @@
-# Migration Guide: v2 (Strapi v4) to v5 (Strapi v5)
+# Migration Guide
+
+## 5.x to 6.0
+
+6.0 makes delivery follow Strapi's read permissions and enforces the admin settings. Check these points after upgrading:
+
+1. **Read permission decides delivery.** Roles and API tokens receive events for content types they may `find` or `findOne`. Create or update permissions alone no longer deliver events.
+2. **Publish events.** Publishing emits `:publish` (it used to emit `:delete` and `:create`). Unpublish and discard draft emit `:unpublish` and `:discardDraft`. If `config.contentTypes[].actions` limits actions, add the new ones.
+3. **Drafts** are not sent by default. Turn off _Only published content_ to send them.
+4. **Delete events** go only to readers and include `locale`.
+5. **Room names:** API-token rooms are `io-token-<id>`, custom role rooms `io-role-<role type>`.
+6. **Settings** stored by 5.x are migrated and are now enforced. Review _Settings > Socket.IO_.
+7. **Admin permissions:** grant `Read settings`, `Update settings`, `Read monitoring` and `Reset statistics and send test events` (Settings > Administration Panel > Roles > Plugins > IO) to roles other than Super Admin.
+8. **Removed:** the `security` service, settings export and import, entity subscription helpers and `GET /api/io`.
+9. **Node.js 22** or later is required; `maxHttpBufferSize` defaults to 100 KB.
+
+| Plugin Version | Strapi Version | Node.js | Status   |
+| -------------- | -------------- | ------- | -------- |
+| **v6.x**       | v5.13+         | 22-24   | Current  |
+| v5.x           | v5.x           | 18-22   | Previous |
+| v2.x           | v4.x           | 14-20   | Legacy   |
+
+---
+
+## v2 (Strapi v4) to v5 (Strapi v5)
 
 Complete guide for migrating from `@strapi-community/plugin-io` v2.x (Strapi v4) to v5.x (Strapi v5).
 
@@ -14,16 +38,17 @@ The Socket.IO plugin has been updated for Strapi v5 with minimal breaking change
 
 ## Version Compatibility
 
-| Plugin Version | Strapi Version | Node.js | Status |
-|----------------|----------------|---------|--------|
-| **v5.x** | v5.x | 18-22 | ✅ Current |
-| v2.x | v4.x | 14-20 | 🔒 Legacy |
+| Plugin Version | Strapi Version | Node.js | Status     |
+| -------------- | -------------- | ------- | ---------- |
+| **v5.x**       | v5.x           | 18-22   | ✅ Current |
+| v2.x           | v4.x           | 14-20   | 🔒 Legacy  |
 
 ---
 
 ## Before You Start
 
 ### 1. Backup Your Project
+
 ```bash
 # Create a backup of your entire project
 cp -r my-strapi-project my-strapi-project-backup
@@ -34,11 +59,14 @@ git tag v4-backup
 ```
 
 ### 2. Review Strapi v5 Changes
+
 Read the official Strapi v5 migration guide:
+
 - [Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - [Breaking Changes Overview](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
 
 ### 3. Test Environment
+
 Migrate in a development environment first!
 
 ---
@@ -80,12 +108,12 @@ module.exports = {
         serverOptions: {
           cors: {
             origin: process.env.CLIENT_URL || 'http://localhost:3000',
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -94,18 +122,20 @@ module.exports = {
 **Strapi v5 Change:** Entity Service API has minor updates.
 
 **Old (v4):**
+
 ```javascript
 // In custom event handlers
 await strapi.entityService.create('api::article.article', {
-  data: { title: 'Test' }
+  data: { title: 'Test' },
 });
 ```
 
 **New (v5):**
+
 ```javascript
 // Same syntax! No changes needed ✅
 await strapi.entityService.create('api::article.article', {
-  data: { title: 'Test' }
+  data: { title: 'Test' },
 });
 ```
 
@@ -114,17 +144,19 @@ await strapi.entityService.create('api::article.article', {
 **Strapi v5 Change:** Query Engine updates.
 
 **Old (v4):**
+
 ```javascript
 await strapi.db.query('api::article.article').findMany({
-  where: { publishedAt: { $notNull: true } }
+  where: { publishedAt: { $notNull: true } },
 });
 ```
 
 **New (v5):**
+
 ```javascript
 // Same syntax! ✅
 await strapi.db.query('api::article.article').findMany({
-  where: { publishedAt: { $notNull: true } }
+  where: { publishedAt: { $notNull: true } },
 });
 ```
 
@@ -146,6 +178,7 @@ npm run develop
 ### ✅ No Breaking Changes in Plugin API
 
 Good news! The plugin API is 100% compatible:
+
 - ✅ `strapi.$io.emit()` - Works the same
 - ✅ `strapi.$io.raw()` - Works the same
 - ✅ Helper functions - All work the same
@@ -158,6 +191,7 @@ Good news! The plugin API is 100% compatible:
 These are Strapi core changes, not plugin-specific:
 
 #### 1. Plugin Structure
+
 **Change:** Strapi v5 uses new plugin SDK
 
 **Impact:** None for users, only for plugin development
@@ -165,6 +199,7 @@ These are Strapi core changes, not plugin-specific:
 **Action Required:** None ✅
 
 #### 2. TypeScript
+
 **Change:** Strapi v5 is TypeScript-first
 
 **Impact:** Better type support available
@@ -183,6 +218,7 @@ declare module '@strapi/strapi' {
 ```
 
 #### 3. Dependencies
+
 **Change:** Updated peer dependencies
 
 **Impact:** Must use Strapi v5 packages
@@ -198,6 +234,7 @@ npm install @strapi/strapi@5 @strapi/plugin-users-permissions@5
 ## Configuration Migration
 
 ### Content Types
+
 **✅ No changes needed**
 
 ```javascript
@@ -206,12 +243,13 @@ contentTypes: [
   'api::article.article',
   {
     uid: 'api::product.product',
-    actions: ['create', 'update']
-  }
-]
+    actions: ['create', 'update'],
+  },
+];
 ```
 
 ### Events
+
 **✅ No changes needed**
 
 ```javascript
@@ -221,12 +259,13 @@ events: [
     name: 'connection',
     handler({ strapi, io }, socket) {
       console.log('Connected:', socket.id);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Hooks
+
 **✅ No changes needed**
 
 ```javascript
@@ -245,22 +284,24 @@ hooks: {
 ### Example 1: Custom Event Handler
 
 **Before (v2):**
+
 ```javascript
 events: [
   {
     name: 'chat:send',
     async handler({ strapi, io }, socket, message) {
       await strapi.entityService.create('api::message.message', {
-        data: { text: message, author: socket.data.user.id }
+        data: { text: message, author: socket.data.user.id },
       });
-      
+
       io.server.to('chat-room').emit('chat:message', message);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 **After (v3):**
+
 ```javascript
 // Exactly the same! ✅
 events: [
@@ -268,24 +309,26 @@ events: [
     name: 'chat:send',
     async handler({ strapi, io }, socket, message) {
       await strapi.entityService.create('api::message.message', {
-        data: { text: message, author: socket.data.user.id }
+        data: { text: message, author: socket.data.user.id },
       });
-      
+
       io.server.to('chat-room').emit('chat:message', message);
-    }
-  }
-]
+    },
+  },
+];
 ```
 
 ### Example 2: Helper Functions
 
 **Before (v2):**
+
 ```javascript
 strapi.$io.joinRoom(socketId, 'premium-users');
 strapi.$io.sendPrivateMessage(socketId, 'notification', data);
 ```
 
 **After (v3):**
+
 ```javascript
 // Exactly the same! ✅
 strapi.$io.joinRoom(socketId, 'premium-users');
@@ -295,11 +338,12 @@ strapi.$io.sendPrivateMessage(socketId, 'notification', data);
 ### Example 3: Client Connection
 
 **Before (v2):**
+
 ```javascript
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken }
+  auth: { strategy: 'jwt', token: userToken },
 });
 
 socket.on('article:create', (data) => {
@@ -308,12 +352,13 @@ socket.on('article:create', (data) => {
 ```
 
 **After (v3):**
+
 ```javascript
 // Exactly the same! ✅
 import { io } from 'socket.io-client';
 
 const socket = io('http://localhost:1337', {
-  auth: { strategy: 'jwt', token: userToken }
+  auth: { strategy: 'jwt', token: userToken },
 });
 
 socket.on('article:create', (data) => {
@@ -326,11 +371,13 @@ socket.on('article:create', (data) => {
 ## Admin Panel Migration
 
 ### Settings Access
+
 **✅ No changes needed**
 
 Navigate to: **Settings → Socket.IO**
 
 All settings work the same:
+
 - CORS configuration
 - Role permissions
 - Content type management
@@ -343,11 +390,13 @@ All settings work the same:
 ### Issue 1: Plugin Not Loading
 
 **Symptoms:**
+
 ```
 Error: Cannot find module '@strapi-community/plugin-io'
 ```
 
 **Solution:**
+
 ```bash
 # Clear node_modules and reinstall
 rm -rf node_modules package-lock.json
@@ -358,11 +407,13 @@ npm install strapi-plugin-io@latest
 ### Issue 2: TypeScript Errors
 
 **Symptoms:**
+
 ```
 Property '$io' does not exist on type 'Strapi'
 ```
 
 **Solution:**
+
 ```typescript
 // Create types/strapi.d.ts
 import type { SocketIO } from '@strapi-community/plugin-io/types';
@@ -380,6 +431,7 @@ declare module '@strapi/strapi' {
 **Symptoms:** Socket.IO events don't fire after migration
 
 **Solution:**
+
 ```bash
 # Rebuild the plugin
 npm run build
@@ -396,6 +448,7 @@ npm run develop
 **Symptoms:** Connection blocked by CORS after migration
 
 **Solution:**
+
 ```javascript
 // Update CORS settings for Strapi v5
 // config/plugins.js
@@ -460,6 +513,7 @@ setTimeout(() => {
 ```
 
 Run it:
+
 ```bash
 node test-socket-io.js
 ```
@@ -469,6 +523,7 @@ node test-socket-io.js
 ## Performance Improvements in v3
 
 ### New in v3.0
+
 - ✅ **Better Caching**: 90% reduction in DB queries
 - ✅ **Parallel Processing**: Faster event emissions
 - ✅ **Optimized Bundle**: Smaller package size
@@ -482,6 +537,7 @@ node test-socket-io.js
 If migration fails, here's how to rollback:
 
 ### Option 1: Restore from Backup
+
 ```bash
 # Remove new version
 rm -rf my-strapi-project
@@ -493,6 +549,7 @@ npm install
 ```
 
 ### Option 2: Git Revert
+
 ```bash
 # Revert to v4-backup tag
 git reset --hard v4-backup
@@ -502,6 +559,7 @@ npm install
 ```
 
 ### Option 3: Downgrade
+
 ```bash
 # Downgrade Strapi
 npm install @strapi/strapi@4
@@ -517,24 +575,28 @@ npm install @strapi-community/plugin-io@2
 **Recommended approach:**
 
 ### Week 1: Preparation
+
 - Read [Strapi v5 migration guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - Read this guide
 - Backup project
 - Set up test environment
 
 ### Week 2: Development Migration
+
 - Migrate development environment
 - Test all features
 - Fix any issues
 - Update tests
 
 ### Week 3: Staging Migration
+
 - Migrate staging environment
 - Run full test suite
 - Performance testing
 - User acceptance testing
 
 ### Week 4: Production Migration
+
 - Migrate production
 - Monitor closely
 - Be ready to rollback
@@ -545,6 +607,7 @@ npm install @strapi-community/plugin-io@2
 ## Getting Help
 
 ### Resources
+
 - 📖 [Official Strapi v5 Migration Guide](https://docs.strapi.io/cms/migration/v4-to-v5/step-by-step)
 - 📖 [Strapi v5 Breaking Changes](https://docs.strapi.io/cms/migration/v4-to-v5/breaking-changes)
 - 🔗 [Plugin GitHub Repository](https://github.com/strapi-community/plugin-io)
@@ -552,7 +615,9 @@ npm install @strapi-community/plugin-io@2
 - 🐛 [Report Issues](https://github.com/strapi-community/plugin-io/issues)
 
 ### Support
+
 If you encounter issues during migration:
+
 1. Check this guide
 2. Search existing GitHub issues
 3. Ask in GitHub Discussions
@@ -577,6 +642,7 @@ If you encounter issues during migration:
 ## Summary
 
 ### ✅ What Works Without Changes
+
 - All API methods (`emit()`, `raw()`, helpers)
 - Configuration file
 - Event handlers
@@ -586,12 +652,14 @@ If you encounter issues during migration:
 - Authentication
 
 ### ⚠️ What to Update
+
 - Strapi core to v5
 - All @strapi/* packages
 - Plugin to v5.x
 - Dependencies (npm install)
 
 ### 🎯 Migration Difficulty
+
 **Easy** - Most projects migrate in under 1 hour!
 
 ---
@@ -600,4 +668,3 @@ If you encounter issues during migration:
 **Last Updated**: November 2025  
 **Plugin Version**: v4 → v5 (current: 5.8.2)  
 **Maintained by**: [@Schero94](https://github.com/Schero94)
-

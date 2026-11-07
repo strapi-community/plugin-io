@@ -1,7 +1,7 @@
 {
   "name": "@strapi-community/plugin-io",
-  "version": "5.8.2",
-  "description": "Socket.IO plugin for Strapi v5 CMS with OAuth authentication, real-time events, Redis adapter, and production-ready features",
+  "version": "6.0.0",
+  "description": "Socket.IO plugin for Strapi v5 CMS: real-time content events with Strapi permissions, JWT and API token auth, admin presence and monitoring",
   "keywords": [
     "strapi",
     "strapi-plugin",
@@ -10,7 +10,6 @@
     "real-time",
     "strapi-v5",
     "strapi5",
-    "oauth",
     "jwt",
     "redis",
     "websockets",
@@ -52,4 +51,3 @@
   ],
   "license": "MIT"
 }
-

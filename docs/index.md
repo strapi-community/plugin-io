@@ -20,23 +20,23 @@ features:
   - icon: ⚡
     title: Real-Time Events
     details: Automatic CRUD event broadcasting for all content types with role-based permissions
-  
+
   - icon: 🔐
     title: Built-in Authentication
     details: JWT and API Token authentication with automatic role-based access control
-  
+
   - icon: 📊
     title: Admin Dashboard
     details: Visual configuration panel with live monitoring, connection stats, and event logs
-  
+
   - icon: 🚀
     title: Production Ready
     details: Redis adapter support, rate limiting, IP whitelisting, and optimized for 2500+ concurrent connections
-  
+
   - icon: 🎯
     title: Developer Friendly
     details: Full TypeScript support, 7 helper functions, comprehensive documentation
-  
+
   - icon: 🔧
     title: Highly Configurable
     details: Namespaces, rooms, custom events, hooks, and flexible CORS settings
@@ -54,7 +54,7 @@ Enable in `config/plugins.js`:
 
 ```javascript
 module.exports = {
-  'io': {
+  io: {
     enabled: true,
     config: {
       contentTypes: ['api::article.article'],
@@ -62,12 +62,12 @@ module.exports = {
         serverOptions: {
           cors: {
             origin: 'http://localhost:3000',
-            methods: ['GET', 'POST']
-          }
-        }
-      }
-    }
-  }
+            methods: ['GET', 'POST'],
+          },
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -79,8 +79,8 @@ import { io } from 'socket.io-client';
 const socket = io('http://localhost:1337', {
   auth: {
     strategy: 'jwt',
-    token: 'your-jwt-token'
-  }
+    token: 'your-jwt-token',
+  },
 });
 
 socket.on('article:create', (data) => {
@@ -117,16 +117,22 @@ contentTypes: [
   'api::comment.comment',
   {
     uid: 'api::product.product',
-    actions: ['create', 'update']
-  }
-]
+    actions: ['create', 'update'],
+  },
+];
 ```
 
 ```javascript
 // Frontend: Automatic events
-socket.on('article:create', (article) => { /* ... */ });
-socket.on('article:update', (article) => { /* ... */ });
-socket.on('article:delete', (article) => { /* ... */ });
+socket.on('article:create', (article) => {
+  /* ... */
+});
+socket.on('article:update', (article) => {
+  /* ... */
+});
+socket.on('article:delete', (article) => {
+  /* ... */
+});
 ```
 
 ### 🔐 Role-Based Access Control
@@ -142,6 +148,7 @@ Permissions are automatically enforced based on user roles:
 ### 📊 Real-Time Monitoring
 
 View live statistics in your admin panel:
+
 - 🟢 Active connections
 - 💬 Active rooms
 - ⚡ Events per second
@@ -175,24 +182,31 @@ strapi.$io.disconnectSocket(socketId, 'Kicked by admin');
 ## Use Cases
 
 ### Real-Time Blog
+
 Automatically notify readers when new articles are published
 
 ### Live Chat
+
 Build a chat system with rooms, private messages, and typing indicators
 
 ### E-Commerce
+
 Update product availability, prices, and inventory in real-time
 
 ### Collaborative Tools
+
 Synchronize state across multiple users editing the same document
 
 ### Dashboards
+
 Push live metrics, alerts, and system status to admin panels
 
 ### Gaming
+
 Handle player connections, game state, and multiplayer interactions
 
 ### IoT Integration
+
 Receive and broadcast sensor data and device status updates
 
 ## Dashboard Widget
@@ -202,6 +216,7 @@ The plugin includes a **live statistics widget** on your Strapi admin home page:
 ![Socket.IO Dashboard Widget](/widget.png)
 
 📊 **Widget Features:**
+
 - 🟢 Live connection status with pulsing indicator
 - 👥 Active connections count
 - 💬 Active rooms count
@@ -220,6 +235,7 @@ Configure everything visually in the admin panel:
 ![Socket.IO Settings](/settings.png)
 
 **Settings → Socket.IO** gives you full control over:
+
 - CORS origins
 - Content type monitoring
 - Role-based permissions
@@ -229,6 +245,7 @@ Configure everything visually in the admin panel:
 ![Monitoring Dashboard](/monitoringSettings.png)
 
 **Real-time monitoring** shows:
+
 - Active connections with user details
 - Event logs
 - Performance metrics
@@ -272,6 +289,7 @@ Configure everything visually in the admin panel:
 Check out other powerful Strapi v5 plugins by [@Schero94](https://github.com/Schero94) that complement Socket.IO perfectly:
 
 ### 📧 Magic-Mail
+
 Enterprise-grade multi-account email management with OAuth 2.0 support. Perfect for sending transactional emails triggered by real-time events.
 
 **Features**: Gmail/Microsoft/Yahoo OAuth, SendGrid, Mailgun, smart routing, rate limiting
@@ -281,6 +299,7 @@ Enterprise-grade multi-account email management with OAuth 2.0 support. Perfect 
 ---
 
 ### 🔐 Magic-Sessionmanager
+
 Advanced session tracking and monitoring for Strapi v5. Track Socket.IO connections, monitor active users, and analyze session patterns.
 
 **Features**: Real-time tracking, IP monitoring, active user dashboard, session analytics
@@ -290,6 +309,7 @@ Advanced session tracking and monitoring for Strapi v5. Track Socket.IO connecti
 ---
 
 ### 🔖 Magicmark
+
 Powerful bookmark management system with real-time sync capabilities. Share bookmarks instantly with your team using Socket.IO integration.
 
 **Features**: Tag organization, team sharing, real-time sync, full REST API

@@ -1,3 +1,51 @@
+## [Unreleased]
+
+The next release is a major version (6.0.0): it contains breaking changes. See "Migration" below.
+
+### Bug Fixes
+
+* **socket:** Strapi Data Transfer works again behind proxies. Engine.IO's `upgrade` listener stopped Node from passing `/admin/transfer/runner/*` upgrades to Strapi, so they timed out (504/524). Upgrades outside the Socket.IO path are now forwarded to Strapi. Closes #112.
+* **lifecycle:** `destroy()` no longer closes Strapi's HTTP server and releases every timer, so shutdown and `strapi ts:generate-types` exit (#109).
+* **events:** content events use the Document Service middleware. Publishing emits `:publish` instead of `:delete` plus `:create`, populated refetches use the same locale and status, and delete emits one event per locale.
+* **security:** Content API sanitizing fails closed. If sanitizing an entry fails, that audience is skipped instead of receiving the raw entry (class of #111). Sensitive keys are matched exactly, so `tokenCount` or an upload `hash` are no longer dropped.
+* **security:** delete events are no longer broadcast to every client.
+* **security:** presence events are accepted only from admin sockets, require Content Manager read permission for the content type, and no longer expose admin emails or socket ids.
+* **security:** admin routes require new plugin permissions (`settings.read`, `settings.update`, `monitoring.read`, `monitoring.manage`).
+* **security:** API-token handshakes reject admin-kind tokens, room names use the token id and the role type, `isReadScope` is defined, and failed handshakes return one generic message.
+* **security:** the handshake uses Strapi's proxy settings for the client IP, does not count anonymous connections as failures, and applies to custom namespaces.
+* **security:** authenticated sockets are re-checked and disconnected when the JWT expires, the user is blocked or changes role, the API token is deleted or the admin is deactivated.
+* **settings:** every admin setting is now enforced (origins, connection cap, ping and timeouts, required authentication, client event rate limit, IP allow and block lists, per-role connect permission, draft handling, excluded fields, presence, monitoring). Settings that were never implemented were removed.
+* **settings:** `PUT /io/settings` validates a strict schema and returns 400 with field paths. `@strapi/utils` is now a declared dependency, so the error is Strapi's own `ValidationError` instead of a bundled copy that produced 500s.
+* **monitoring:** statistics, event log and admins online report real values and never contain IP addresses, emails, tokens or socket ids. Test events refuse reserved, content and presence names.
+* **admin:** the presence panel reconnects with a fresh one-time token, and the stats widget no longer shows zeros.
+* **api:** the scaffold route `GET /api/io`, which answered 500, is removed.
+* **types:** `types.d.ts` matches the runtime API and is published through `types` and the `strapi-server` export.
+
+### Features
+
+* **events:** new actions `publish`, `unpublish` and `discardDraft`; content types and actions can also be chosen in the admin settings.
+* **admin:** Settings, Monitoring, homepage widgets and the Live presence panel were rebuilt with the Strapi Design System 2 following native Strapi patterns (Save in the header, unsaved-changes guard, inline validation, confirmation dialogs, loading, empty and error states, RBAC-aware links and pages, five languages).
+* **api:** `strapi.$io.emitIdentifier()`, `revalidateSockets()`, `namespaces`, and `emit()` accepts a content type uid.
+
+### Chores
+
+* Dependencies updated to their latest versions: socket.io and socket.io-client 4.8.4, zod 4.6.7 (fixes GHSA-mrhx-c7xc-m3w5), @strapi/strapi and @strapi/utils 5.61.0, @strapi/sdk-plugin 6.1.1, Design System and icons 2.2.4, styled-components 6.6.0, ESLint 10, semantic-release 25. `date-fns` and the implicit `lodash` use were removed. TypeScript stays on 5.9 because react-intl 6 (Strapi's admin version) only accepts TypeScript up to 5.
+* Node.js engines follow Strapi 5.61 (`>=22.0.0 <=26.x.x`); peers are `@strapi/strapi ^5.13.0` and Design System/icons `^2.2.0`.
+* The legacy `server/` tree, the root `strapi-server.js`/`strapi-admin.js` shims, unreachable admin components and the manual root test scripts were removed. `dist/` is no longer tracked; `package-lock.json` is.
+* ESLint 10 flat config, Prettier check, `node --test` suite and published-types check; CI on Node 22 and 24, hardened release workflow (SHA-pinned actions, lockfile install without scripts, npm OIDC with `NPM_TOKEN` fallback and provenance), Dependabot with verified auto-merge.
+
+### Migration
+
+* **Read permission decides delivery.** Roles and API tokens receive events for content types they may `find` or `findOne`. Grant read permissions where you relied on create or update permissions.
+* **Publish events.** Listen to `:publish`, `:unpublish` and `:discardDraft` instead of the `:delete` plus `:create` pair. If `config.contentTypes[].actions` limits actions, add the new ones you need.
+* **Drafts** are not sent by default. Turn off "Only published content" in the settings to send them.
+* **Room names.** API-token rooms are `io-token-<id>` and custom role rooms are `io-role-<role type>`. `io-role-public` and `io-role-authenticated` are unchanged.
+* **Settings.** Stored 5.x settings are migrated on the first start: keys that were never implemented are dropped, the old default origin `http://localhost:3000` and the old default limit of 1000 connections are reset. Review the settings after upgrading because they are now enforced.
+* **Permissions.** Grant the new plugin permissions to non-Super-Admin roles that need the Socket.IO pages.
+* **Removed APIs:** the `security` service, settings export and import, the entity subscription helpers (never part of the published 5.4 to 5.8 builds) and `GET /api/io`.
+* **Message size.** `maxHttpBufferSize` defaults to 100 KB; set it in `socket.serverOptions` if clients send larger messages.
+* **Node.js 22** or later is required.
+
 ## [5.8.3](https://github.com/strapi-community/plugin-io/compare/5.8.2...5.8.3) (2026-08-02)
 
 

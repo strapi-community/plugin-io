@@ -61,6 +61,7 @@ docs/
 ## 📖 Content Overview
 
 ### Getting Started
+
 - Requirements & compatibility
 - Installation instructions
 - Basic & advanced configuration
@@ -69,10 +70,12 @@ docs/
 - Troubleshooting
 
 ### API Reference
+
 - **IO Class**: Complete API with 7 helper functions
 - **Plugin Config**: All configuration options with examples
 
 ### Examples
+
 - **Content Types**: Automatic real-time events
 - **Events**: Custom event handlers
 - **Hooks**: Lifecycle hooks & adapters
@@ -136,6 +139,7 @@ const socket: Socket = io();
 ## 🔧 Configuration
 
 Edit `.vitepress/config.js` to customize:
+
 - Site title & description
 - Navigation & sidebar
 - Social links
@@ -148,6 +152,7 @@ Edit `.vitepress/config.js` to customize:
 ## 🎨 Theming
 
 The documentation uses VitePress's default theme with custom branding:
+
 - **Primary Color**: `#4945ff` (Strapi blue)
 - **Dark Mode**: Automatic based on system preference
 - **Fonts**: System fonts for optimal performance
@@ -161,6 +166,7 @@ npm run build
 ```
 
 Generates static files in `.vitepress/dist/`:
+
 - Optimized HTML files
 - Minified CSS & JavaScript
 - Pre-rendered Vue components
@@ -255,10 +261,12 @@ MIT License - Same as the plugin
 ## 👥 Credits
 
 **Original Plugin Authors:**
+
 - [@ComfortablyCoding](https://github.com/ComfortablyCoding)
 - [@hrdunn](https://github.com/hrdunn)
 
 **Documentation:**
+
 - Updated and enhanced by [@Schero94](https://github.com/Schero94)
 
 **Will be maintained till December 2026** 🚀
@@ -276,4 +284,3 @@ MIT License - Same as the plugin
 **Last Updated**: August 2, 2026  
 **VitePress Version**: 1.6.4  
 **Plugin Version**: 5.8.2
-

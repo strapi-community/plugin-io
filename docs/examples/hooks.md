@@ -13,6 +13,7 @@ Hooks are similar to Strapi model lifecycles. They are functions called at speci
 ## Init Hook
 
 The `init` hook is triggered immediately after the Socket.IO server instance is constructed. It's perfect for:
+
 - Adding server adapters (Redis, MongoDB)
 - Registering middleware
 - Configuring namespaces
@@ -45,36 +46,34 @@ module.exports = ({ env }) => ({
       hooks: {
         async init({ strapi, io }) {
           const pubClient = createClient({
-            url: env('REDIS_URL', 'redis://localhost:6379')
+            url: env('REDIS_URL', 'redis://localhost:6379'),
           });
-          
+
           const subClient = pubClient.duplicate();
-          
-          await Promise.all([
-            pubClient.connect(),
-            subClient.connect()
-          ]);
-          
+
+          await Promise.all([pubClient.connect(), subClient.connect()]);
+
           io.server.adapter(createAdapter(pubClient, subClient));
-          
+
           strapi.log.info('[io] ✅ Redis adapter initialized');
-          
+
           // Handle errors
           pubClient.on('error', (err) => {
             strapi.log.error('[io] Redis pub client error:', err);
           });
-          
+
           subClient.on('error', (err) => {
             strapi.log.error('[io] Redis sub client error:', err);
           });
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 });
 ```
 
 **Benefits:**
+
 - ✅ Horizontal scaling across multiple servers
 - ✅ Load balancing
 - ✅ Session persistence
@@ -98,20 +97,20 @@ module.exports = ({ env }) => ({
         async init({ strapi, io }) {
           const mongoClient = new MongoClient(env('MONGO_URL'));
           await mongoClient.connect();
-          
-          const mongoCollection = mongoClient
-            .db('mydb')
-            .collection('socket.io-adapter-events');
-          
-          io.server.adapter(createAdapter(mongoCollection, {
-            addCreatedAtField: true
-          }));
-          
+
+          const mongoCollection = mongoClient.db('mydb').collection('socket.io-adapter-events');
+
+          io.server.adapter(
+            createAdapter(mongoCollection, {
+              addCreatedAtField: true,
+            })
+          );
+
           strapi.log.info('[io] ✅ MongoDB adapter initialized');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 });
 ```
 
@@ -133,33 +132,32 @@ module.exports = {
           io.server.use(async (socket, next) => {
             try {
               const token = socket.handshake.auth.token;
-              
+
               if (!token) {
                 return next(new Error('Authentication required'));
               }
-              
+
               // Verify JWT token
-              const user = await strapi.plugins['users-permissions']
-                .services.jwt.verify(token);
-              
+              const user = await strapi.plugins['users-permissions'].services.jwt.verify(token);
+
               if (!user) {
                 return next(new Error('Invalid token'));
               }
-              
+
               // Attach user to socket
               socket.data.user = user;
-              
+
               next();
             } catch (error) {
               next(new Error('Authentication failed'));
             }
           });
-          
+
           strapi.log.info('[io] Authentication middleware registered');
-        }
-      }
-    }
-  }
+        },
+      },
+    },
+  },
 };
 ```
 
@@ -175,10 +173,10 @@ hooks: {
         userAgent: socket.handshake.headers['user-agent'],
         timestamp: new Date().toISOString()
       });
-      
+
       // Add connection timestamp
       socket.data.connectedAt = Date.now();
-      
+
       next();
     });
   }
@@ -195,15 +193,15 @@ hooks: {
       '::1',
       '192.168.1.0/24'
     ];
-    
+
     io.server.use((socket, next) => {
       const clientIP = socket.handshake.address;
-      
+
       if (!isIPAllowed(clientIP, allowedIPs)) {
         strapi.log.warn(`[io] Blocked connection from ${clientIP}`);
         return next(new Error('IP not whitelisted'));
       }
-      
+
       next();
     });
   }
@@ -228,7 +226,7 @@ hooks: {
         });
       }
     }));
-    
+
     strapi.log.info('[io] Rate limiting enabled');
   }
 }
@@ -245,40 +243,40 @@ hooks: {
   init({ strapi, io }) {
     // Admin namespace
     const adminNamespace = io.server.of('/admin');
-    
+
     adminNamespace.use(async (socket, next) => {
       // Admin-only authentication
       const token = socket.handshake.auth.token;
       const user = await verifyAdminToken(token);
-      
+
       if (!user || user.role.type !== 'admin') {
         return next(new Error('Admin access required'));
       }
-      
+
       socket.data.user = user;
       next();
     });
-    
+
     adminNamespace.on('connection', (socket) => {
       strapi.log.info(`[io] Admin connected: ${socket.data.user.username}`);
-      
+
       socket.on('broadcast', (data) => {
         // Broadcast to all users
         io.server.emit('admin:announcement', data);
       });
     });
-    
+
     // Chat namespace
     const chatNamespace = io.server.of('/chat');
-    
+
     chatNamespace.on('connection', (socket) => {
       strapi.log.info('[io] Chat user connected');
-      
+
       socket.on('message', (data) => {
         chatNamespace.emit('message', data);
       });
     });
-    
+
     strapi.log.info('[io] Namespaces configured: /admin, /chat');
   }
 }
@@ -289,12 +287,12 @@ hooks: {
 ```javascript
 // Connect to admin namespace
 const adminSocket = io('http://localhost:1337/admin', {
-  auth: { token: adminToken }
+  auth: { token: adminToken },
 });
 
 // Connect to chat namespace
 const chatSocket = io('http://localhost:1337/chat', {
-  auth: { token: userToken }
+  auth: { token: userToken },
 });
 ```
 
@@ -308,7 +306,7 @@ const chatSocket = io('http://localhost:1337/chat', {
 hooks: {
   init({ strapi, io }) {
     const connections = new Map();
-    
+
     io.server.on('connection', (socket) => {
       const connectionInfo = {
         socketId: socket.id,
@@ -317,20 +315,20 @@ hooks: {
         connectedAt: new Date(),
         userId: socket.data.user?.id
       };
-      
+
       connections.set(socket.id, connectionInfo);
-      
+
       // Log to database
       strapi.entityService.create('api::connection-log.connection-log', {
         data: connectionInfo
       });
-      
+
       socket.on('disconnect', () => {
         const info = connections.get(socket.id);
         const duration = Date.now() - info.connectedAt.getTime();
-        
+
         strapi.log.info(`[io] Session ended: ${socket.id} (${duration}ms)`);
-        
+
         // Update log
         strapi.entityService.update('api::connection-log.connection-log', {
           where: { socketId: socket.id },
@@ -339,11 +337,11 @@ hooks: {
             duration
           }
         });
-        
+
         connections.delete(socket.id);
       });
     });
-    
+
     // Periodic stats logging
     setInterval(() => {
       strapi.log.info(`[io] Active connections: ${connections.size}`);
@@ -358,30 +356,30 @@ hooks: {
 hooks: {
   init({ strapi, io }) {
     const eventStats = new Map();
-    
+
     // Intercept all events
     io.server.use((socket, next) => {
       socket.use((packet, next) => {
         const [eventName] = packet;
-        
+
         // Track event
         const count = eventStats.get(eventName) || 0;
         eventStats.set(eventName, count + 1);
-        
+
         next();
       });
-      
+
       next();
     });
-    
+
     // Report stats every 5 minutes
     setInterval(() => {
       const stats = Array.from(eventStats.entries())
         .map(([event, count]) => ({ event, count }))
         .sort((a, b) => b.count - a.count);
-      
+
       strapi.log.info('[io] Event statistics:', stats);
-      
+
       // Reset stats
       eventStats.clear();
     }, 300000);
@@ -400,26 +398,26 @@ hooks: {
   init({ strapi, io }) {
     io.server.on('connection', async (socket) => {
       if (!socket.data.user) return;
-      
+
       const user = socket.data.user;
-      
+
       // Join user-specific room
       socket.join(`user-${user.id}`);
-      
+
       // Join role-based room
       socket.join(`role-${user.role.type}`);
-      
+
       // Join premium room
       if (user.isPremium) {
         socket.join('premium');
       }
-      
+
       // Join location-based rooms
       if (user.country) {
         socket.join(`country-${user.country}`);
       }
-      
-      strapi.log.info(`[io] User ${user.username} joined rooms:`, 
+
+      strapi.log.info(`[io] User ${user.username} joined rooms:`,
         Array.from(socket.rooms)
       );
     });
@@ -438,25 +436,25 @@ hooks: {
   init({ strapi, io }) {
     const shutdown = async (signal) => {
       strapi.log.info(`[io] Received ${signal}, closing connections...`);
-      
+
       // Notify all clients
       io.server.emit('server:shutdown', {
         message: 'Server is restarting',
         reconnectIn: 5000
       });
-      
+
       // Wait for messages to be sent
       await new Promise(resolve => setTimeout(resolve, 1000));
-      
+
       // Close all connections
       const sockets = await io.server.fetchSockets();
       sockets.forEach(socket => {
         socket.disconnect(true);
       });
-      
+
       strapi.log.info(`[io] Closed ${sockets.length} connections`);
     };
-    
+
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
   }
@@ -480,34 +478,34 @@ hooks: {
             'api::channel.channel',
             channelId
           );
-          
+
           if (!channel) {
             socket.emit('error', { message: 'Channel not found' });
             return;
           }
-          
+
           // Check password if private
           if (channel.isPrivate && channel.password !== password) {
             socket.emit('error', { message: 'Invalid password' });
             return;
           }
-          
+
           // Check member limit
           const roomSize = (await io.server.in(`channel-${channelId}`).fetchSockets()).length;
           if (channel.maxMembers && roomSize >= channel.maxMembers) {
             socket.emit('error', { message: 'Channel is full' });
             return;
           }
-          
+
           // Join room
           socket.join(`channel-${channelId}`);
-          
+
           // Notify others
           socket.to(`channel-${channelId}`).emit('user:joined', {
             userId: socket.data.user?.id,
             username: socket.data.user?.username
           });
-          
+
           socket.emit('channel:joined', {
             channelId,
             members: roomSize + 1
@@ -533,23 +531,23 @@ hooks: {
   init({ strapi, io }) {
     // Add custom helper
     io.kickUser = async (userId, reason) => {
-      const stats = strapi.plugin('io').service('monitoring').getConnectionStats();
-      const userSocket = stats.sockets.find(s => s.user?.id === userId);
-      
+      const sockets = await strapi.$io.server.fetchSockets();
+      const userSocket = sockets.find((s) => s.data.user?.id === userId);
+
       if (userSocket) {
         io.server.to(userSocket.id).emit('kicked', { reason });
         io.disconnectSocket(userSocket.id, reason);
         return true;
       }
-      
+
       return false;
     };
-    
+
     // Add broadcast to role
     io.broadcastToRole = (roleName, event, data) => {
       io.server.to(`role-${roleName}`).emit(event, data);
     };
-    
+
     strapi.log.info('[io] Custom helpers registered');
   }
 }
@@ -564,7 +562,7 @@ await strapi.$io.kickUser(123, 'Violation of terms');
 // Broadcast to all admins
 strapi.$io.broadcastToRole('admin', 'system:alert', {
   level: 'critical',
-  message: 'Database backup required'
+  message: 'Database backup required',
 });
 ```
 
@@ -579,17 +577,17 @@ describe('Socket.IO Hooks', () => {
     const adapter = strapi.$io.server.adapter;
     expect(adapter.constructor.name).toBe('RedisAdapter');
   });
-  
+
   test('should have custom helpers', () => {
     expect(typeof strapi.$io.kickUser).toBe('function');
     expect(typeof strapi.$io.broadcastToRole).toBe('function');
   });
-  
+
   test('should auto-join user room', (done) => {
     const socket = io('http://localhost:1337', {
-      auth: { token: userToken }
+      auth: { token: userToken },
     });
-    
+
     socket.on('connect', () => {
       // Verify user joined their room
       socket.emit('get-rooms', (rooms) => {
