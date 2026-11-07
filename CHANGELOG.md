@@ -1,8 +1,6 @@
 # [6.0.0](https://github.com/strapi-community/plugin-io/compare/5.8.3...6.0.0) (2026-11-07)
 
-
 * feat!: plugin-io 6.0 for Strapi 5 (security, Design System 2 admin, fixes [#112](https://github.com/strapi-community/plugin-io/issues/112)) ([#113](https://github.com/strapi-community/plugin-io/issues/113)) ([668e612](https://github.com/strapi-community/plugin-io/commit/668e612dda9c66944dcc3f061966fb1b3f7cd1b5)), closes [#109](https://github.com/strapi-community/plugin-io/issues/109)
-
 
 ### BREAKING CHANGES
 
@@ -14,8 +12,6 @@ unless "Only published content" is turned off. Token rooms are
 `io-token-<id>` and custom role rooms `io-role-<role type>`. The `security`
 service and `GET /api/io` were removed. Admin routes need the new plugin
 permissions. maxHttpBufferSize defaults to 100 KB.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 * feat(admin)!: rebuild the admin with Strapi Design System 2 and native patterns
 
@@ -40,8 +36,6 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 never enforced (Redis, namespaces, entity subscriptions, live preview,
 field-level changes, per-role CORS options) are no longer shown.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * ci: add PR checks, harden releases and enable Dependabot
 
 - ci.yml: Node 22/24 matrix with lint, format check, build, tests, types
@@ -56,13 +50,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   Pages permissions scoped to the deploy job.
 - The Discussions link points to strapi-community/plugin-io.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 * admin presence sockets expose socket.data.admin instead of
 socket.data.user and do not run config.events handlers unless the event sets
 admin: true. An empty Allowed origins list now refuses foreign browser
 origins for WebSocket connections.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 * fix(admin): count unreadable entries in Admins online and pluralize client counts
 
@@ -71,15 +62,11 @@ Monitoring and the Admins online widget show "N entries you cannot view" /
 viewer may not read. The connected-clients breakdown uses ICU plurals in all
 five languages.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * build(release): fold the [Unreleased] changelog section into the release notes
 
 A local semantic-release plugin returns the [Unreleased] body as extra
 release notes and removes the section before @semantic-release/changelog
 prepends the new entry, so no stale block is left behind (IO-RA-10).
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 * docs: rewrite the guides and references against the 6.0 code
 
@@ -98,8 +85,6 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - CHANGELOG [Unreleased]: re-attack fixes, migration steps and the dev-only
   audit advisories; llms-full.txt regenerated
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * test: add a Playwright admin regression suite and refresh the screenshots
 
 - tests/e2e/admin.e2e.mjs (npm run test:e2e) runs against a real Strapi app:
@@ -111,15 +96,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 - README and docs screenshots re-captured from the current build (synthetic
   data, light, dark and 390 px)
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * docs: state the measured query numbers precisely in the README
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * docs: regenerate llms-full.txt
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 * fix(server)!: require Node.js 22.21+ or 24.9+ and drop the upgrade body fallback
 
@@ -131,8 +110,6 @@ longer run on a supported engine. On an unsupported Node.js the plugin
 logs a warning and leaves upgrades to Socket.IO.
 * engines.node is now "^22.21.0 || >=24.9.0 <=26.x.x".
 Node.js 22.0 to 22.20 and 23.x are no longer supported.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 * feat(server): restore entity subscriptions with per-audience permissions
 
@@ -159,8 +136,6 @@ use `strapi.$io.subscribeToEntity()`, `unsubscribeFromEntity()` and
   on disconnect and adds no query for unfollowed documents.
 - Admin presence sockets cannot subscribe.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * feat(admin): restore settings export and import, add entry subscription settings
 
 - Export and import: Settings > Socket.IO has an "Export and import"
@@ -178,8 +153,6 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
   the switch alone.
 - New strings in all five languages.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * build(deps): override patched nodemailer, koa-body zod and @hono/node-server in the dev tree
 
 Scoped npm overrides for development dependencies (they are not part of
@@ -194,8 +167,6 @@ the published package):
 npm audit of the dev tree: 71 (5 high) before, 67 (3 high) after. The
 remaining advisories have no compatible patched release and are listed
 in docs/guide/migration.md.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 
 * ci: run the browser and socket e2e suites against a scaffolded Strapi 5.61 app
 
@@ -215,16 +186,11 @@ New suites:
   broadcast, the settings import check (strict schema, 403 without
 * Strapi 5.38 or later is required.
 
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 * test(cluster): give the store contract its own PostgreSQL schema
 
 node --test runs test files in parallel, and tests/cluster.test.mjs wipes the
 plugin tables of the same database. The store contract now creates and drops
 a private schema (knex searchPath), so the counter test no longer races.
-
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-
 
 The next release is a major version (6.0.0): it contains breaking changes. See "Migration" below.
 
@@ -316,13 +282,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.8.3](https://github.com/strapi-community/plugin-io/compare/5.8.2...5.8.3) (2026-08-02)
 
-
 ### Bug Fixes
 
 * **socket:** stop Engine.IO from killing Strapi transfer upgrades ([5111a74](https://github.com/strapi-community/plugin-io/commit/5111a74ca447f7d80e691509f00623e4ec03906b)), closes [#112](https://github.com/strapi-community/plugin-io/issues/112)
 
 ## [5.8.2](https://github.com/strapi-community/plugin-io/compare/5.8.1...5.8.2) (2026-04-28)
-
 
 ### Bug Fixes
 
@@ -330,13 +294,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.8.1](https://github.com/strapi-community/plugin-io/compare/5.8.0...5.8.1) (2026-04-16)
 
-
 ### Bug Fixes
 
 * six runtime bugs from deep audit ([f29143e](https://github.com/strapi-community/plugin-io/commit/f29143e087534201acf03d2f2a752e3c6e58845a))
 
 # [5.8.0](https://github.com/strapi-community/plugin-io/compare/5.7.1...5.8.0) (2026-04-16)
-
 
 ### Features
 
@@ -344,13 +306,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.7.1](https://github.com/strapi-community/plugin-io/compare/5.7.0...5.7.1) (2026-04-16)
 
-
 ### Bug Fixes
 
 * **presence:** field injection not working - fix field name matching ([af4ed2c](https://github.com/strapi-community/plugin-io/commit/af4ed2c5534e0c1387974aa6d590c6bd0513114d))
 
 # [5.7.0](https://github.com/strapi-community/plugin-io/compare/5.6.0...5.7.0) (2026-04-16)
-
 
 ### Features
 
@@ -358,20 +318,17 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 # [5.6.0](https://github.com/strapi-community/plugin-io/compare/5.5.0...5.6.0) (2026-04-16)
 
-
 ### Features
 
 * **presence:** field-level visual presence with border + avatar dot ([e9988cf](https://github.com/strapi-community/plugin-io/commit/e9988cf84a2a224b3b68842411d7758b76be521b))
 
 # [5.5.0](https://github.com/strapi-community/plugin-io/compare/5.4.4...5.5.0) (2026-04-16)
 
-
 ### Features
 
 * **presence:** server-side presence tracking with content context ([9978bfe](https://github.com/strapi-community/plugin-io/commit/9978bfefb67f899d8da944f34f71526fae9dd2fb))
 
 ## [5.4.4](https://github.com/strapi-community/plugin-io/compare/5.4.3...5.4.4) (2026-04-15)
-
 
 ### Bug Fixes
 
@@ -382,13 +339,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.4.3](https://github.com/strapi-community/plugin-io/compare/5.4.2...5.4.3) (2026-04-15)
 
-
 ### Bug Fixes
 
 * **config:** use double-colon namespace notation for plugin config ([755d25c](https://github.com/strapi-community/plugin-io/commit/755d25cb46b56ef2cf091451ae16c90da2ec432e))
 
 ## [5.4.2](https://github.com/strapi-community/plugin-io/compare/5.4.1...5.4.2) (2026-04-15)
-
 
 ### Bug Fixes
 
@@ -396,18 +351,15 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.4.1](https://github.com/strapi-community/plugin-io/compare/5.4.0...5.4.1) (2026-04-15)
 
-
 ### Bug Fixes
 
 * **stats:** guard adapter.rooms access when no clients connected ([2209635](https://github.com/strapi-community/plugin-io/commit/22096359fb3987d28925423f96429c8718644215))
 
 # [5.4.0](https://github.com/strapi-community/plugin-io/compare/5.3.7...5.4.0) (2026-04-15)
 
-
 ### Bug Fixes
 
 * **sanitize:** use runtime strapi.contentAPI instead of static import ([3c9bb6e](https://github.com/strapi-community/plugin-io/commit/3c9bb6e3ef5d6f70713365715790003d76d31bf3))
-
 
 ### Features
 
@@ -415,13 +367,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.3.7](https://github.com/strapi-community/plugin-io/compare/5.3.6...5.3.7) (2026-04-15)
 
-
 ### Bug Fixes
 
 * **transform:** resolve full content-type schema to prevent crash ([#110](https://github.com/strapi-community/plugin-io/issues/110)) ([cd5deff](https://github.com/strapi-community/plugin-io/commit/cd5deff0ada6ac6d607d5b46abb8db9b6ecc97c5))
 
 ## [5.3.6](https://github.com/strapi-community/plugin-io/compare/5.3.5...5.3.6) (2026-03-03)
-
 
 ### Bug Fixes
 
@@ -429,13 +379,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.3.5](https://github.com/strapi-community/plugin-io/compare/5.3.4...5.3.5) (2026-03-03)
 
-
 ### Bug Fixes
 
 * **lifecycle:** populate relations in emitted events ([#82](https://github.com/strapi-community/plugin-io/issues/82)) ([dcdfc9f](https://github.com/strapi-community/plugin-io/commit/dcdfc9f8c901af6c7a60e6c35b52431f1b00242b))
 
 ## [5.3.4](https://github.com/strapi-community/plugin-io/compare/5.3.3...5.3.4) (2026-03-03)
-
 
 ### Bug Fixes
 
@@ -443,13 +391,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.3.3](https://github.com/strapi-community/plugin-io/compare/5.3.2...5.3.3) (2026-03-03)
 
-
 ### Bug Fixes
 
 * **security:** patch 25 vulnerabilities across Socket.IO plugin ([0fa0d78](https://github.com/strapi-community/plugin-io/commit/0fa0d787f8a1d89dbecd21df4b26645ead09fbe3))
 
 ## [5.3.2](https://github.com/strapi-community/plugin-io/compare/5.3.1...5.3.2) (2026-02-02)
-
 
 ### Bug Fixes
 
@@ -457,13 +403,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 ## [5.3.1](https://github.com/strapi-community/plugin-io/compare/5.3.0...5.3.1) (2025-12-29)
 
-
 ### Bug Fixes
 
 * readme update ([1d55244](https://github.com/strapi-community/plugin-io/commit/1d552442ae8314686b5f1c7d6a3ffb08b8a31717))
 
 # [5.3.0](https://github.com/strapi-community/plugin-io/compare/5.2.0...5.3.0) (2025-12-28)
-
 
 ### Features
 
@@ -472,11 +416,9 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 # [5.2.0](https://github.com/strapi-community/plugin-io/compare/5.1.0...5.2.0) (2025-12-28)
 
-
 ### Bug Fixes
 
 * admin users now properly authenticated instead of showing anonymous ([6478777](https://github.com/strapi-community/plugin-io/commit/647877731f2d529d550b05740aea2547a0ada6f2))
-
 
 ### Features
 
@@ -484,13 +426,11 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 
 # [5.1.0](https://github.com/strapi-community/plugin-io/compare/5.0.6...5.1.0) (2025-12-28)
 
-
 ### Features
 
 * add Live Presence System with typing indicators ([29390fb](https://github.com/strapi-community/plugin-io/commit/29390fb0406ea70f009f26ee646dfc9c1b0bf8ad))
 
 ## [5.0.6](https://github.com/strapi-community/plugin-io/compare/5.0.5...5.0.6) (2025-12-28)
-
 
 ### Bug Fixes
 
@@ -499,7 +439,6 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * remove package-lock.json to fix cross-platform SWC native binding issues ([d3715ff](https://github.com/strapi-community/plugin-io/commit/d3715ff4db824d8b7bce217a31689618c569c8ef))
 
 # 1.0.0 (2025-12-28)
-
 
 ### Bug Fixes
 
@@ -545,7 +484,6 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * **strategies:role:** verification is happening after connection ([9fdd4fb](https://github.com/strapi-community/plugin-io/commit/9fdd4fbceaa105783642e2344d497d3f7214578a))
 * update repository URLs from strapi-plugin-io to plugin-io ([091eb53](https://github.com/strapi-community/plugin-io/commit/091eb531d47a5599f71000fa5af100ba82ff4ad1))
 * use npm install instead of npm ci for cross-platform SWC compatibility ([e3fe3b8](https://github.com/strapi-community/plugin-io/commit/e3fe3b864bd6465bafe6e96a6b69292f46894d1e))
-
 
 ### Features
 

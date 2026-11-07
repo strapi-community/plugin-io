@@ -11,6 +11,12 @@
  * Without this step the changelog plugin would prepend the new entry above a
  * stale `[Unreleased]` block.
  *
+ * `prepare` also removes `Co-authored-by:` trailers from the release notes.
+ * The commit analyzer copies commit bodies into "BREAKING CHANGES", so a
+ * squash merge would otherwise publish those trailers in the GitHub release,
+ * the CHANGELOG entry and the release commit. It runs before every other
+ * prepare plugin, and they all read the same `nextRelease.notes`.
+ *
  * @see https://semantic-release.gitbook.io/semantic-release/usage/plugins
  */
 import { readFile, writeFile } from 'node:fs/promises';
@@ -40,6 +46,22 @@ export function splitUnreleased(text) {
 
 const changelogPath = (cwd) => join(cwd, 'CHANGELOG.md');
 
+const TRAILER = /^[ \t]*Co-authored-by:[^\n]*(?:\n|$)/gim;
+
+/**
+ * Removes `Co-authored-by:` trailer lines and the blank lines they leave.
+ *
+ * @param {string} notes - Release notes.
+ * @returns {string} Notes without co-author trailers.
+ */
+export function stripCoAuthorTrailers(notes) {
+  if (typeof notes !== 'string') return notes;
+  return notes
+    .replace(TRAILER, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/\s+$/, '\n');
+}
+
 /**
  * @param {object} _config - Plugin config.
  * @param {{ cwd: string }} context - semantic-release context.
@@ -55,10 +77,13 @@ export async function generateNotes(_config, { cwd }) {
 
 /**
  * @param {object} _config - Plugin config.
- * @param {{ cwd: string, logger: { log: Function } }} context - semantic-release context.
+ * @param {{ cwd: string, logger: { log: Function }, nextRelease?: { notes?: string } }} context - semantic-release context.
  * @returns {Promise<void>}
  */
-export async function prepare(_config, { cwd, logger }) {
+export async function prepare(_config, { cwd, logger, nextRelease }) {
+  if (nextRelease && typeof nextRelease.notes === 'string') {
+    nextRelease.notes = stripCoAuthorTrailers(nextRelease.notes);
+  }
   const file = changelogPath(cwd);
   const text = await readFile(file, 'utf8');
   const { body, rest } = splitUnreleased(text);
