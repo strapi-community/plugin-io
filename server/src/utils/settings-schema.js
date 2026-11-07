@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CONTENT_ACTIONS } from './constants.js';
+import { CONTENT_ACTIONS, CONTENT_TYPE_UID_RE } from './constants.js';
 import { isValidIpOrCidr } from './ip-rules.js';
 
 /** Version of the stored settings document. Version 1 had no `version` key. */
@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = Object.freeze({
 	},
 	rolePermissions: {},
 	presence: { enabled: true, showTypingIndicator: true },
+	subscriptions: { enabled: false, maxPerSocket: 100 },
 	monitoring: {
 		enableConnectionLogging: false,
 		enableEventLogging: false,
@@ -63,10 +64,7 @@ const fieldName = z
 	.min(1)
 	.max(100)
 	.regex(/^[A-Za-z0-9_.-]+$/, { error: 'Use letters, numbers, "_", "-" or "."' });
-const contentTypeUid = z
-	.string()
-	.max(200)
-	.regex(/^api::[a-z0-9-]+\.[a-z0-9-]+$/, { error: 'Unknown content type.' });
+const contentTypeUid = z.string().max(200).regex(CONTENT_TYPE_UID_RE, { error: 'Unknown content type.' });
 const roleType = z
 	.string()
 	.max(100)
@@ -103,6 +101,7 @@ const sections = {
 	}),
 	rolePermissions: z.record(roleType, z.strictObject({ canConnect: z.boolean() })),
 	presence: z.strictObject({ enabled: z.boolean(), showTypingIndicator: z.boolean() }),
+	subscriptions: z.strictObject({ enabled: z.boolean(), maxPerSocket: z.number().int().min(1).max(1000) }),
 	monitoring: z.strictObject({
 		enableConnectionLogging: z.boolean(),
 		enableEventLogging: z.boolean(),
@@ -128,6 +127,7 @@ const settingsUpdateSchema = z.strictObject({
 	events: sections.events.optional(),
 	rolePermissions: sections.rolePermissions.optional(),
 	presence: sections.presence.optional(),
+	subscriptions: sections.subscriptions.optional(),
 	monitoring: sections.monitoring.optional(),
 });
 
@@ -188,6 +188,11 @@ function migrateV1(stored) {
 		presence: {
 			enabled: v1.presence?.enabled,
 			showTypingIndicator: v1.presence?.showTypingIndicator,
+		},
+		// 5.x stored entity subscription settings but never shipped the
+		// feature in a published build, so it stays off until enabled again.
+		subscriptions: {
+			maxPerSocket: v1.entitySubscriptions?.maxSubscriptionsPerSocket,
 		},
 		monitoring: {
 			enableEventLogging: v1.monitoring?.enableEventLogging,

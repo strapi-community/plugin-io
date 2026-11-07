@@ -29,4 +29,10 @@ async function run(): Promise<number> {
 }
 
 const onlyPublished: PluginSettings['events']['onlyPublished'] = true;
-export { config, run, onlyPublished };
+const maxPerSocket: PluginSettings['subscriptions']['maxPerSocket'] = 100;
+
+async function follow(socketId: string): Promise<string | null> {
+	const result = await strapi.$io.subscribeToEntity(socketId, 'api::article.article', 'abc123');
+	return result.success ? result.documentId : result.error;
+}
+export { config, run, onlyPublished, maxPerSocket, follow };

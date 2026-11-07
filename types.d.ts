@@ -92,7 +92,14 @@ export interface EmitOptions {
 	/** Content type uid or an object with `uid` (and optionally `singularName`). */
 	schema: string | { uid: string; singularName?: string };
 	data: Record<string, unknown>;
+	/** Send to the audience rooms (default `true`). `false` reaches only the entity subscribers of `data.documentId`. */
+	broadcast?: boolean;
 }
+
+/** Outcome of an entity subscription request (`subscribe-entity` ack and the server helpers). */
+export type EntitySubscriptionResult =
+	| { success: true; uid: string; documentId: string; /** Alias of `documentId` (5.x clients). */ id: string }
+	| { success: false; error: string };
 
 export interface RawEmitOptions {
 	event: string;
@@ -112,10 +119,11 @@ export declare class SocketIO {
 		event: ContentTypeAction;
 		schema: string | { uid: string; singularName?: string };
 		data: { documentId: string; locale?: string | null };
+		broadcast?: boolean;
 	}): Promise<number>;
 	/** Emits a custom event; sensitive fields are removed. Without rooms it goes to every client. */
 	raw(options: RawEmitOptions): Promise<void>;
-	/** Adds a socket to a room. Plugin-managed rooms (io-role-, io-token-, io-admin-, presence:) are refused. */
+	/** Adds a socket to a room. Plugin-managed rooms (io-role-, io-token-, io-admin-, io-entity-, presence:) are refused. */
 	joinRoom(socketId: string, room: string): boolean;
 	leaveRoom(socketId: string, room: string): boolean;
 	getSocketsInRoom(room: string): Promise<string[]>;
@@ -123,6 +131,18 @@ export declare class SocketIO {
 	broadcast(socketId: string, event: string, data: unknown): void;
 	emitToNamespace(namespace: string, event: string, data: unknown): void;
 	disconnectSocket(socketId: string): boolean;
+	/** Subscribes a socket to one document with the same checks as `subscribe-entity`. */
+	subscribeToEntity(
+		socketId: string,
+		uid: string,
+		documentId: string
+	): Promise<EntitySubscriptionResult | { success: false; error: 'Socket not found' }>;
+	unsubscribeFromEntity(socketId: string, uid: string, documentId: string): EntitySubscriptionResult;
+	getEntitySubscriptions(
+		socketId: string
+	):
+		| { success: true; subscriptions: Array<{ uid: string; documentId: string; id: string }> }
+		| { success: false; error: string };
 	/**
 	 * Re-checks authenticated sockets (in every namespace) and disconnects invalid ones.
 	 * `ids` limits the check to the sockets of those user, admin or API token ids.
@@ -150,6 +170,8 @@ export interface PluginSettings {
 	events: { onlyPublished: boolean; excludeFields: string[]; contentTypes: Record<string, ContentTypeAction[]> };
 	rolePermissions: Record<string, { canConnect: boolean }>;
 	presence: { enabled: boolean; showTypingIndicator: boolean };
+	/** Entity subscriptions (`subscribe-entity`); off by default. */
+	subscriptions: { enabled: boolean; maxPerSocket: number };
 	monitoring: { enableConnectionLogging: boolean; enableEventLogging: boolean; maxEventLogSize: number };
 }
 

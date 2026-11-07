@@ -171,16 +171,20 @@ class SocketIO {
 	}
 
 	/**
-	 * Emits a content event to every audience that may read the content type.
-	 * Each audience receives data sanitized with its own permissions.
+	 * Emits a content event to every audience that may read the content type,
+	 * and to the audience's entity subscribers of that document. Each
+	 * audience receives data sanitized with its own permissions, once per
+	 * socket even when a socket is in both rooms.
 	 *
 	 * @param {object} params - Parameters.
 	 * @param {string} params.event - Action (`create`, `update`, `publish`, ...).
 	 * @param {{ uid: string, singularName: string }} params.schema - Content type.
 	 * @param {object} params.data - Entry from the Document Service.
-	 * @returns {Promise<number>} Number of non-empty rooms the event was sent to.
+	 * @param {boolean} [params.broadcast] - Send to the audience rooms (default). With `false` only the
+	 *   entity subscribers of `data.documentId` receive the event.
+	 * @returns {Promise<number>} Number of audiences the event was sent to.
 	 */
-	async emit({ event, schema: schemaInput, data }) {
+	async emit({ event, schema: schemaInput, data, broadcast = true }) {
 		const schema = this._resolveSchema(schemaInput);
 		if (!data || !schema?.uid) return 0;
 		const plugin = this.strapi.plugin(pluginId);
@@ -191,7 +195,9 @@ class SocketIO {
 		let delivered = 0;
 
 		for (const audience of await rooms.getAudiences()) {
-			if (!this._hasSockets(audience.name) || !rooms.canRead(audience, schema.uid)) continue;
+			if (!rooms.canRead(audience, schema.uid)) continue;
+			const targets = this._targetsFor(audience.name, schema.uid, data.documentId, broadcast);
+			if (!targets.length) continue;
 			try {
 				const sanitized = await sanitize.output({
 					data,
@@ -205,7 +211,7 @@ class SocketIO {
 						},
 					},
 				});
-				this._socket.to(audience.name).emit(eventName, { ...transform.response({ data: sanitized, schema }) });
+				this._socket.to(targets).emit(eventName, { ...transform.response({ data: sanitized, schema }) });
 				delivered += 1;
 			} catch (error) {
 				this.strapi.log.warn(
@@ -225,9 +231,10 @@ class SocketIO {
 	 * @param {string} params.event - Action name.
 	 * @param {{ uid: string, singularName: string }} params.schema - Content type.
 	 * @param {{ documentId: string, locale?: string | null }} params.data - Identifiers.
+	 * @param {boolean} [params.broadcast] - Send to the audience rooms (default); `false` reaches entity subscribers only.
 	 * @returns {Promise<number>} Number of rooms reached.
 	 */
-	async emitIdentifier({ event, schema: schemaInput, data }) {
+	async emitIdentifier({ event, schema: schemaInput, data, broadcast = true }) {
 		const schema = this._resolveSchema(schemaInput);
 		if (!schema?.uid || !data?.documentId) return 0;
 		const plugin = this.strapi.plugin(pluginId);
@@ -236,11 +243,34 @@ class SocketIO {
 		const payload = { documentId: data.documentId };
 		if (data.locale) payload.locale = data.locale;
 		const names = (await rooms.getAudiences())
-			.filter((a) => this._hasSockets(a.name) && rooms.canRead(a, schema.uid))
-			.map((a) => a.name);
+			.filter((a) => rooms.canRead(a, schema.uid))
+			.flatMap((a) => this._targetsFor(a.name, schema.uid, data.documentId, broadcast));
 		if (names.length) this._socket.to(names).emit(eventName, { data: payload });
 		plugin.service('monitoring').recordEvent(eventName, { audiences: names.length });
 		return names.length;
+	}
+
+	/**
+	 * Returns the rooms of one audience that should receive an event: the
+	 * audience room when broadcasting, plus the room of the audience's
+	 * subscribers to the document while entity subscriptions are enabled.
+	 * Rooms without sockets are left out.
+	 *
+	 * @param {string} audience - Audience room name.
+	 * @param {string} uid - Content type uid.
+	 * @param {string | undefined} documentId - Document id.
+	 * @param {boolean} broadcast - Whether the audience room is a target.
+	 * @returns {string[]} Room names.
+	 */
+	_targetsFor(audience, uid, documentId, broadcast) {
+		const targets = [];
+		if (broadcast && this._hasSockets(audience)) targets.push(audience);
+		const plugin = this.strapi.plugin(pluginId);
+		if (documentId && plugin.service('settings').current().subscriptions?.enabled) {
+			const room = plugin.service('subscriptions').entityRoom(audience, uid, documentId);
+			if (this._hasSockets(room)) targets.push(room);
+		}
+		return targets;
 	}
 
 	/**
@@ -369,6 +399,48 @@ class SocketIO {
 	}
 
 	/**
+	 * Subscribes a socket to one document, with the same checks as the
+	 * client event `subscribe-entity` (setting, limit, read permission of the
+	 * socket's audience, document exists).
+	 *
+	 * @param {string} socketId - Socket id.
+	 * @param {string} uid - Content type uid.
+	 * @param {string} documentId - Document id.
+	 * @returns {Promise<{ success: boolean, error?: string, uid?: string, documentId?: string, id?: string }>} Outcome.
+	 */
+	async subscribeToEntity(socketId, uid, documentId) {
+		const socket = this._socket.of('/').sockets.get(socketId);
+		if (!socket) return { success: false, error: 'Socket not found' };
+		return this.strapi.plugin(pluginId).service('subscriptions').subscribe(socket, { uid, documentId });
+	}
+
+	/**
+	 * Removes one entity subscription of a socket.
+	 *
+	 * @param {string} socketId - Socket id.
+	 * @param {string} uid - Content type uid.
+	 * @param {string} documentId - Document id.
+	 * @returns {{ success: boolean, error?: string, uid?: string, documentId?: string, id?: string }} Outcome.
+	 */
+	unsubscribeFromEntity(socketId, uid, documentId) {
+		const socket = this._socket.of('/').sockets.get(socketId);
+		if (!socket) return { success: false, error: 'Socket not found' };
+		return this.strapi.plugin(pluginId).service('subscriptions').unsubscribe(socket, { uid, documentId });
+	}
+
+	/**
+	 * Lists the entity subscriptions of a socket.
+	 *
+	 * @param {string} socketId - Socket id.
+	 * @returns {{ success: boolean, error?: string, subscriptions?: Array<{ uid: string, documentId: string, id: string }> }} Outcome.
+	 */
+	getEntitySubscriptions(socketId) {
+		const socket = this._socket.of('/').sockets.get(socketId);
+		if (!socket) return { success: false, error: 'Socket not found' };
+		return { success: true, subscriptions: this.strapi.plugin(pluginId).service('subscriptions').list(socket) };
+	}
+
+	/**
 	 * Disconnects a socket.
 	 *
 	 * @param {string} socketId - Socket id.
@@ -394,6 +466,7 @@ class SocketIO {
 		this._unsubscribeSettings?.();
 		this._removeUpgradeForwarder?.();
 		this._socket.disconnectSockets(true);
+		this.strapi.plugin(pluginId).service('subscriptions')?.untrack?.();
 		// `_nsps` is what Socket.IO's own close() iterates; there is no public list.
 		const namespaces = this._socket._nsps ? [...this._socket._nsps.values()] : [];
 		await Promise.allSettled(namespaces.map((nsp) => nsp.adapter?.close?.()));
@@ -428,6 +501,7 @@ function isReservedRoom(room) {
 		room.startsWith('io-role-') ||
 		room.startsWith('io-token-') ||
 		room.startsWith('io-admin-') ||
+		room.startsWith('io-entity-') ||
 		room.startsWith('presence:')
 	);
 }

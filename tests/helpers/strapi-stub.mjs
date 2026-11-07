@@ -30,6 +30,7 @@ export function createStrapi(options = {}) {
     tokens: options.tokens ?? [],
     users: options.users ?? [],
     admins: options.admins ?? [],
+    documents: options.documents ?? [],
     queries: [],
   };
   const config = {
@@ -125,7 +126,13 @@ export function createStrapi(options = {}) {
             }
             if (uid === 'admin::api-token') return state.tokens.find((t) => t.id === where.id) ?? null;
             if (uid === 'admin::user') return state.admins.find((a) => a.id === where.id) ?? null;
-            return null;
+            const doc = state.documents.find(
+              (d) =>
+                d.uid === uid &&
+                d.documentId === where?.documentId &&
+                (!where?.publishedAt?.$notNull || Boolean(d.publishedAt))
+            );
+            return doc ? { id: doc.id ?? 1 } : null;
           },
           update: async () => ({}),
         };

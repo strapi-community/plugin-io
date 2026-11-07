@@ -25,8 +25,12 @@ const ROOM_PREFIX = Object.freeze({
 	ROLE: 'io-role-',
 	TOKEN: 'io-token-',
 	ADMIN: 'io-admin-',
+	ENTITY: 'io-entity-',
 	PRESENCE: 'presence:',
 });
+
+/** Content type uids the plugin can emit events for (`api::<name>.<name>`). */
+const CONTENT_TYPE_UID_RE = /^api::[a-z0-9-]+\.[a-z0-9-]+$/;
 
 /** Admin RBAC actions registered by the plugin (uids are `plugin::io.<uid>`). */
 const PERMISSIONS = Object.freeze({
@@ -36,4 +40,4 @@ const PERMISSIONS = Object.freeze({
 	MONITORING_MANAGE: 'plugin::io.monitoring.manage',
 });
 
-export { API_TOKEN_TYPE, CONTENT_ACTIONS, PERMISSIONS, RESERVED_EVENT_NAMES, ROOM_PREFIX };
+export { API_TOKEN_TYPE, CONTENT_ACTIONS, CONTENT_TYPE_UID_RE, PERMISSIONS, RESERVED_EVENT_NAMES, ROOM_PREFIX };

@@ -6,7 +6,7 @@ import { registerPresence } from './presence.js';
 /**
  * Creates `strapi.$io`, runs `hooks.init` (before the plugin handshake),
  * and registers the connection handlers: rate limiting, credential expiry,
- * presence and the custom events from `config.events`. Custom events are not
+ * presence, entity subscriptions and the custom events from `config.events`. Custom events are not
  * registered on admin presence sockets unless the event sets `admin: true`.
  *
  * @param {{ strapi: import('@strapi/types').Core.Strapi }} deps - Strapi instance.
@@ -33,6 +33,8 @@ async function bootstrapIO({ strapi }) {
 	}
 
 	const lastSeen = new Map();
+	const subscriptions = strapi.plugin(pluginId).service('subscriptions');
+	subscriptions.track(io.server);
 
 	io.server.on('connection', (socket) => {
 		monitoring.recordConnection();
@@ -54,6 +56,7 @@ async function bootstrapIO({ strapi }) {
 		});
 
 		registerPresence({ strapi, io: io.server, socket, lastSeen });
+		subscriptions.register(socket);
 
 		for (const event of config.events || []) {
 			// Admin presence sockets carry an admin id, not a Users & Permissions

@@ -71,6 +71,9 @@ const toPlain = (entry) => JSON.parse(JSON.stringify(entry));
  * socket events: `<singularName>:<action>` for create, update, delete,
  * publish, unpublish and discardDraft.
  *
+ * Content types and actions that are not broadcast are still emitted to
+ * entity subscribers of the affected documents.
+ *
  * Draft versions of draft-and-publish content are only emitted when the
  * setting "Only published content" is off. Delete and unpublish events carry
  * `{ documentId, locale }` only.
@@ -95,7 +98,7 @@ function createDocumentEventsMiddleware(strapi) {
 				const key = `${entry.documentId}:${entry.locale ?? ''}`;
 				if (seen.has(key)) continue;
 				seen.add(key);
-				await strapi.$io.emitIdentifier({ event: action, schema, data: entry });
+				await strapi.$io.emitIdentifier({ event: action, schema, data: entry, broadcast: watch.broadcast });
 			}
 			return;
 		}
@@ -114,18 +117,26 @@ function createDocumentEventsMiddleware(strapi) {
 				});
 				if (refetched) data = refetched;
 			}
-			await strapi.$io.emit({ event: action, schema, data: toPlain(data) });
+			await strapi.$io.emit({ event: action, schema, data: toPlain(data), broadcast: watch.broadcast });
 		}
 	};
 
 	return async (ctx, next) => {
 		const result = await next();
-		if (!CONTENT_ACTIONS.includes(ctx.action) || !strapi.$io) return result;
-		const watch = resolveWatch(ctx.uid);
-		if (!watch || !watch.actions.includes(ctx.action) || !result) return result;
-
-		const entries = Array.isArray(result.entries) ? result.entries : [result];
+		if (!CONTENT_ACTIONS.includes(ctx.action) || !strapi.$io || !result) return result;
 		if (ctx.action === 'delete' && !result.entries?.length) return result;
+		const entries = Array.isArray(result.entries) ? result.entries : [result];
+
+		const configured = resolveWatch(ctx.uid);
+		let watch = configured?.actions.includes(ctx.action) ? { ...configured, broadcast: true } : null;
+		// Not broadcast: still emit when a socket follows one of the documents
+		// (entity subscriptions). The check is an in-memory lookup.
+		if (!watch && strapi.contentTypes[ctx.uid]) {
+			const ids = entries.map((entry) => entry?.documentId).filter(Boolean);
+			const subscriptions = strapi.plugin(pluginId).service('subscriptions');
+			if (subscriptions?.hasSubscribers(ctx.uid, ids)) watch = { populate: undefined, broadcast: false };
+		}
+		if (!watch) return result;
 		afterCommit(strapi, () => emitEntries({ uid: ctx.uid, action: ctx.action, entries, watch }));
 		return result;
 	};
