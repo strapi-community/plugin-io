@@ -196,5 +196,14 @@
   "widget.stats.link": "Open monitoring",
   "widget.stats.loading": "Loading statistics",
   "widget.stats.title": "Socket.IO",
-  "widget.stats.total": "Events sent"
+  "widget.stats.total": "Events sent",
+  "settings.conflict.title": "Settings changed in the meantime",
+  "settings.conflict.body": "Another administrator saved the settings after you opened this page, so your changes were not saved. Load the latest settings and apply your changes again.",
+  "settings.conflict.keep": "Keep editing",
+  "settings.conflict.reload": "Load latest settings",
+  "monitoring.subtitle.cluster": "Live connection and event counters, added up across {count} server processes. Updated every 10 seconds.",
+  "monitoring.cluster.noAdapter.title": "Several server processes without an adapter",
+  "monitoring.cluster.noAdapter.body": "Events and presence reach only the clients connected to the process that sent them. Set socket.adapter to \"postgres\" or \"redis\" in the plugin configuration.",
+  "monitoring.admins.subtitle.instance": "Admins connected to this server process only. Other processes can be listed with a multi-server adapter.",
+  "monitoring.log.subtitle.instance": "The newest 100 events of this server process only, kept in memory. Other processes can be included with a multi-server adapter."
 }

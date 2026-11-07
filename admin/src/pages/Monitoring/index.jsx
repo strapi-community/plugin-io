@@ -77,6 +77,8 @@ const MonitoringPage = () => {
 		}
 	};
 
+	const instances = s.instances?.count ?? 1;
+	const missingAdapter = (s.instances?.warnings ?? []).includes('no-adapter');
 	const admins = online.data?.admins ?? [];
 	const events = log.data?.data ?? [];
 	const logEnabled = log.data?.meta?.enabled;
@@ -90,7 +92,15 @@ const MonitoringPage = () => {
 		<PageShell
 			pageTitle={t('monitoring.pageTitle', 'Monitoring - Socket.IO')}
 			title={t('monitoring.title', 'Monitoring')}
-			subtitle={t('monitoring.subtitle', 'Live connection and event counters. Updated every 10 seconds.')}
+			subtitle={
+				instances > 1
+					? t(
+							'monitoring.subtitle.cluster',
+							'Live connection and event counters, added up across {count} server processes. Updated every 10 seconds.',
+							{ count: instances }
+						)
+					: t('monitoring.subtitle', 'Live connection and event counters. Updated every 10 seconds.')
+			}
 			primaryAction={allowedActions.canManage ? <TestEventModal onSent={refreshAll} /> : undefined}
 			endActions={
 				<>
@@ -121,6 +131,18 @@ const MonitoringPage = () => {
 					title={t('monitoring.refresh.errorTitle', 'Refresh failed')}
 				>
 					{t('monitoring.refresh.error', 'The numbers below are from the last successful update.')}
+				</Alert>
+			) : null}
+			{missingAdapter ? (
+				<Alert
+					variant="warning"
+					closeLabel={t('common.close', 'Close')}
+					title={t('monitoring.cluster.noAdapter.title', 'Several server processes without an adapter')}
+				>
+					{t(
+						'monitoring.cluster.noAdapter.body',
+						'Events and presence reach only the clients connected to the process that sent them. Set socket.adapter to "postgres" or "redis" in the plugin configuration.'
+					)}
 				</Alert>
 			) : null}
 			<StatCards
@@ -154,10 +176,14 @@ const MonitoringPage = () => {
 
 			<SectionCard
 				title={t('monitoring.admins.title', 'Admins online')}
-				subtitle={t(
-					'monitoring.admins.subtitle',
-					'Admins with the Content Manager open and the entries they are editing.'
-				)}
+				subtitle={
+					online.data?.meta?.scope === 'instance'
+						? t(
+								'monitoring.admins.subtitle.instance',
+								'Admins connected to this server process only. Other processes can be listed with a multi-server adapter.'
+							)
+						: t('monitoring.admins.subtitle', 'Admins with the Content Manager open and the entries they are editing.')
+				}
 			>
 				{online.status === 'error' ? (
 					<EmptyStateLayout
@@ -243,7 +269,14 @@ const MonitoringPage = () => {
 
 			<SectionCard
 				title={t('monitoring.log.title', 'Recent events')}
-				subtitle={t('monitoring.log.subtitle', 'The newest 100 events sent by the server, kept in memory.')}
+				subtitle={
+					log.data?.meta?.scope === 'instance'
+						? t(
+								'monitoring.log.subtitle.instance',
+								'The newest 100 events of this server process only, kept in memory. Other processes can be included with a multi-server adapter.'
+							)
+						: t('monitoring.log.subtitle', 'The newest 100 events sent by the server, kept in memory.')
+				}
 			>
 				{log.status === 'error' ? (
 					<EmptyStateLayout

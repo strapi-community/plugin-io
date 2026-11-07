@@ -6,6 +6,7 @@ import { ConfirmAction, PageShell } from '../../components/ui';
 import { useT } from '../../hooks/useT';
 import { PERMISSIONS } from '../../permissions';
 import { LIMITS } from '../../utils/settings.mjs';
+import { ConflictDialog } from './ConflictDialog';
 import { BackupSection } from './sections/BackupSection';
 import { ConnectionSection } from './sections/ConnectionSection';
 import { EventsSection } from './sections/EventsSection';
@@ -122,6 +123,7 @@ const SettingsPage = () => {
 				busy={form.saving}
 				t={t}
 			/>
+			<ConflictDialog open={form.conflict} onKeep={form.dismissConflict} onReload={form.discard} t={t} />
 			{/* Kept empty: DS Tag buttons have no type and would submit a real form on Enter. */}
 			<Form method="PUT" initialValues={form.saved}>
 				<DraftSync values={form.draft} />

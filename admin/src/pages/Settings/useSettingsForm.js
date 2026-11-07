@@ -1,12 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFetchClient, useNotification } from '@strapi/strapi/admin';
 import { useIntl } from 'react-intl';
 import { getTranslation } from '../../utils/getTranslation';
 import { changedSections, isEqual, serverErrorsToFields, setIn, validateSettings } from '../../utils/settings.mjs';
 
 /**
+ * Checks whether a request failed with 409 Conflict.
+ *
+ * @param {any} error - Error from useFetchClient.
+ * @returns {boolean} True for 409.
+ */
+const isConflict = (error) => error?.status === 409 || error?.response?.status === 409;
+
+/**
  * Loads, edits, validates and saves the plugin settings. Content types and
  * roles load separately, so a failure there does not hide the form.
+ *
+ * Every save sends the settings revision the form was loaded with. When
+ * another administrator saved in between (on any server process), the API
+ * answers 409, nothing is saved and `conflict` turns true so the page can
+ * offer to load the newer settings.
  *
  * @returns {object} Form state and actions.
  */
@@ -22,10 +35,15 @@ export function useSettingsForm() {
 	const [saving, setSaving] = useState(false);
 	const [contentTypes, setContentTypes] = useState({ status: 'loading', data: [] });
 	const [roles, setRoles] = useState({ status: 'loading', data: [] });
+	const [conflict, setConflict] = useState(false);
+	// Revision the draft is based on; a ref, so saving never re-renders for it.
+	const revisionRef = useRef(null);
 
 	const fetchSettings = useCallback(async () => {
 		try {
 			const { data } = await get('/io/settings');
+			revisionRef.current = Number.isInteger(data.meta?.revision) ? data.meta.revision : null;
+			setConflict(false);
 			setSaved(data.data);
 			setDraft(data.data);
 			setServerErrors({});
@@ -100,7 +118,9 @@ export function useSettingsForm() {
 		if (Object.keys(errors).length) return;
 		setSaving(true);
 		try {
-			const { data } = await put('/io/settings', draft);
+			const body = revisionRef.current === null ? draft : { ...draft, revision: revisionRef.current };
+			const { data } = await put('/io/settings', body);
+			revisionRef.current = Number.isInteger(data.meta?.revision) ? data.meta.revision : null;
 			const stored = data.data;
 			const adjusted = changedSections(draft, stored);
 			setSaved(stored);
@@ -116,6 +136,10 @@ export function useSettingsForm() {
 					: formatMessage({ id: getTranslation('settings.save.success'), defaultMessage: 'Settings saved.' }),
 			});
 		} catch (error) {
+			if (isConflict(error)) {
+				setConflict(true);
+				return;
+			}
 			setServerErrors(serverErrorsToFields(error));
 			toggleNotification({
 				type: 'danger',
@@ -133,6 +157,8 @@ export function useSettingsForm() {
 		await loadSettings();
 	}, [loadSettings]);
 
+	const dismissConflict = useCallback(() => setConflict(false), []);
+
 	return {
 		status,
 		saved,
@@ -141,6 +167,8 @@ export function useSettingsForm() {
 		serverErrors,
 		dirty,
 		saving,
+		conflict,
+		dismissConflict,
 		contentTypes,
 		roles,
 		setField,

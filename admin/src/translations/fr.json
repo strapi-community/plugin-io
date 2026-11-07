@@ -196,5 +196,14 @@
   "widget.stats.link": "Ouvrir le monitoring",
   "widget.stats.loading": "Chargement des statistiques",
   "widget.stats.title": "Socket.IO",
-  "widget.stats.total": "Événements envoyés"
+  "widget.stats.total": "Événements envoyés",
+  "settings.conflict.title": "Les paramètres ont changé entre-temps",
+  "settings.conflict.body": "Un autre administrateur a enregistré les paramètres après l'ouverture de cette page, vos modifications n'ont donc pas été enregistrées. Chargez les derniers paramètres et appliquez à nouveau vos modifications.",
+  "settings.conflict.keep": "Continuer la modification",
+  "settings.conflict.reload": "Charger les derniers paramètres",
+  "monitoring.subtitle.cluster": "Compteurs en direct des connexions et des événements, additionnés sur {count} processus serveur. Mis à jour toutes les 10 secondes.",
+  "monitoring.cluster.noAdapter.title": "Plusieurs processus serveur sans adaptateur",
+  "monitoring.cluster.noAdapter.body": "Les événements et la présence n'atteignent que les clients connectés au processus qui les a envoyés. Définissez socket.adapter sur \"postgres\" ou \"redis\" dans la configuration du plugin.",
+  "monitoring.admins.subtitle.instance": "Uniquement les administrateurs connectés à ce processus serveur. Avec un adaptateur multi-serveurs, les autres processus sont aussi listés.",
+  "monitoring.log.subtitle.instance": "Les 100 derniers événements de ce processus serveur uniquement, conservés en mémoire. Avec un adaptateur multi-serveurs, les autres processus sont inclus."
 }

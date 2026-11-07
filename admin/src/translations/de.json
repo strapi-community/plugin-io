@@ -196,5 +196,14 @@
   "widget.stats.link": "Monitoring öffnen",
   "widget.stats.loading": "Statistik wird geladen",
   "widget.stats.title": "Socket.IO",
-  "widget.stats.total": "Gesendete Events"
+  "widget.stats.total": "Gesendete Events",
+  "settings.conflict.title": "Einstellungen wurden inzwischen geändert",
+  "settings.conflict.body": "Eine andere Person hat die Einstellungen gespeichert, nachdem Sie diese Seite geöffnet haben. Ihre Änderungen wurden deshalb nicht gespeichert. Laden Sie die aktuellen Einstellungen und übernehmen Sie Ihre Änderungen erneut.",
+  "settings.conflict.keep": "Weiter bearbeiten",
+  "settings.conflict.reload": "Aktuelle Einstellungen laden",
+  "monitoring.subtitle.cluster": "Live-Zähler für Verbindungen und Events, zusammengezählt über {count} Serverprozesse. Aktualisiert alle 10 Sekunden.",
+  "monitoring.cluster.noAdapter.title": "Mehrere Serverprozesse ohne Adapter",
+  "monitoring.cluster.noAdapter.body": "Events und Anwesenheit erreichen nur die Clients, die mit dem sendenden Prozess verbunden sind. Setzen Sie socket.adapter in der Plugin-Konfiguration auf \"postgres\" oder \"redis\".",
+  "monitoring.admins.subtitle.instance": "Nur Admins, die mit diesem Serverprozess verbunden sind. Mit einem Multi-Server-Adapter werden auch andere Prozesse aufgeführt.",
+  "monitoring.log.subtitle.instance": "Die neuesten 100 Events nur dieses Serverprozesses, nur im Arbeitsspeicher. Mit einem Multi-Server-Adapter werden andere Prozesse einbezogen."
 }
