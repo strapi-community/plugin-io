@@ -161,12 +161,30 @@ if (!sqliteAvailable) {
 
 if (PG_URL) {
   contract('postgres', async () => {
-    const knex = knexFactory({ client: 'pg', connection: PG_URL, pool: { min: 0, max: 6 } });
+    // node --test runs files in parallel and tests/cluster.test.mjs wipes the
+    // plugin tables of the same database, so this file uses its own schema.
+    const schema = `io_store_test_${process.pid}_${Date.now()}`;
+    const admin = knexFactory({ client: 'pg', connection: PG_URL, pool: { min: 0, max: 1 } });
+    await admin.raw('CREATE SCHEMA IF NOT EXISTS ??', [schema]);
+    const knex = knexFactory({
+      client: 'pg',
+      connection: PG_URL,
+      searchPath: [schema],
+      pool: { min: 0, max: 6 },
+    });
     const store = createDatabaseStore({ knex, dialect: 'postgres' });
     // Several processes creating the tables at once.
     await Promise.all([store.ensure(), store.ensure(), store.ensure()]);
     for (const table of Object.values(TABLES)) await knex(table).del();
-    return { store, knex, close: () => knex.destroy() };
+    return {
+      store,
+      knex,
+      close: async () => {
+        await knex.destroy();
+        await admin.raw('DROP SCHEMA IF EXISTS ?? CASCADE', [schema]);
+        await admin.destroy();
+      },
+    };
   });
 } else {
   test('postgres store contract (set IO_TEST_PG_URL to run)', { skip: 'IO_TEST_PG_URL not set' }, () => {});
