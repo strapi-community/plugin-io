@@ -269,9 +269,9 @@ Report vulnerabilities privately through GitHub security advisories.
 
 ## Performance
 
-- **Delivery:** one sanitize pass per room that has listeners. Rooms without sockets are skipped (with the in-memory adapter), so hundreds of API tokens cost nothing until they connect.
+- **Delivery:** one sanitize pass per room that has listeners. Rooms without sockets are skipped (with the in-memory adapter), so hundreds of API tokens cost nothing until they connect. On the 5,000-article test host a publish with populated relations adds 10 queries for the plugin (one refetch plus an occasional audience-cache rebuild), independent of the number of roles and tokens.
 - **Audience cache:** roles, tokens and their permissions are loaded with one query per kind and cached for 10 seconds; role, permission and token changes clear the cache.
-- **Re-checks:** every five minutes and right after a user, admin, API token or Strapi session changes. Checks run in one batch per kind: one query for all affected users, one for tokens, one for admins, plus one per distinct session. Measured before this change: 427 queries per unrelated user update with 200 sockets; now 0.
+- **Re-checks:** every five minutes and right after a user, admin, API token or Strapi session changes. Checks run in one batch per kind: one query for all affected users, one for tokens, one for admins, plus one per distinct session. On a test host with 200 connected sockets, updating an unrelated user cost 427 SQL queries before this targeting existed; now the plugin adds none (the update itself takes Strapi 22 to 27 queries).
 - **Populate:** only what you configure, refetched once per event.
 - **Memory:** presence tokens are capped per admin and globally; monitoring keeps fixed-size counters and a bounded event log.
 
