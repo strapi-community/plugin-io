@@ -132,7 +132,7 @@ const MonitoringPage = () => {
 						value: s.connections.connected,
 						hint: t(
 							'monitoring.kpi.connected.hint',
-							'{admin} admins, {user} users, {token} API tokens, {public} public',
+							'{admin, plural, one {# admin} other {# admins}}, {user, plural, one {# user} other {# users}}, {token, plural, one {# API token} other {# API tokens}}, {public} public',
 							s.connections.byKind
 						),
 					},
@@ -202,7 +202,7 @@ const MonitoringPage = () => {
 										</Flex>
 									</Td>
 									<Td>
-										{admin.editing.length ? (
+										{admin.editing.length || admin.hiddenEditing ? (
 											<Flex gap={2} wrap="wrap">
 												{admin.editing.map((entry) => (
 													<LinkButton
@@ -215,6 +215,15 @@ const MonitoringPage = () => {
 														{entry.contentTypeName}
 													</LinkButton>
 												))}
+												{admin.hiddenEditing ? (
+													<Typography textColor="neutral600">
+														{t(
+															'monitoring.admins.hidden',
+															'{count, plural, one {# entry} other {# entries}} you cannot view',
+															{ count: admin.hiddenEditing }
+														)}
+													</Typography>
+												) : null}
 											</Flex>
 										) : (
 											<Typography textColor="neutral600">{t('monitoring.admins.notEditing', 'Not editing')}</Typography>

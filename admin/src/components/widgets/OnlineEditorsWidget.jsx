@@ -59,7 +59,11 @@ const OnlineEditorsWidget = () => {
 							</Td>
 							<Td>
 								<Typography variant="omega" textColor="neutral600" ellipsis>
-									{entry ? entry.contentTypeName : t('widget.online.notEditing', 'Not editing')}
+									{entry
+										? entry.contentTypeName
+										: admin.hiddenEditing
+											? t('widget.online.hidden', 'An entry you cannot view')
+											: t('widget.online.notEditing', 'Not editing')}
 								</Typography>
 							</Td>
 							<Td>
