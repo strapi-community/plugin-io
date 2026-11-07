@@ -1,4 +1,230 @@
-## [Unreleased]
+# [6.0.0](https://github.com/strapi-community/plugin-io/compare/5.8.3...6.0.0) (2026-11-07)
+
+
+* feat!: plugin-io 6.0 for Strapi 5 (security, Design System 2 admin, fixes [#112](https://github.com/strapi-community/plugin-io/issues/112)) ([#113](https://github.com/strapi-community/plugin-io/issues/113)) ([668e612](https://github.com/strapi-community/plugin-io/commit/668e612dda9c66944dcc3f061966fb1b3f7cd1b5)), closes [#109](https://github.com/strapi-community/plugin-io/issues/109)
+
+
+### BREAKING CHANGES
+
+* content events go to roles and API tokens that may read the
+content type (find/findOne), not to roles with create/update permission.
+Publishing emits `<name>:publish` instead of `:delete` plus `:create`; new
+actions `unpublish` and `discardDraft` exist. Draft versions are not emitted
+unless "Only published content" is turned off. Token rooms are
+`io-token-<id>` and custom role rooms `io-role-<role type>`. The `security`
+service and `GET /api/io` were removed. Admin routes need the new plugin
+permissions. maxHttpBufferSize defaults to 100 KB.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* feat(admin)!: rebuild the admin with Strapi Design System 2 and native patterns
+
+- Settings and Monitoring follow native settings pages: Page.Main/Title,
+  Layouts.Header with Save (and Discard changes) in the header, section
+  cards, DS Table, EmptyStateLayout, ConfirmDialog, Modal, Field API with
+  inline validation that mirrors the server rules, Switch rows, and the
+  native Blocker for unsaved changes.
+- Loading, empty, error-with-retry and no-permission states everywhere;
+  settings links, widgets and pages are gated by the plugin permissions.
+- Homepage widgets use the Widget API (link, Widget.Loading/Error/NoData)
+  and the correct `{ data }` response shape (the stats widget showed 0).
+- The Live presence panel uses DS Status, Avatar and Badge, hides on the
+  create view and when presence is off, and fetches a fresh one-time token
+  on every (re)connect.
+- addSettingsLink replaces the deprecated createSettingSection; no hex
+  colours, px fonts, global CSS, DOM patching or console output.
+- en, de (Sie), fr, es and pt catalogues with identical keys, checked by an
+  ICU/parity test; source-contract test for DS-only styling.
+- Unreachable components, contexts and hooks were deleted.
+* settings export/import was removed, and settings that were
+never enforced (Redis, namespaces, entity subscriptions, live preview,
+field-level changes, per-role CORS options) are no longer shown.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* ci: add PR checks, harden releases and enable Dependabot
+
+- ci.yml: Node 22/24 matrix with lint, format check, build, tests, types
+  check, verify, npm pack and production audit.
+- release.yml (renamed from semantic-release.yml): read-only default token,
+  SHA-pinned actions, npm ci --ignore-scripts, the full quality gate before
+  publishing, npm 11 for OIDC trusted publishing with NPM_TOKEN /
+  NODE_AUTH_TOKEN fallback and provenance, concurrency and timeout.
+- Dependabot for npm (root and docs) and GitHub Actions, with a verified
+  auto-merge workflow for patch and minor updates.
+- docs.yml: pinned actions, no persisted credentials, scripts disabled,
+  Pages permissions scoped to the deploy job.
+- The Discussions link points to strapi-community/plugin-io.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+* admin presence sockets expose socket.data.admin instead of
+socket.data.user and do not run config.events handlers unless the event sets
+admin: true. An empty Allowed origins list now refuses foreign browser
+origins for WebSocket connections.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* fix(admin): count unreadable entries in Admins online and pluralize client counts
+
+Monitoring and the Admins online widget show "N entries you cannot view" /
+"An entry you cannot view" instead of naming entries in content types the
+viewer may not read. The connected-clients breakdown uses ICU plurals in all
+five languages.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* build(release): fold the [Unreleased] changelog section into the release notes
+
+A local semantic-release plugin returns the [Unreleased] body as extra
+release notes and removes the section before @semantic-release/changelog
+prepends the new entry, so no stale block is left behind (IO-RA-10).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* docs: rewrite the guides and references against the 6.0 code
+
+- events, hooks and examples check socket.data.kind, use real room names and
+  data keys, the Document Service or db.query instead of entityService, and
+  no longer reference socket.data.userId, a permissions service or eventPrefix
+  (IO-RA-04)
+- hooks.init documents { strapi, $io, io } and that it runs before the
+  handshake (IO-RA-03); Allowed origins documents same-origin-only for an
+  empty list (IO-RA-05); session-bound sockets match the code (IO-RA-07)
+- plugin configuration, IO class, getting started, migration and the landing
+  page rewritten with option tables and verified defaults; Node requirements
+  corrected
+- README: CI badge, hero and mobile screenshots, socket.data table,
+  performance section, troubleshooting for h2c and hooks.init, contributing
+- CHANGELOG [Unreleased]: re-attack fixes, migration steps and the dev-only
+  audit advisories; llms-full.txt regenerated
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* test: add a Playwright admin regression suite and refresh the screenshots
+
+- tests/e2e/admin.e2e.mjs (npm run test:e2e) runs against a real Strapi app:
+  Settings validation, unsaved-changes guard and save, Monitoring anatomy,
+  homepage widgets, 390 px and dark mode without overflow, read-only RBAC
+  (IO-RA-09); skipped without IO_E2E_URL
+- the Allowed origins hint describes the enforced same-origin rule in all
+  five languages; the Spanish hidden-entry strings use usted like the rest
+- README and docs screenshots re-captured from the current build (synthetic
+  data, light, dark and 390 px)
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* docs: state the measured query numbers precisely in the README
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* docs: regenerate llms-full.txt
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* fix(server)!: require Node.js 22.21+ or 24.9+ and drop the upgrade body fallback
+
+The plugin now always routes upgrades with the HTTP server's
+shouldUpgradeCallback, which Node.js added in 22.21.0 and 24.9.0. The
+legacy `upgrade` listener, which answered upgrade requests with a body
+with a 400 on older Node.js versions, is removed because it can no
+longer run on a supported engine. On an unsupported Node.js the plugin
+logs a warning and leaves upgrades to Socket.IO.
+* engines.node is now "^22.21.0 || >=24.9.0 <=26.x.x".
+Node.js 22.0 to 22.20 and 23.x are no longer supported.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* feat(server): restore entity subscriptions with per-audience permissions
+
+Clients can follow single documents again with `subscribe-entity`
+(`{ uid, documentId }`, `{ uid, id }` still accepted),
+`unsubscribe-entity` and `get-entity-subscriptions`, and server code can
+use `strapi.$io.subscribeToEntity()`, `unsubscribeFromEntity()` and
+`getEntitySubscriptions()`.
+
+- Off by default (`subscriptions.enabled`), limited per socket
+  (`subscriptions.maxPerSocket`, 1 to 1,000, default 100) and to ten
+  subscribe requests per second.
+- A subscription needs read permission (find/findOne, read-only or
+  full-access token) of the socket's own role or API token and an
+  existing document (published only while "Only published content" is
+  on). Unknown types and missing permission get the same answer.
+- Subscriber rooms are per audience (`io-entity-<audience>|<uid>|<id>`)
+  and reserved, so every emit sanitizes once per audience with that
+  audience's permissions, re-checks read permission at emit time and
+  sends each socket the event once.
+- Events of content types or actions that are not broadcast reach
+  subscribers only. The check is an in-memory count kept from the
+  adapter's join-room/leave-room events, so it also drops subscriptions
+  on disconnect and adds no query for unfollowed documents.
+- Admin presence sockets cannot subscribe.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* feat(admin): restore settings export and import, add entry subscription settings
+
+- Export and import: Settings > Socket.IO has an "Export and import"
+  section. Export downloads the saved settings as JSON (origins, IP
+  rules, roles and limits; no secrets). Import reads a JSON file of at
+  most 256 KB and sends it to the new `POST /io/settings/validate`
+  (plugin::io.settings.update), which checks it with the same strict
+  schema as Save and returns the resulting settings without storing
+  them. A ConfirmDialog lists the changed values; confirming replaces
+  the form values, and nothing is stored until Save.
+- Entry subscriptions: a section to allow `subscribe-entity` and set the
+  per-client limit, with inline range validation.
+- Setting titles are now <label> elements for their Switch, so clicking
+  the title toggles the setting and the pointer target is larger than
+  the switch alone.
+- New strings in all five languages.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* build(deps): override patched nodemailer, koa-body zod and @hono/node-server in the dev tree
+
+Scoped npm overrides for development dependencies (they are not part of
+the published package):
+
+- nodemailer ^10.3.1 (same major; fixes seven moderate advisories)
+- zod ^4.6.7 under koa-body (high GHSA-mrhx-c7xc-m3w5; koa-body 6 only
+  uses z.object/union/array/nativeEnum/default, which zod 4 keeps)
+- @hono/node-server ^2.1.6 under @modelcontextprotocol/node
+  (GHSA-rmxm-3fg6-px4f; v2 keeps the public API)
+
+npm audit of the dev tree: 71 (5 high) before, 67 (3 high) after. The
+remaining advisories have no compatible patched release and are listed
+in docs/guide/migration.md.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* ci: run the browser and socket e2e suites against a scaffolded Strapi 5.61 app
+
+scripts/e2e-app.mjs scaffolds a minimal Strapi 5.61 app outside the repo
+(SQLite, synthetic article/category/note types from tests/e2e/app,
+loopback-only egress), installs the packed plugin tarball, seeds a Super
+Admin, a read-only admin, public read permissions and a full-access API
+token with per-run random secrets that are never printed, starts the app
+and runs tests/e2e. CI runs the same script in a new `e2e` job on Node 22
+and 24 after `verify`, with pinned actions, read-only permissions, the
+npm cache and Chromium only; the Node 24 leg also applies the repo's npm
+overrides to the app.
+
+New suites:
+- tests/e2e/socket.e2e.mjs: per-audience sanitized delivery to public and
+  API-token sockets, entity subscriptions on a type that is not
+  broadcast, the settings import check (strict schema, 403 without
+* Strapi 5.38 or later is required.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
+* test(cluster): give the store contract its own PostgreSQL schema
+
+node --test runs test files in parallel, and tests/cluster.test.mjs wipes the
+plugin tables of the same database. The store contract now creates and drops
+a private schema (knex searchPath), so the counter test no longer races.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
 
 The next release is a major version (6.0.0): it contains breaking changes. See "Migration" below.
 

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package",
   "name": "@strapi-community/plugin-io",
-  "version": "5.8.3",
+  "version": "6.0.0",
   "description": "Socket.IO for Strapi 5: sends content changes to connected clients in real time, filtered by role and API token permissions, with live presence and monitoring in the admin panel.",
   "keywords": [
     "strapi",
