@@ -47,6 +47,8 @@ The next release is a major version (6.0.0): it contains breaking changes. See "
 * The legacy `server/` tree, the root `strapi-server.js`/`strapi-admin.js` shims, unreachable admin components and the manual root test scripts were removed. `dist/` is no longer tracked; `package-lock.json` is.
 * semantic-release folds this `[Unreleased]` section into the release notes and removes it from CHANGELOG.md (`scripts/release-unreleased.mjs`), so no stale block is left behind.
 * The development tree's `npm audit` reports advisories inside `@strapi/strapi` 5.61.0 (`koa-body`, `koa-session`, its bundled `zod` 3, `@strapi/core`/`@strapi/types`). They are dev-only and upstream; `npm audit --omit=dev` is clean.
+* `npm run test:e2e`: Playwright 1.65 browser regression suite for Settings, Monitoring, the homepage widgets, 390 px, dark mode and read-only RBAC, run against a real Strapi app. The Socket.IO forwarding tests use a real Koa app, including `POST` bodies with an `Upgrade` header.
+* The Allowed origins hint in the settings matches the enforced rule (five languages).
 * ESLint 10 flat config, Prettier check, `node --test` suite and published-types check; CI on Node 22 and 24, hardened release workflow (SHA-pinned actions, lockfile install without scripts, npm OIDC with `NPM_TOKEN` fallback and provenance), Dependabot with verified auto-merge.
 
 ### Migration

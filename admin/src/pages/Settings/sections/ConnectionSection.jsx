@@ -20,7 +20,7 @@ export const ConnectionSection = ({ draft, setField, errorFor, disabled, t }) =>
 				label={t('settings.connection.origins.label', 'Allowed origins')}
 				hint={t(
 					'settings.connection.origins.hint',
-					'Frontends that may connect from a browser. Leave empty to allow WebSocket connections from any origin. The Strapi admin is always allowed.'
+					'Browser frontends on another origin that may connect. The Strapi admin and the server URL are always allowed; apps without a browser are not affected.'
 				)}
 				placeholder="https://app.example.com"
 				error={errorFor('cors.origins')}

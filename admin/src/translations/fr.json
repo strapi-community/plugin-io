@@ -74,7 +74,7 @@
   "settings.connection.connectionTimeout.label": "Délai de connexion",
   "settings.connection.maxConnections.hint": "0 signifie illimité. Autorisé : 0 à 100 000.",
   "settings.connection.maxConnections.label": "Connexions maximales",
-  "settings.connection.origins.hint": "Frontends autorisés à se connecter depuis un navigateur. Laissez vide pour autoriser les connexions WebSocket de toute origine. L'admin Strapi est toujours autorisé.",
+  "settings.connection.origins.hint": "Frontends web d'une autre origine autorisés à se connecter. L'admin Strapi et l'URL du serveur sont toujours autorisés ; les applications hors navigateur ne sont pas concernées.",
   "settings.connection.origins.label": "Origines autorisées",
   "settings.connection.pingInterval.hint": "Fréquence à laquelle le serveur vérifie qu'un client est toujours là. Autorisé : 1 000 à 600 000.",
   "settings.connection.pingInterval.label": "Intervalle de ping",

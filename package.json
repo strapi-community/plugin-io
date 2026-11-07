@@ -51,7 +51,8 @@
     "test:types": "tsc -p tests/types/tsconfig.json",
     "docs:dev": "npm --prefix docs run dev",
     "docs:build": "npm --prefix docs run build",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "test:e2e": "node --test --test-concurrency=1 \"tests/e2e/*.e2e.mjs\""
   },
   "dependencies": {
     "@strapi/utils": "^5.61.0",
@@ -77,6 +78,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.14.0",
     "koa": "^3.3.0",
+    "playwright": "^1.65.0",
     "prettier": "^3.9.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

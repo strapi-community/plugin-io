@@ -73,5 +73,14 @@ export default defineConfig([
     },
   },
 
+  {
+    // Playwright tests run callbacks inside the page (page.evaluate).
+    name: 'io/e2e',
+    files: ['tests/e2e/**/*.{js,mjs}'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+  },
+
   eslintConfigPrettier,
 ]);

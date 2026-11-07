@@ -348,8 +348,11 @@ npm run format:check  # Prettier
 npm run build         # @strapi/sdk-plugin
 npm test              # node --test
 npm run test:types    # checks types.d.ts with tsc
+npm run test:e2e      # Playwright browser tests against a running Strapi app (see below)
 npm run verify
 ```
+
+`npm run test:e2e` runs the admin regression suite (Settings form, unsaved-changes guard, Monitoring, homepage widgets, 390 px and dark mode, read-only RBAC) in a standalone Chromium. Point it at a Strapi app with the plugin installed: `IO_E2E_URL=http://127.0.0.1:1337 IO_E2E_EMAIL=... IO_E2E_PASSWORD=... npm run test:e2e` (optionally `IO_E2E_VIEWER_EMAIL` / `IO_E2E_VIEWER_PASSWORD` for an admin with read-only plugin permissions). Run `npx playwright install chromium` once. Without `IO_E2E_URL` the tests are skipped.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/). semantic-release publishes releases from `main` and folds the `[Unreleased]` section of `CHANGELOG.md` into the release notes (`scripts/release-unreleased.mjs`).
 

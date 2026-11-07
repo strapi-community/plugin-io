@@ -74,7 +74,7 @@
   "settings.connection.connectionTimeout.label": "Verbindungs-Timeout",
   "settings.connection.maxConnections.hint": "0 bedeutet unbegrenzt. Erlaubt: 0 bis 100.000.",
   "settings.connection.maxConnections.label": "Maximale Verbindungen",
-  "settings.connection.origins.hint": "Frontends, die sich aus dem Browser verbinden dürfen. Leer lassen, um WebSocket-Verbindungen von jeder Origin zu erlauben. Der Strapi-Admin ist immer erlaubt.",
+  "settings.connection.origins.hint": "Browser-Frontends auf einem anderen Origin, die sich verbinden dürfen. Der Strapi-Admin und die Server-URL sind immer erlaubt; Apps ohne Browser sind nicht betroffen.",
   "settings.connection.origins.label": "Erlaubte Origins",
   "settings.connection.pingInterval.hint": "Wie oft der Server prüft, ob ein Client noch da ist. Erlaubt: 1.000 bis 600.000.",
   "settings.connection.pingInterval.label": "Ping-Intervall",
