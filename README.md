@@ -322,7 +322,7 @@ io: {
 },
 
 // config/server.js (Railway passes the client IP in X-Real-IP)
-proxy: { koa: true, ipHeader: 'X-Real-IP' },
+proxy: { koa: true, ipHeader: 'X-Real-IP', maxIpsCount: 1 },
 ```
 
 Clients connect with `transports: ['websocket']`. The admin already does.

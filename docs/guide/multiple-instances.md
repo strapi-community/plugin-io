@@ -47,7 +47,7 @@ module.exports = () => ({
 module.exports = ({ env }) => ({
   host: env('HOST', '0.0.0.0'),
   port: env.int('PORT', 1337),
-  proxy: { koa: true, ipHeader: 'X-Real-IP' },
+  proxy: { koa: true, ipHeader: 'X-Real-IP', maxIpsCount: 1 },
   app: { keys: env.array('APP_KEYS') },
 });
 ```
@@ -80,8 +80,8 @@ memory, as before, and writes nothing extra.
 | Settings                          | A revision in the stored settings. Saves are compare-and-swap; a stale save gets `409` and the admin offers a reload.    |
 | Revocations (user, token, admin)  | A control signal over the adapter (`serverSideEmit`) and table `plugin_io_signals`, polled every 3 s as fallback.        |
 | Audience cache                    | Same control signal; the 10-second cache stays as the upper bound.                                                       |
-| Failed-handshake lockout          | Table `plugin_io_counters` (hashed IPs). 20 failures per minute across all processes.                                    |
-| Connection cap (`maxConnections`) | A total over all processes, from each process's heartbeat (at most 10 s old).                                            |
+| Failed-handshake lockout          | Table `plugin_io_counters` (hashed IPs). 20 failures per minute across all processes; a block is announced to all.       |
+| Connection cap (`maxConnections`) | A total over all processes, from their heartbeats (10 s), re-read at most every poll interval (3 s).                     |
 | Monitoring                        | Each process writes its counters to `plugin_io_nodes`; the page shows the sum. The event log is merged over the adapter. |
 
 The four `plugin_io_*` tables are created on first start with portable knex
@@ -189,8 +189,12 @@ client's failed handshakes lock out everyone and IP rules apply to the proxy.
 
 ```js
 // config/server.js
-proxy: { koa: true, ipHeader: 'X-Real-IP' },
+proxy: { koa: true, ipHeader: 'X-Real-IP', maxIpsCount: 1 },
 ```
+
+`ipHeader` and `maxIpsCount` exist since Strapi 5.52. Strapi's docs ask for
+`maxIpsCount` with every reverse proxy; Railway sends one address in `X-Real-IP`,
+so `1` fits ([Strapi server configuration](https://docs.strapi.io/cms/configurations/server)).
 
 The plugin reads the client IP exactly like Strapi (`server.proxy.koa`,
 `ipHeader`, `maxIpsCount`) and warns at boot when it runs on Railway without
@@ -213,6 +217,14 @@ module.exports = {
   ],
 };
 ```
+
+### Restarts and rolling deploys
+
+When a process stops (`pm2 reload`, a Railway deploy, scaling down), the plugin
+closes only that process's connections. Clients see `transport close` and
+socket.io-client reconnects by itself, through the balancer, to a running
+process; clients of the other processes stay connected. Admin presence fetches a
+new one-time token for the reconnect.
 
 With several hosts, each running a pm2 cluster, `@socket.io/pm2` is not enough:
 the Socket.IO docs point to "another adapter" for that case
@@ -251,7 +263,11 @@ connection: {
 - Revocations arrive within the poll interval (3 s by default) when the adapter
   is down; the periodic five-minute re-check stays as the last line.
 - The failed-handshake lockout may let through one extra attempt per other
-  process before every process knows about a block.
+  process while the failures are counted. Once an IP is blocked, the block is
+  announced to every process (over the adapter, or within the poll interval).
+- `maxConnections` uses the other processes' last heartbeat, so a burst of new
+  connections within one heartbeat interval (10 s) can exceed the cap by what
+  arrived on the other processes in that time.
 - Monitoring totals from other processes are at most one heartbeat old.
 - With entity subscriptions on, every change is sanitized for each reading
   audience, because a process cannot see which entries are followed elsewhere
