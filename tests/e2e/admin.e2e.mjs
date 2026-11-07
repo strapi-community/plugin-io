@@ -108,8 +108,10 @@ test('Settings: Save stays disabled until a valid change, guards navigation and 
 
   await page.getByRole('link', { name: 'Webhooks' }).first().click();
   await page.getByRole('alertdialog').waitFor();
+  // Radix moves focus into the dialog once it has mounted its Escape handler.
+  await page.waitForFunction(() => document.activeElement?.closest('[role="alertdialog"]'));
   await page.keyboard.press('Escape');
-  await page.getByRole('alertdialog').waitFor({ state: 'hidden' });
+  await page.getByRole('alertdialog').waitFor({ state: 'hidden', timeout: 5000 });
   assert.match(page.url(), /\/settings\/io\/settings$/, 'Escape keeps the page and the edits');
 
   const puts = [];
