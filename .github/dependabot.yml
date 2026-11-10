@@ -12,6 +12,13 @@ updates:
       timezone: Europe/Berlin
     open-pull-requests-limit: 5
     versioning-strategy: increase-if-necessary
+    # Wait before proposing a release: brand-new versions carry the highest risk
+    # of being broken or compromised. Security updates are not delayed.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     commit-message:
       prefix: 'chore(deps)'
       prefix-development: 'chore(deps-dev)'
@@ -37,6 +44,11 @@ updates:
       # Kept at 5.x: react-intl 6 (Strapi's admin version) only accepts TypeScript <= 5.
       - dependency-name: 'typescript'
         update-types: ['version-update:semver-major']
+      # Keep the Design System on the version the Strapi admin ships (2.2.x).
+      - dependency-name: '@strapi/design-system'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
+      - dependency-name: '@strapi/icons'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
   - package-ecosystem: npm
     directory: /docs
     schedule:
@@ -45,6 +57,13 @@ updates:
       time: '06:00'
       timezone: Europe/Berlin
     open-pull-requests-limit: 3
+    # Wait before proposing a release: brand-new versions carry the highest risk
+    # of being broken or compromised. Security updates are not delayed.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+      semver-minor-days: 7
+      semver-patch-days: 7
     commit-message:
       prefix: 'docs(deps)'
     labels: [dependencies]
@@ -58,6 +77,8 @@ updates:
       day: monday
       time: '06:00'
       timezone: Europe/Berlin
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: 'ci'
     labels: [dependencies]
