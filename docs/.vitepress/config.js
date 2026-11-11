@@ -52,7 +52,8 @@ export default defineConfig({
 
 	head: [
 		['link', { rel: 'icon', type: 'image/svg+xml', href: '/plugin-io/logo.svg' }],
-		['link', { rel: 'apple-touch-icon', href: '/plugin-io/logo.svg' }],
+		['link', { rel: 'icon', type: 'image/png', sizes: '128x128', href: '/plugin-io/logo-128.png' }],
+		['link', { rel: 'apple-touch-icon', href: '/plugin-io/logo-512.png' }],
 		['meta', { name: 'theme-color', content: '#4945ff' }],
 		['meta', { name: 'color-scheme', content: 'light dark' }],
 		['meta', { name: 'author', content: 'ComfortablyCoding, hrdunn, Schero94, strapi-community' }],
@@ -103,7 +104,7 @@ export default defineConfig({
 		const canonicalUrl = `${SITE_URL}/${pagePath}`.replace(/\/+$/, '/') || `${SITE_URL}/`;
 		const pageTitle = frontmatter.title || pageData.title || SITE_NAME;
 		const pageDescription = frontmatter.description || pageData.description || SITE_DESCRIPTION;
-		const pageOgImage = frontmatter.ogImage ? `${SITE_URL}${frontmatter.ogImage}` : `${SITE_URL}/logo.svg`;
+		const pageOgImage = frontmatter.ogImage ? `${SITE_URL}${frontmatter.ogImage}` : `${SITE_URL}/logo-512.png`;
 		const fullTitle = isHome ? `${SITE_NAME} — Socket.IO for Strapi v5` : `${pageTitle} | ${SITE_NAME}`;
 
 		head.push(['link', { rel: 'canonical', href: canonicalUrl }]);

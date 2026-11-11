@@ -39,7 +39,9 @@ docs/
 │   ├── events.md              # Custom events examples
 │   └── hooks.md               # Lifecycle hooks examples
 ├── public/
-│   └── logo.svg               # Plugin logo
+│   ├── logo.svg               # Plugin icon (header logo, favicon)
+│   ├── logo-128.png           # PNG favicon fallback
+│   └── logo-512.png           # apple-touch-icon and default og:image
 └── .vitepress/
     └── config.js              # VitePress configuration (GitHub Pages base: /plugin-io/)
 ```

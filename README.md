@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/strapi-community/plugin-io/main/docs/public/logo.svg" alt="Socket.IO for Strapi icon" width="96" height="96" />
+</p>
+
 # @strapi-community/plugin-io
 
 > Real-time content events for Strapi 5 with Socket.IO, scoped by Strapi's own permissions.
