@@ -30,6 +30,24 @@ test('CI is read-only and runs the e2e suites against a scaffolded Strapi app on
   assert.match(e2e, /tests\/e2e\/app\/package-lock\.json/);
 });
 
+test('CI runs the e2e suites on the current Strapi version and on the declared peer floor', () => {
+  const ci = workflows.find(([f]) => f === 'ci.yml')[1];
+  const e2e = ci.slice(ci.indexOf('\n  e2e:'));
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const floor = /^\^(\d+\.\d+\.\d+)$/.exec(pkg.peerDependencies['@strapi/strapi'])?.[1];
+  assert.ok(floor, 'the @strapi/strapi peer is a caret range');
+  const pinned = /const STRAPI_VERSION = '(\d+\.\d+\.\d+)';/.exec(readFileSync(script, 'utf8'))?.[1];
+  // `strapi` must be a base matrix key: an include entry that only adds a new
+  // key merges into the matching Node job instead of adding a combination.
+  assert.match(e2e, new RegExp(`\\n {8}strapi: \\['${pinned.replaceAll('.', '\\.')}'\\]\\n`));
+  assert.match(
+    e2e,
+    new RegExp(`include:\\n {10}- node: '\\d+'\\n {12}strapi: '${floor.replaceAll('.', '\\.')}'\\n`),
+    `e2e matrix tests the peer floor ${floor}`
+  );
+  assert.match(e2e, /--strapi "\$\{\{ matrix\.strapi \}\}"/);
+});
+
 test('CI runs the multi-process suites against PostgreSQL and SQLite', () => {
   const ci = workflows.find(([f]) => f === 'ci.yml')[1];
   const verify = ci.slice(ci.indexOf('\n  verify:'), ci.indexOf('\n  e2e:'));
@@ -44,7 +62,10 @@ test('the e2e app installs from its committed lockfile with lifecycle scripts of
   assert.match(source, /\['rebuild', 'better-sqlite3'\]/);
   const lock = JSON.parse(readFileSync(new URL('../tests/e2e/app/package-lock.json', import.meta.url), 'utf8'));
   assert.equal(lock.lockfileVersion, 3);
-  assert.equal(lock.packages[''].dependencies['@strapi/strapi'], '5.61.0');
+  const pinned = /const STRAPI_VERSION = '(\d+\.\d+\.\d+)';/.exec(source)?.[1];
+  assert.equal(pinned, '5.62.0');
+  assert.equal(lock.packages[''].dependencies['@strapi/strapi'], pinned);
+  assert.equal(lock.packages['node_modules/@strapi/strapi'].version, pinned);
   assert.ok(lock.packages['node_modules/@strapi-community/plugin-io'], 'plugin entry');
   assert.ok(lock.packages['node_modules/better-sqlite3'].hasInstallScript);
 });
@@ -54,6 +75,10 @@ test('the e2e runner refuses reserved ports and app folders inside the repositor
   assert.equal(port.status, 2);
   const inside = spawnSync(process.execPath, [script, '--dir', 'tests/e2e/app'], { encoding: 'utf8' });
   assert.equal(inside.status, 2);
+  const range = spawnSync(process.execPath, [script, '--strapi', '^5.38.0'], { encoding: 'utf8' });
+  assert.equal(range.status, 2, 'only exact Strapi versions');
+  const lockOther = spawnSync(process.execPath, [script, '--strapi', '5.38.0', '--update-lock'], { encoding: 'utf8' });
+  assert.equal(lockOther.status, 2, 'the committed lockfile is only for STRAPI_VERSION');
 });
 
 const cluster = fileURLToPath(new URL('../scripts/cluster-acceptance.mjs', import.meta.url));

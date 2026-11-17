@@ -41,8 +41,8 @@ Full documentation: <https://strapi-community.github.io/plugin-io/>
 
 |                     | Version                                                  |
 | ------------------- | -------------------------------------------------------- |
-| Strapi              | 5.38 or later (tested with 5.61)                         |
-| Node.js             | 22.21+ or 24.9+ (up to 26, like Strapi 5.61)             |
+| Strapi              | 5.38 or later (tested with 5.62)                         |
+| Node.js             | 22.21+ or 24.9+ (up to 26, like Strapi 5.62)             |
 | Users & Permissions | Optional. Needed for user JWTs and the Public role room. |
 
 ## Quick start
@@ -387,14 +387,14 @@ npm run build         # @strapi/sdk-plugin
 npm test              # node --test
 npm run test:types    # checks types.d.ts with tsc
 npm run test:e2e      # e2e suites against a running Strapi app (see below)
-npm run test:e2e:app  # scaffolds a Strapi 5.61 app with the packed plugin and runs the e2e suites (as CI does)
+npm run test:e2e:app  # scaffolds a Strapi 5.62 app with the packed plugin and runs the e2e suites (as CI does)
 npm run test:cluster  # 8 processes (2 pm2 daemons x 4 workers) on PostgreSQL behind a non-sticky balancer (CONTRIBUTING.md)
 npm run verify
 ```
 
 `npm run test:e2e` runs the admin regression suite (Settings form, unsaved-changes guard, export and import, Monitoring, homepage widgets, 390 px and dark mode, read-only RBAC) in a standalone Chromium and the socket/API suite (per-audience delivery, entity subscriptions, settings import check, #112 upgrades, `Upgrade: h2c` bodies). Point it at a Strapi app with the plugin installed: `IO_E2E_URL=http://127.0.0.1:1337 IO_E2E_EMAIL=... IO_E2E_PASSWORD=... IO_E2E_TOKEN=<full-access API token> npm run test:e2e` (optionally `IO_E2E_VIEWER_EMAIL` / `IO_E2E_VIEWER_PASSWORD` for an admin with read-only plugin permissions). Run `npx playwright install chromium` once. Without these variables the tests are skipped.
 
-`npm run build && npm run test:e2e:app` does all of that for you: it scaffolds a Strapi 5.61 app outside the repository (SQLite, the synthetic content types in `tests/e2e/app`, loopback-only egress), installs the packed plugin, seeds admins and a token with random per-run secrets that are never printed, and runs both suites. The app installs from the committed `tests/e2e/app/package-lock.json` with `npm ci --ignore-scripts`; only `better-sqlite3` runs its install script (`npm rebuild better-sqlite3`). Options: `--port` (default 1357), `--dir`, `--overrides` (apply this repo's npm overrides to the app), `--update-lock` (re-resolve the app and rewrite its lockfile, after changing the Strapi version or the plugin's dependencies) and `--keep`. CI runs it on Node 22 and 24.
+`npm run build && npm run test:e2e:app` does all of that for you: it scaffolds a Strapi 5.62 app outside the repository (SQLite, the synthetic content types in `tests/e2e/app`, loopback-only egress), installs the packed plugin, seeds admins and a token with random per-run secrets that are never printed, and runs both suites. The app installs from the committed `tests/e2e/app/package-lock.json` with `npm ci --ignore-scripts`; only `better-sqlite3` runs its install script (`npm rebuild better-sqlite3`). Options: `--port` (default 1357), `--dir`, `--strapi` (another exact Strapi version, resolved without the committed lockfile; CI runs the 5.38.0 peer floor this way), `--overrides` (apply this repo's npm overrides to the app), `--update-lock` (re-resolve the app and rewrite its lockfile, after changing the Strapi version or the plugin's dependencies) and `--keep`. CI runs it on Node 22 and 24.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/). semantic-release publishes releases from `main` and folds the `[Unreleased]` section of `CHANGELOG.md` into the release notes (`scripts/release-unreleased.mjs`).
 

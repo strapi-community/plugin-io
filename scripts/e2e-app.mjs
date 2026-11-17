@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Scaffolds a minimal Strapi 5.61 app (SQLite, synthetic content types from
+ * Scaffolds a minimal Strapi 5.62 app (SQLite, synthetic content types from
  * tests/e2e/app), installs the packed plugin tarball, starts it and runs the
  * end-to-end suites in tests/e2e (Playwright admin suite, socket and API
  * suite). CI runs exactly this script; run it locally the same way:
@@ -12,6 +12,11 @@
  *                    the OS temp directory, outside this repository, so the
  *                    app never resolves packages from this repo).
  *   --port <n>       Port (default 1357).
+ *   --strapi <ver>   Strapi version for the app (default STRAPI_VERSION).
+ *                    Any other version is resolved afresh with
+ *                    `npm install --ignore-scripts`, because the committed
+ *                    lockfile records STRAPI_VERSION. CI uses it to test the
+ *                    @strapi/strapi peer floor from package.json.
  *   --overrides      Copy this package's npm `overrides` into the app, to
  *                    check that Strapi runs with the patched dependencies.
  *   --update-lock    Resolve the app's dependencies afresh and write the
@@ -40,12 +45,13 @@ import { parseArgs } from 'node:util';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RESERVED_PORTS = new Set([1337, 1338, 1340, 1345, 1351, 1352, 1353, 1354]);
-const STRAPI_VERSION = '5.61.0';
+const STRAPI_VERSION = '5.62.0';
 
 const { values: args } = parseArgs({
   options: {
     dir: { type: 'string', default: join(tmpdir(), 'plugin-io-e2e-app') },
     port: { type: 'string', default: '1357' },
+    strapi: { type: 'string', default: STRAPI_VERSION },
     overrides: { type: 'boolean', default: false },
     keep: { type: 'boolean', default: false },
     'update-lock': { type: 'boolean', default: false },
@@ -53,6 +59,17 @@ const { values: args } = parseArgs({
 });
 if (args['update-lock'] && args.overrides) {
   console.error('--update-lock records the lockfile without overrides; do not combine it with --overrides.');
+  process.exit(2);
+}
+if (!/^\d+\.\d+\.\d+$/.test(args.strapi)) {
+  console.error(`--strapi takes an exact version such as ${STRAPI_VERSION}.`);
+  process.exit(2);
+}
+const strapiVersion = args.strapi;
+// The committed lockfile records STRAPI_VERSION; other versions resolve afresh.
+const freshResolve = strapiVersion !== STRAPI_VERSION;
+if (freshResolve && args['update-lock']) {
+  console.error(`--update-lock records the lockfile for ${STRAPI_VERSION}; change STRAPI_VERSION instead.`);
   process.exit(2);
 }
 const port = Number(args.port);
@@ -134,7 +151,7 @@ if (
 }
 const tarball = readdirSync(join(app, 'pkg')).find((f) => f.endsWith('.tgz'));
 
-// 3. package.json pinned to Strapi 5.61 and the plugin's peer versions.
+// 3. package.json pinned to the Strapi version and the plugin's peer versions.
 const plugin = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const appPackage = {
   name: 'io-e2e-app',
@@ -142,8 +159,8 @@ const appPackage = {
   version: '0.0.0',
   scripts: {},
   dependencies: {
-    '@strapi/strapi': STRAPI_VERSION,
-    '@strapi/plugin-users-permissions': STRAPI_VERSION,
+    '@strapi/strapi': strapiVersion,
+    '@strapi/plugin-users-permissions': strapiVersion,
     '@strapi-community/plugin-io': `file:./pkg/${tarball}`,
     'better-sqlite3': '12.11.1',
     react: '18.3.1',
@@ -164,7 +181,7 @@ writeFileSync(join(app, 'package.json'), `${JSON.stringify(appPackage, null, 2)}
 // accepts it; any other difference fails and asks for --update-lock.
 const LOCKFILE = join(ROOT, 'tests/e2e/app/package-lock.json');
 const appLock = join(app, 'package-lock.json');
-if (args['update-lock']) {
+if (args['update-lock'] || freshResolve) {
   rmSync(appLock, { force: true });
 } else {
   if (!existsSync(appLock)) fail('tests/e2e/app/package-lock.json is missing; run with --update-lock.');
@@ -183,9 +200,9 @@ if (args['update-lock']) {
   writeFileSync(appLock, `${JSON.stringify(lock, null, 2)}\n`);
 }
 
-step(`installing Strapi ${STRAPI_VERSION} and the plugin${args.overrides ? ' (with overrides)' : ''}`);
+step(`installing Strapi ${strapiVersion} and the plugin${args.overrides ? ' (with overrides)' : ''}`);
 const installArgs = [
-  args['update-lock'] || args.overrides ? 'install' : 'ci',
+  args['update-lock'] || args.overrides || freshResolve ? 'install' : 'ci',
   '--ignore-scripts',
   '--no-audit',
   '--no-fund',
