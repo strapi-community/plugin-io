@@ -1,3 +1,16 @@
+## [Unreleased]
+
+### Fixed
+
+- The docs site showed `v5.8.2` in the navigation and `softwareVersion: "5.8.2"` in its JSON-LD for the 6.0.0 release. Both now read the version from `package.json`, and the Deploy Docs workflow rebuilds the site after every successful Release run, because the `[skip ci]` release commit starts no push workflow.
+- `llms.txt` and the "Which Strapi version is supported?" answer in the JSON-LD named Node.js 18–22; they now state Strapi 5.38 or later on Node.js 22.21+ or 24.9+ (up to 26), as `package.json` does. `llms.txt` also lists the 6.0 event names (`publish`, `unpublish`, `discardDraft`), the Postgres adapter and the current migration guide.
+- `docs/README.md` no longer lists a plugin version and stale Vue/Node.js versions; `docs/package-seo.json` drops its `version` field.
+- `tests/docs-version.test.mjs` fails on hard-coded plugin versions, Node.js/Strapi requirements that differ from `package.json`, "tested with" claims that differ from the Strapi version CI tests, and a `docs/public/llms-full.txt` that is out of sync with the pages.
+
+### Changed
+
+- Development builds and tests use Strapi 5.62.0 and Design System/Icons 2.3.1. The published peer ranges and `engines.node` are unchanged.
+
 # [6.0.0](https://github.com/strapi-community/plugin-io/compare/5.8.3...6.0.0) (2026-11-07)
 
 * feat!: plugin-io 6.0 for Strapi 5 (security, Design System 2 admin, fixes [#112](https://github.com/strapi-community/plugin-io/issues/112)) ([#113](https://github.com/strapi-community/plugin-io/issues/113)) ([668e612](https://github.com/strapi-community/plugin-io/commit/668e612dda9c66944dcc3f061966fb1b3f7cd1b5)), closes [#109](https://github.com/strapi-community/plugin-io/issues/109)

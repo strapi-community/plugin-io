@@ -2,6 +2,15 @@
  * Per-page Schema.org JSON-LD for SEO / GEO / AIO discoverability.
  */
 
+import { readFileSync } from 'node:fs';
+
+/**
+ * Plugin version from the root package.json, which semantic-release bumps on
+ * every release. The nav (config.js) and the JSON-LD softwareVersion use it,
+ * so the site never hard-codes a version.
+ */
+export const PLUGIN_VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version;
+
 const SITE_URL = 'https://strapi-community.github.io/plugin-io';
 const REPO_URL = 'https://github.com/strapi-community/plugin-io';
 const NPM_URL = 'https://www.npmjs.com/package/@strapi-community/plugin-io';
@@ -39,7 +48,7 @@ const SOFTWARE = {
 	url: `${SITE_URL}/`,
 	downloadUrl: NPM_URL,
 	installUrl: NPM_URL,
-	softwareVersion: '5.8.2',
+	softwareVersion: PLUGIN_VERSION,
 	license: 'https://opensource.org/licenses/MIT',
 	programmingLanguage: 'JavaScript',
 	runtimePlatform: 'Node.js',
@@ -148,7 +157,7 @@ export function generateStructuredData({
 					name: 'Which Strapi version is supported?',
 					acceptedAnswer: {
 						'@type': 'Answer',
-						text: 'Strapi v5. Node.js 18–22. Install via npm as @strapi-community/plugin-io.',
+						text: 'Strapi 5.38 or later on Node.js 22.21+ or 24.9+ (up to 26). Install via npm as @strapi-community/plugin-io.',
 					},
 				},
 			],

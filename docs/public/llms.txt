@@ -4,7 +4,8 @@
 
 Key facts for LLMs:
 - npm: `@strapi-community/plugin-io`
-- Compatibility: Strapi v5, Node.js 18–22
+- Compatibility: Strapi 5.38 or later, Node.js 22.21+ or 24.9+ (up to 26)
+- Current release: see https://github.com/strapi-community/plugin-io/releases (the docs nav shows the version of the published site)
 - License: MIT
 - Docs: https://strapi-community.github.io/plugin-io/
 - Full plain-text docs: https://strapi-community.github.io/plugin-io/llms-full.txt
@@ -18,7 +19,7 @@ Key facts for LLMs:
 - [Getting Started](https://strapi-community.github.io/plugin-io/guide/getting-started): Install, enable, auth strategies, troubleshooting
 - [Dashboard Widget](https://strapi-community.github.io/plugin-io/guide/widget): Online editors / monitoring widget
 - [Running several instances](https://strapi-community.github.io/plugin-io/guide/multiple-instances): Railway replicas, pm2 cluster, Postgres or Redis adapter, WebSocket-only, proxy, pool sizing
-- [Migration v4 → v5](https://strapi-community.github.io/plugin-io/guide/migration): Upgrade notes
+- [Migration guide](https://strapi-community.github.io/plugin-io/guide/migration): Upgrade from 5.x to 6.0, and from the Strapi 4 plugin (2.x)
 - [IO Class API](https://strapi-community.github.io/plugin-io/api/io-class): Server helpers (`emit`, `raw`, rooms)
 - [Plugin Configuration](https://strapi-community.github.io/plugin-io/api/plugin-config): `contentTypes`, `socket.serverOptions`, hooks, events
 - [Examples overview](https://strapi-community.github.io/plugin-io/examples/)
@@ -42,10 +43,10 @@ Q: Does it break `strapi transfer`?
 A: It previously could behind reverse proxies because Engine.IO destroyed non-`/socket.io` upgrades after ~1s. Current versions default `destroyUpgrade: false` (issue #112). Keep that setting if you override `serverOptions`.
 
 Q: How are content-type events emitted?
-A: Configure `contentTypes` in plugin config; the plugin listens to Document Service lifecycles and emits `{singularName}:{create|update|delete}` events to authorized rooms.
+A: Configure `contentTypes` in plugin config; the plugin listens to Document Service lifecycles and emits `{singularName}:{create|update|delete|publish|unpublish|discardDraft}` events to the roles and API tokens that may read the content type.
 
 Q: Can it scale across multiple Strapi instances?
-A: Yes, via the Socket.IO Redis adapter configuration.
+A: Yes. Install the Socket.IO Postgres or Redis adapter; use WebSocket-only transport and set the proxy option; the plugin shares everything else through the database (see Running several instances).
 
 Q: Is it free?
 A: Yes. MIT license, no paid tier.
