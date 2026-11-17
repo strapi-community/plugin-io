@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/strapi-community/plugin-io/main/docs/public/logo.svg" alt="Socket.IO for Strapi icon" width="96" height="96" />
+  <img src="https://strapi-community.github.io/plugin-io/logo.svg" alt="Socket.IO for Strapi icon" width="96" height="96" />
 </p>
 
 # @strapi-community/plugin-io
@@ -16,7 +16,7 @@ The plugin attaches a Socket.IO server to Strapi's HTTP server and sends an even
 
 It also adds _Settings > Socket.IO_ (settings and live monitoring), two homepage widgets and a live presence panel in the Content Manager, all built from the Strapi Design System.
 
-![Settings > Socket.IO > Monitoring in dark mode](./pics/monitoring-dark.png)
+![Settings > Socket.IO > Monitoring in dark mode](https://strapi-community.github.io/plugin-io/monitoring-dark.png)
 
 Full documentation: <https://strapi-community.github.io/plugin-io/>
 
@@ -196,7 +196,7 @@ Defaults the plugin sets unless you override them in `socket.serverOptions`:
 
 The plugin adds a **Socket.IO** section under _Settings_ with two pages, two homepage widgets and a side panel in the Content Manager. All screens use the Strapi Design System and follow the layout of the native settings pages.
 
-![Settings > Socket.IO > Settings](./pics/settings.png)
+![Settings > Socket.IO > Settings](https://strapi-community.github.io/plugin-io/settings.png)
 
 **Settings** (`plugin::io.settings.read` / `plugin::io.settings.update`). Every setting applies to new connections without a restart:
 
@@ -215,17 +215,17 @@ Import sends the file to `POST /io/settings/validate` (needs `plugin::io.setting
 
 **Monitoring** (`plugin::io.monitoring.read`; reset and test events need `plugin::io.monitoring.manage`): connected clients by type, active rooms, events per second, events sent, admins online with the entries they edit, and the event log. Entries in content types the viewer may not read in the Content Manager are counted, not named. Test events go to every connected client; names used by content and presence events are refused.
 
-![Settings > Socket.IO > Monitoring](./pics/monitoringSettings.png)
+![Settings > Socket.IO > Monitoring](https://strapi-community.github.io/plugin-io/monitoringSettings.png)
 
 **Homepage widgets**: _Socket.IO_ (four counters) and _Admins online_. Both need `plugin::io.monitoring.read`.
 
-![Socket.IO homepage widget](./pics/widget.png)
+![Socket.IO homepage widget](https://strapi-community.github.io/plugin-io/widget.png)
 
-<img src="./pics/monitoring-mobile.png" alt="Monitoring at 390 px width" width="260">
+<img src="https://strapi-community.github.io/plugin-io/monitoring-mobile.png" alt="Monitoring at 390 px width" width="260">
 
 **Live presence panel** in the Content Manager edit view: shows the other admins editing the same entry and, optionally, which field they are typing in. Admins only join the presence room of content types they may read in the Content Manager. The panel connects with a one-time token per connection attempt (at most five unused tokens per admin) and shows no email addresses. The connection ends when the admin logs out, the admin session expires or the account is deactivated.
 
-![Live presence panel in the edit view](./pics/livepresenceindi.png)
+![Live presence panel in the edit view](https://strapi-community.github.io/plugin-io/presence.png)
 
 Screenshots come from a local test host with synthetic data.
 
@@ -344,7 +344,7 @@ With an adapter that spans several servers, a server cannot see which entries ar
 
 ## Upgrading from 5.x
 
-6.0 contains breaking changes. The full list is in [CHANGELOG.md](./CHANGELOG.md). In short:
+6.0 contains breaking changes. The full list is in [CHANGELOG.md](https://github.com/strapi-community/plugin-io/blob/main/CHANGELOG.md). In short:
 
 1. **Delivery follows read permissions.** Give roles and tokens `find` (or `findOne`) on the content types they should receive. Create or update permissions alone no longer deliver events.
 2. **Publish is its own event.** Publishing used to emit `:delete` and `:create`; it now emits `:publish`. Unpublish and discard draft emit `:unpublish` and `:discardDraft`. If you limit `actions` in the config, add the new ones you need.
@@ -400,8 +400,8 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/). sem
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please open an [issue](https://github.com/strapi-community/plugin-io/issues) first for larger changes and add a test for every fix. [CONTRIBUTING.md](./CONTRIBUTING.md) lists the checks to run before you push, the cluster acceptance run and the admin UI conventions.
+Bug reports and pull requests are welcome. Please open an [issue](https://github.com/strapi-community/plugin-io/issues) first for larger changes and add a test for every fix. [CONTRIBUTING.md](https://github.com/strapi-community/plugin-io/blob/main/CONTRIBUTING.md) lists the checks to run before you push, the cluster acceptance run and the admin UI conventions.
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](https://github.com/strapi-community/plugin-io/blob/main/LICENSE)

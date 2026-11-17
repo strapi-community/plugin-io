@@ -20,7 +20,7 @@ import globals from 'globals';
 const unusedVars = ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' }];
 
 export default defineConfig([
-  globalIgnores(['dist/**', 'node_modules/**', 'pics/**', 'coverage/**', 'docs/**', '.strapi/**', 'output/**']),
+  globalIgnores(['dist/**', 'node_modules/**', 'coverage/**', 'docs/**', '.strapi/**', 'output/**']),
 
   {
     name: 'io/recommended',
