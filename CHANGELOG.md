@@ -1,3 +1,9 @@
+## [Unreleased]
+
+### Fixed
+
+- The README screenshots and the CHANGELOG, CONTRIBUTING and LICENSE links were broken on the Strapi marketplace and on npmjs.com, which render the README from the npm package and do not resolve relative paths such as `./pics/settings.png`. The README now uses absolute URLs: the screenshots and the icon come from the GitHub Pages site (`docs/public`), the file links point to GitHub. The duplicate `pics/` folder is removed. `tests/readme-urls.test.mjs` fails on relative or `raw.githubusercontent.com` targets, images without alt text, images from other hosts and Pages images that are missing in `docs/public`.
+
 ## [6.0.1](https://github.com/strapi-community/plugin-io/compare/6.0.0...6.0.1) (2026-11-17)
 
 
