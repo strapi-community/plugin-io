@@ -1,4 +1,10 @@
-## [Unreleased]
+## [6.0.3](https://github.com/strapi-community/plugin-io/compare/6.0.2...6.0.3) (2026-11-17)
+
+
+### Bug Fixes
+
+* **server:** answer invalid settings with 400 on older Strapi hosts ([#120](https://github.com/strapi-community/plugin-io/issues/120)) ([053330e](https://github.com/strapi-community/plugin-io/commit/053330ec130d0568182f5c68f50027f76a6080ed))
+
 
 ### Fixed
 
