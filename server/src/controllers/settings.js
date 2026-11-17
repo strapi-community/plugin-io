@@ -1,7 +1,5 @@
-import { errors } from '@strapi/utils';
+import { getHostErrors } from '../utils/host-errors.js';
 import { settingsUpdateSchema, toValidationDetails } from '../utils/settings-schema.js';
-
-const { ValidationError } = errors;
 
 /**
  * Admin controller for the plugin settings.
@@ -21,6 +19,8 @@ export default ({ strapi }) => {
 	 * @throws {ValidationError} With `details.errors[]` (path, message).
 	 */
 	const parseUpdate = (body) => {
+		// Strapi answers 400 only for its own @strapi/utils class (see host-errors.js).
+		const { ValidationError } = getHostErrors(strapi);
 		const parsed = settingsUpdateSchema.safeParse(body ?? {});
 		if (!parsed.success) {
 			throw new ValidationError('Invalid settings', toValidationDetails(parsed.error));

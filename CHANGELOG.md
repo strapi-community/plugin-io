@@ -1,3 +1,10 @@
+## [Unreleased]
+
+### Fixed
+
+- Invalid settings saves and imports and invalid Monitoring test events answered `500` instead of `400` with field errors on any Strapi version older than the newest 5.x (for example 5.38 to 5.61 while 5.62 is current). npm satisfies the `@strapi/utils` peer with the newest 5.x at the app root, while Strapi's own packages keep their exact version in nested copies, and Strapi's error middleware only answers `400` for its own `ValidationError` class. The admin controllers now take the error classes from the `@strapi/utils` copy that the host's `@strapi/core` uses (resolved through `@strapi/strapi` → `@strapi/core`, with the plugin's own import as fallback). No action is needed.
+- `tests/host-errors.test.mjs` reproduces the nested tree. CI now also runs the end-to-end suites on the `@strapi/strapi` peer floor 5.38.0, which found this.
+
 ## [6.0.2](https://github.com/strapi-community/plugin-io/compare/6.0.1...6.0.2) (2026-11-17)
 
 
