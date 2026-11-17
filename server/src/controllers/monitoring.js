@@ -1,7 +1,5 @@
-import { errors } from '@strapi/utils';
+import { getHostErrors } from '../utils/host-errors.js';
 import { RESERVED_EVENT_NAMES } from '../utils/constants.js';
-
-const { ValidationError } = errors;
 
 const EVENT_NAME_RE = /^[a-zA-Z0-9:._-]{1,99}$/;
 const MAX_TEST_BYTES = 8 * 1024;
@@ -160,6 +158,8 @@ export default ({ strapi }) => {
 		 * @sideeffect Emits to all connected sockets.
 		 */
 		async sendTestEvent(ctx) {
+			// Strapi answers 400 only for its own @strapi/utils class (see host-errors.js).
+			const { ValidationError } = getHostErrors(strapi);
 			const { eventName, data } = ctx.request.body || {};
 			const nameError = validateTestEventName(strapi, eventName);
 			if (nameError) {
