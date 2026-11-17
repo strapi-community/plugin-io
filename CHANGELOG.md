@@ -1,4 +1,10 @@
-## [Unreleased]
+## [6.0.1](https://github.com/strapi-community/plugin-io/compare/6.0.0...6.0.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* show the current version in the docs and take @strapi/utils from the host ([#118](https://github.com/strapi-community/plugin-io/issues/118)) ([1a590db](https://github.com/strapi-community/plugin-io/commit/1a590dbe661dd2f2fd9c94a96de7ec5683ed528d))
+
 
 ### Fixed
 
