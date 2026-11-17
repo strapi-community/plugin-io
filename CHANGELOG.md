@@ -1,4 +1,10 @@
-## [Unreleased]
+## [6.0.2](https://github.com/strapi-community/plugin-io/compare/6.0.1...6.0.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* **readme:** make images and links work on the Strapi marketplace ([#119](https://github.com/strapi-community/plugin-io/issues/119)) ([13cef9e](https://github.com/strapi-community/plugin-io/commit/13cef9e18bfb8a5556328dc434e4ad8df9880dcb))
+
 
 ### Fixed
 
