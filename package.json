@@ -61,7 +61,6 @@
     "test:cluster": "node scripts/cluster-acceptance.mjs"
   },
   "dependencies": {
-    "@strapi/utils": "^5.61.0",
     "socket.io": "^4.8.4",
     "socket.io-client": "^4.8.4",
     "zod": "^4.6.7"
@@ -81,6 +80,7 @@
     "@strapi/icons": "^2.3.1",
     "@strapi/sdk-plugin": "^6.1.1",
     "@strapi/strapi": "^5.62.0",
+    "@strapi/utils": "^5.62.0",
     "better-sqlite3": "^13.0.3",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
@@ -106,6 +106,7 @@
     "@strapi/design-system": "^2.2.0",
     "@strapi/icons": "^2.2.0",
     "@strapi/strapi": "^5.38.0",
+    "@strapi/utils": "^5.38.0",
     "ioredis": "^5.9.0 || ^6.0.0",
     "pg": "^8.11.0",
     "react": "^18.0.0",

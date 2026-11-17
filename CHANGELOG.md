@@ -2,6 +2,7 @@
 
 ### Fixed
 
+- `@strapi/utils` is a peer dependency (`^5.38.0`, the same floor as `@strapi/strapi`) instead of a dependency. On a host older than the dependency range (Strapi 5.38 to 5.60 with `^5.61.0`) npm installed a second copy inside the plugin, and Strapi's error middleware, which checks `instanceof` against its own copy, answered the plugin's validation errors (400) with 500. The host's `@strapi/utils` is used now, which also keeps Strapi's own dependency tree, including the `picomatch` advisory GHSA-fc5q-39xc-vjpf that has no fix yet, out of the plugin's production tree. Every Strapi 5 app already has `@strapi/utils` through `@strapi/strapi`; no action is needed.
 - The docs site showed `v5.8.2` in the navigation and `softwareVersion: "5.8.2"` in its JSON-LD for the 6.0.0 release. Both now read the version from `package.json`, and the Deploy Docs workflow rebuilds the site after every successful Release run, because the `[skip ci]` release commit starts no push workflow.
 - `llms.txt` and the "Which Strapi version is supported?" answer in the JSON-LD named Node.js 18–22; they now state Strapi 5.38 or later on Node.js 22.21+ or 24.9+ (up to 26), as `package.json` does. `llms.txt` also lists the 6.0 event names (`publish`, `unpublish`, `discardDraft`), the Postgres adapter and the current migration guide.
 - `docs/README.md` no longer lists a plugin version and stale Vue/Node.js versions; `docs/package-seo.json` drops its `version` field.
