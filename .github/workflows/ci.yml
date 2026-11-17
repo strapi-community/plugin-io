@@ -1,8 +1,9 @@
 # Checks every pull request and push to a non-main branch: lint, formatting,
 # tests (including the multi-process suites on PostgreSQL 16), type check,
-# build and package verification on the Node versions Strapi 5.61 supports,
-# then the end-to-end suites against a scaffolded
-# Strapi 5.61 app with the packed plugin (scripts/e2e-app.mjs).
+# build and package verification on the Node versions Strapi 5.62 supports,
+# then the end-to-end suites against a scaffolded Strapi 5.62 app and against
+# the @strapi/strapi peer floor (5.38) with the packed plugin
+# (scripts/e2e-app.mjs).
 name: CI
 
 on:
@@ -81,13 +82,18 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   e2e:
-    # Scaffolds a Strapi 5.61 app (SQLite, synthetic content types from
+    # Scaffolds a Strapi 5.62 app (SQLite, synthetic content types from
     # tests/e2e/app), installs the packed plugin and runs tests/e2e: the
     # Playwright admin suite and the socket/API suite. Secrets and admin
     # passwords are generated per run and never printed. The app installs
     # from tests/e2e/app/package-lock.json with lifecycle scripts off (only
     # better-sqlite3 is rebuilt). On Node 24 the app also uses this repo's npm
-    # overrides, to prove Strapi runs with them.
+    # overrides, to prove Strapi runs with them. The extra entry installs the
+    # lowest Strapi version the peer range allows (^5.38.0) without the
+    # committed lockfile, so the declared floor is tested, not only claimed.
+    # `strapi` is part of the base matrix so that the include entry, which
+    # overrides it, becomes its own combination instead of merging into the
+    # Node 22 job.
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -95,6 +101,10 @@ jobs:
       fail-fast: false
       matrix:
         node: ['22', '24']
+        strapi: ['5.62.0']
+        include:
+          - node: '22'
+            strapi: '5.38.0'
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -117,7 +127,7 @@ jobs:
       - name: Build
         run: npm run build
       - name: Scaffold the Strapi app and run tests/e2e
-        run: node scripts/e2e-app.mjs --dir "$RUNNER_TEMP/io-e2e-app" ${{ matrix.node == '24' && '--overrides' || '' }}
+        run: node scripts/e2e-app.mjs --dir "$RUNNER_TEMP/io-e2e-app" --strapi "${{ matrix.strapi }}" ${{ matrix.node == '24' && '--overrides' || '' }}
       - name: Server log tail (on failure)
         if: failure()
         run: tail -n 200 "$RUNNER_TEMP/io-e2e-app/logs/server.log" || true
