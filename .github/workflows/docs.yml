@@ -7,6 +7,13 @@ on:
     paths:
       - 'docs/**'
       - '.github/workflows/docs.yml'
+  # The site reads the plugin version from package.json (nav and JSON-LD).
+  # semantic-release bumps it in a "[skip ci]" commit pushed with the workflow
+  # token, which starts no push workflow, so rebuild after every Release run.
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -18,6 +25,8 @@ concurrency:
 
 jobs:
   build:
+    # workflow_run fires whatever the Release conclusion; publish only after a successful run.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

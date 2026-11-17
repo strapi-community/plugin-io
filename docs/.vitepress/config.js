@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitepress';
 import { buildLlmsFull } from './build-llms-full.js';
-import { generateStructuredData } from './structured-data.js';
+import { PLUGIN_VERSION as VERSION, generateStructuredData } from './structured-data.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS_ROOT = path.resolve(__dirname, '..');
@@ -10,7 +10,6 @@ const DOCS_ROOT = path.resolve(__dirname, '..');
 const SITE_URL = 'https://strapi-community.github.io/plugin-io';
 const REPO_URL = 'https://github.com/strapi-community/plugin-io';
 const NPM_URL = 'https://www.npmjs.com/package/@strapi-community/plugin-io';
-const VERSION = '5.8.2';
 const SITE_NAME = 'Strapi Plugin IO';
 const SITE_DESCRIPTION =
 	'Socket.IO plugin for Strapi v5 — real-time content events with Strapi permissions, JWT and API token auth, rooms, Redis scaling via hooks, admin presence and monitoring. Free MIT open source.';

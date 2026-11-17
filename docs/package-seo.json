@@ -1,6 +1,5 @@
 {
   "name": "@strapi-community/plugin-io",
-  "version": "6.0.0",
   "description": "Socket.IO plugin for Strapi v5 CMS: real-time content events with Strapi permissions, JWT and API token auth, admin presence and monitoring",
   "keywords": [
     "strapi",

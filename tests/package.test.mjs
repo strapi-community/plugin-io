@@ -10,7 +10,14 @@ const rootDir = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8'));
 
 test('runtime dependencies are declared, so @strapi/utils stays external (#F-08)', () => {
-  assert.ok(pkg.dependencies['@strapi/utils']);
+  // @strapi/utils comes from the host (every Strapi app has it through
+  // @strapi/strapi). As a dependency, a host older than its range got a
+  // nested copy: Strapi's error middleware checks `instanceof` against its
+  // own copy, so the plugin's ValidationError 400s became 500s.
+  assert.equal(pkg.dependencies['@strapi/utils'], undefined, '@strapi/utils is not a dependency');
+  assert.equal(pkg.peerDependencies['@strapi/utils'], pkg.peerDependencies['@strapi/strapi'], 'same floor as Strapi');
+  assert.equal(pkg.peerDependenciesMeta['@strapi/utils'], undefined, '@strapi/utils is a required peer');
+  assert.ok(pkg.devDependencies['@strapi/utils'], 'installed for the tests');
   assert.match(pkg.dependencies.zod, /^\^4\./);
   assert.equal(pkg.dependencies['date-fns'], undefined);
   assert.equal(pkg.dependencies.lodash, undefined);
@@ -31,8 +38,16 @@ test('engines and peers match Strapi 5.61', () => {
     assert.equal(pkg.peerDependenciesMeta[name]?.optional, true, `${name} is optional (comes with @strapi/admin)`);
     assert.equal(pkg.dependencies[name], undefined, `${name} is never bundled as a dependency`);
   }
-  // Every Strapi app lists these itself (create-strapi-app template), so they stay required.
-  for (const name of ['@strapi/strapi', 'react', 'react-dom', 'react-router-dom', 'styled-components']) {
+  // Every Strapi app has these (the create-strapi-app template lists them; @strapi/utils
+  // comes with @strapi/strapi), so they stay required.
+  for (const name of [
+    '@strapi/strapi',
+    '@strapi/utils',
+    'react',
+    'react-dom',
+    'react-router-dom',
+    'styled-components',
+  ]) {
     assert.ok(pkg.peerDependencies[name], `${name} is a declared peer`);
     assert.equal(pkg.peerDependenciesMeta[name], undefined, `${name} is a required peer`);
   }

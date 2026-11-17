@@ -88,9 +88,9 @@ docs/
 
 ## 🛠️ Technology Stack
 
-- **VitePress**: v1.6.4
-- **Vue**: v3.5.13
-- **Node**: 18.0.0 - 22.x
+- **VitePress** and **Vue**: the versions in `docs/package.json` and `docs/package-lock.json`
+- **Node.js**: 22 (the version the Deploy Docs workflow uses)
+- **Plugin version**: read from the root `package.json` at build time (nav and JSON-LD `softwareVersion`); never hard-code it
 
 ---
 
@@ -280,9 +280,3 @@ MIT License - Same as the plugin
 - **Issues**: [GitHub Issues](https://github.com/strapi-community/plugin-io/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/strapi-community/plugin-io/discussions)
 - **Documentation**: [strapi-community.github.io/plugin-io](https://strapi-community.github.io/plugin-io/)
-
----
-
-**Last Updated**: August 2, 2026  
-**VitePress Version**: 1.6.4  
-**Plugin Version**: 5.8.2
