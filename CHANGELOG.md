@@ -1,4 +1,10 @@
-## [Unreleased]
+## [6.0.4](https://github.com/strapi-community/plugin-io/compare/6.0.3...6.0.4) (2026-11-18)
+
+
+### Bug Fixes
+
+* **admin:** do not show an aborted monitoring request as a load error ([#124](https://github.com/strapi-community/plugin-io/issues/124)) ([3bca059](https://github.com/strapi-community/plugin-io/commit/3bca059bde17e93bddaa3af75824a1db844ea65e))
+
 
 ### Fixed
 
