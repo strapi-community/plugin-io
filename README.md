@@ -6,11 +6,12 @@
 
 > Real-time content events for Strapi 5 with Socket.IO, scoped by Strapi's own permissions.
 
-[![NPM Version](https://img.shields.io/npm/v/@strapi-community/plugin-io?style=flat-square)](https://www.npmjs.com/package/@strapi-community/plugin-io)
-[![NPM Downloads](https://img.shields.io/npm/dm/@strapi-community/plugin-io?style=flat-square)](https://www.npmjs.com/package/@strapi-community/plugin-io)
-[![License](https://img.shields.io/npm/l/@strapi-community/plugin-io?style=flat-square)](https://github.com/strapi-community/plugin-io/blob/main/LICENSE)
-[![CI](https://img.shields.io/github/actions/workflow/status/strapi-community/plugin-io/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/strapi-community/plugin-io/actions/workflows/ci.yml)
-[![Strapi Version](https://img.shields.io/badge/strapi-v5-blueviolet?style=flat-square)](https://strapi.io)
+[![npm version](https://img.shields.io/npm/v/@strapi-community/plugin-io.svg)](https://www.npmjs.com/package/@strapi-community/plugin-io)
+[![npm downloads](https://img.shields.io/npm/dm/@strapi-community/plugin-io.svg)](https://www.npmjs.com/package/@strapi-community/plugin-io)
+[![CI build status](https://img.shields.io/github/actions/workflow/status/strapi-community/plugin-io/release.yml?branch=main&label=CI&logo=github)](https://github.com/strapi-community/plugin-io/actions/workflows/release.yml?query=branch%3Amain)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/strapi-community/plugin-io/blob/main/LICENSE)
+[![Strapi 5.38+](https://img.shields.io/badge/Strapi-5.38%2B-4945FF.svg)](https://github.com/strapi-community/plugin-io#requirements)
+[![Documentation site](https://img.shields.io/badge/docs-project%20site-6d4aff.svg)](https://strapi-community.github.io/plugin-io/)
 
 The plugin attaches a Socket.IO server to Strapi's HTTP server and sends an event whenever a watched document is created, updated, published, unpublished, has its draft discarded or is deleted. Each client receives only what its role or API token may read through the REST API, sanitized with the same Content API sanitizer Strapi uses.
 
