@@ -63,7 +63,7 @@ test('the e2e app installs from its committed lockfile with lifecycle scripts of
   const lock = JSON.parse(readFileSync(new URL('../tests/e2e/app/package-lock.json', import.meta.url), 'utf8'));
   assert.equal(lock.lockfileVersion, 3);
   const pinned = /const STRAPI_VERSION = '(\d+\.\d+\.\d+)';/.exec(source)?.[1];
-  assert.equal(pinned, '5.62.0');
+  assert.equal(pinned, '5.63.0');
   assert.equal(lock.packages[''].dependencies['@strapi/strapi'], pinned);
   assert.equal(lock.packages['node_modules/@strapi/strapi'].version, pinned);
   assert.ok(lock.packages['node_modules/@strapi-community/plugin-io'], 'plugin entry');
