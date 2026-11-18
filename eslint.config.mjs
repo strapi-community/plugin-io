@@ -5,6 +5,7 @@
  * - Admin (React, browser, ESM): JSX parsing and eslint-plugin-react-hooks.
  * - Server (Node, ESM sources bundled by @strapi/sdk-plugin).
  * - Tests and tooling: Node globals.
+ * - Admin StrictMode harness (tests/admin): JSX, Node and browser (jsdom) globals, React Hooks.
  * - eslint-config-prettier last, so ESLint never fights Prettier.
  *
  * eslint-plugin-react and eslint-plugin-jsx-a11y are not used: their latest
@@ -70,6 +71,19 @@ export default defineConfig([
       ecmaVersion: 'latest',
       sourceType: 'module',
       globals: { ...globals.node },
+    },
+  },
+
+  {
+    // Admin StrictMode harness and tests: node --test with a jsdom window.
+    name: 'io/admin-strict-mode',
+    files: ['tests/admin/**/*.{mjs,jsx}'],
+    extends: [reactHooks.configs.flat.recommended],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      parserOptions: { ecmaFeatures: { jsx: true } },
+      globals: { ...globals.node, ...globals.browser },
     },
   },
 

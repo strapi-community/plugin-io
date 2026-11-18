@@ -387,11 +387,14 @@ npm run format:check  # Prettier
 npm run build         # @strapi/sdk-plugin
 npm test              # node --test
 npm run test:types    # checks types.d.ts with tsc
+npm run test:admin    # admin entry points in React StrictMode (jsdom, fake network)
 npm run test:e2e      # e2e suites against a running Strapi app (see below)
 npm run test:e2e:app  # scaffolds a Strapi 5.63 app with the packed plugin and runs the e2e suites (as CI does)
 npm run test:cluster  # 8 processes (2 pm2 daemons x 4 workers) on PostgreSQL behind a non-sticky balancer (CONTRIBUTING.md)
 npm run verify
 ```
+
+`npm run test:admin` renders every admin entry point (the Settings and Monitoring pages with the test event dialog, both homepage widgets, the Live presence side panel of the Content Manager edit view and the initializer) inside `React.StrictMode` with the providers of the Strapi admin, in jsdom with a fake network and a counting fake of `socket.io-client`. It fails on a mutation sent twice, a read repeated without aborting the first one, an interval, listener, socket or observer left after unmount, and any console error or warning. A separate CI job runs the same tests against React 19 for information only: the plugin's peer range is React 18, like the Strapi 5 admin.
 
 `npm run test:e2e` runs the admin regression suite (Settings form, unsaved-changes guard, export and import, Monitoring, homepage widgets, 390 px and dark mode, read-only RBAC) in a standalone Chromium and the socket/API suite (per-audience delivery, entity subscriptions, settings import check, #112 upgrades, `Upgrade: h2c` bodies). Point it at a Strapi app with the plugin installed: `IO_E2E_URL=http://127.0.0.1:1337 IO_E2E_EMAIL=... IO_E2E_PASSWORD=... IO_E2E_TOKEN=<full-access API token> npm run test:e2e` (optionally `IO_E2E_VIEWER_EMAIL` / `IO_E2E_VIEWER_PASSWORD` for an admin with read-only plugin permissions). Run `npx playwright install chromium` once. Without these variables the tests are skipped.
 

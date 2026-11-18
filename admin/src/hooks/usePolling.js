@@ -26,7 +26,10 @@ export function usePolling(load, intervalMs, enabled = true) {
 			setData(next);
 			setStatus('ready');
 			setRefreshError(false);
-		} catch {
+		} catch (error) {
+			// An aborted request (unmount, or React StrictMode's simulated unmount, after which the
+			// effect loads again) is not a failed load.
+			if (error?.name === 'AbortError') return;
 			if (hasData.current) setRefreshError(true);
 			else setStatus('error');
 		}

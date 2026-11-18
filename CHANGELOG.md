@@ -1,3 +1,14 @@
+## [Unreleased]
+
+### Fixed
+
+- Monitoring page and Socket.IO homepage widget: a request that was aborted (when the component unmounts, and on every mount under React `StrictMode`, which unmounts and mounts once more) no longer counts as a failed load. Before, the widget showed "Statistics could not be loaded" and the Monitoring page its error state until the next response arrived, or "Refresh failed" when data was already shown. No action is needed.
+- The "Send test event" dialog no longer logs the Radix "Missing `Description`" warning (`aria-describedby={undefined}`: the title is its only label).
+
+### Tests
+
+- `npm run test:admin`: StrictMode tests for every admin entry point (no duplicate requests, no leaked timers, listeners, sockets or observers after unmount, no console errors or warnings), also run against React 19 in an informational CI job.
+
 ## [6.0.3](https://github.com/strapi-community/plugin-io/compare/6.0.2...6.0.3) (2026-11-17)
 
 
