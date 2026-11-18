@@ -11,6 +11,7 @@ npm run format:check
 npm run build
 npm test              # set IO_TEST_PG_URL to include the PostgreSQL suites
 npm run test:types
+npm run test:admin    # admin entry points in React StrictMode (jsdom, fake network)
 npm run verify
 npm run docs:build
 npm pack --dry-run

@@ -85,7 +85,7 @@ export const TestEventModal = ({ onSent }) => {
 					{t('monitoring.test.open', 'Send test event')}
 				</Button>
 			</Modal.Trigger>
-			<Modal.Content>
+			<Modal.Content aria-describedby={undefined}>
 				<Modal.Header>
 					<Modal.Title>{t('monitoring.test.title', 'Send test event')}</Modal.Title>
 				</Modal.Header>

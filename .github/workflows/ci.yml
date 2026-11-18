@@ -1,7 +1,9 @@
 # Checks every pull request and push to a non-main branch: lint, formatting,
-# tests (including the multi-process suites on PostgreSQL 16), type check,
-# build and package verification on the Node versions Strapi 5.63 supports,
-# then the end-to-end suites against a scaffolded Strapi 5.63 app and against
+# tests (including the multi-process suites on PostgreSQL 16), the admin
+# StrictMode tests, type check, build and package verification on the Node
+# versions Strapi 5.63 supports (plus the admin StrictMode tests against
+# React 19, informational), then the end-to-end suites against a scaffolded
+# Strapi 5.63 app and against
 # the @strapi/strapi peer floor (5.38) with the packed plugin
 # (scripts/e2e-app.mjs).
 name: CI
@@ -72,6 +74,8 @@ jobs:
         run: npm test
         env:
           IO_TEST_PG_URL: postgres://io:io-ci-only@127.0.0.1:5432/io_test
+      - name: Admin StrictMode tests (React 18)
+        run: npm run test:admin
       - name: Type check (published types)
         run: npm run test:types
       - name: Verify package
@@ -80,6 +84,33 @@ jobs:
         run: npm pack --dry-run
       - name: Production audit
         run: npm audit --omit=dev --audit-level=high
+
+  react-19:
+    # Informational: the peer range is React ^18, like the Strapi 5 admin, and stays so. This job
+    # runs the admin StrictMode tests against React 19 (RFC strapi/strapi#25739) to see problems
+    # before Strapi moves; a failure here does not block a pull request.
+    name: Admin StrictMode tests on React 19 (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: Install React 19 (not saved)
+        run: npm install --no-save --legacy-peer-deps --ignore-scripts react@19 react-dom@19
+      - name: Show installed React version
+        run: node -p "'react ' + require('react/package.json').version + ', react-dom ' + require('react-dom/package.json').version"
+      - name: Admin StrictMode tests (React 19)
+        run: npm run test:admin
 
   e2e:
     # Scaffolds a Strapi 5.63 app (SQLite, synthetic content types from
