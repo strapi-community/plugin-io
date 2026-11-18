@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Scaffolds a minimal Strapi 5.62 app (SQLite, synthetic content types from
+ * Scaffolds a minimal Strapi 5.63 app (SQLite, synthetic content types from
  * tests/e2e/app), installs the packed plugin tarball, starts it and runs the
  * end-to-end suites in tests/e2e (Playwright admin suite, socket and API
  * suite). CI runs exactly this script; run it locally the same way:
@@ -45,7 +45,7 @@ import { parseArgs } from 'node:util';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const RESERVED_PORTS = new Set([1337, 1338, 1340, 1345, 1351, 1352, 1353, 1354]);
-const STRAPI_VERSION = '5.62.0';
+const STRAPI_VERSION = '5.63.0';
 
 const { values: args } = parseArgs({
   options: {

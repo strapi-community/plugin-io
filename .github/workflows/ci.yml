@@ -1,7 +1,7 @@
 # Checks every pull request and push to a non-main branch: lint, formatting,
 # tests (including the multi-process suites on PostgreSQL 16), type check,
-# build and package verification on the Node versions Strapi 5.62 supports,
-# then the end-to-end suites against a scaffolded Strapi 5.62 app and against
+# build and package verification on the Node versions Strapi 5.63 supports,
+# then the end-to-end suites against a scaffolded Strapi 5.63 app and against
 # the @strapi/strapi peer floor (5.38) with the packed plugin
 # (scripts/e2e-app.mjs).
 name: CI
@@ -82,7 +82,7 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
   e2e:
-    # Scaffolds a Strapi 5.62 app (SQLite, synthetic content types from
+    # Scaffolds a Strapi 5.63 app (SQLite, synthetic content types from
     # tests/e2e/app), installs the packed plugin and runs tests/e2e: the
     # Playwright admin suite and the socket/API suite. Secrets and admin
     # passwords are generated per run and never printed. The app installs
@@ -101,7 +101,7 @@ jobs:
       fail-fast: false
       matrix:
         node: ['22', '24']
-        strapi: ['5.62.0']
+        strapi: ['5.63.0']
         include:
           - node: '22'
             strapi: '5.38.0'

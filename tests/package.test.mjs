@@ -23,7 +23,7 @@ test('runtime dependencies are declared, so @strapi/utils stays external (#F-08)
   assert.equal(pkg.dependencies.lodash, undefined);
 });
 
-test('engines and peers match Strapi 5.62', () => {
+test('engines and peers match Strapi 5.63', () => {
   assert.equal(pkg.engines.node, '^22.21.0 || >=24.9.0 <=26.x.x');
   assert.equal(pkg.peerDependencies['@strapi/design-system'], '^2.2.0');
   assert.equal(pkg.peerDependencies['@strapi/icons'], '^2.2.0');
