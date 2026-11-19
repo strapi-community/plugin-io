@@ -1479,7 +1479,7 @@ export async function main(argv) {
     setOutputs({
       'allow-licenses': [...ALLOWED_LICENSES, ...DEV_ONLY_LICENSES].join(', '),
       'allow-dependencies-licenses': LICENSE_EXCEPTIONS.map(
-        (name) => `pkg:npm/${name.replace('@', '%40')}`
+        (name) => `pkg:npm/${name.startsWith('@') ? `%40${name.slice(1)}` : name}`
       ).join(', '),
     });
     return 0;
