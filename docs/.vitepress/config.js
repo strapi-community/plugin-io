@@ -12,7 +12,7 @@ const REPO_URL = 'https://github.com/strapi-community/plugin-io';
 const NPM_URL = 'https://www.npmjs.com/package/@strapi-community/plugin-io';
 const SITE_NAME = 'Strapi Plugin IO';
 const SITE_DESCRIPTION =
-	'Socket.IO plugin for Strapi v5 — real-time content events with Strapi permissions, JWT and API token auth, rooms, Redis scaling via hooks, admin presence and monitoring. Free MIT open source.';
+	'Socket.IO plugin for Strapi 5: real-time content events filtered by Strapi permissions, JWT and API token auth, rooms, scaling and admin presence. MIT.';
 
 export default defineConfig({
 	title: SITE_NAME,
@@ -208,7 +208,7 @@ export default defineConfig({
 
 		footer: {
 			message:
-				'Released under the MIT License. Updated and made better by <a href="https://github.com/Schero94" target="_blank">@Schero94</a> · <a href="https://strapi-community.github.io/plugin-io/llms.txt">llms.txt</a>',
+				'Released under the MIT License. Updated and made better by <a href="https://github.com/Schero94" target="_blank">@Schero94</a> · <a href="https://strapi-community.github.io/plugin-io/llms.txt">llms.txt</a> · <a href="https://schero94.github.io/plugins/plugin-io/">Plugin hub overview</a>',
 			copyright: 'Copyright © 2023-present ComfortablyCoding & hrdunn | Maintained by strapi-community',
 		},
 
@@ -246,5 +246,8 @@ export default defineConfig({
 
 	markdown: {
 		lineNumbers: true,
+		// The default github-light and github-dark comment colours miss WCAG AA on the
+		// code block background; these two themes keep comments at 4.5:1 or more.
+		theme: { light: 'github-light-high-contrast', dark: 'github-dark-default' },
 	},
 });

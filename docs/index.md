@@ -37,6 +37,21 @@ features:
     details: See which admins have the same entry open in the Content Manager. No emails, Content Manager read permission required.
 ---
 
+**Strapi Plugin IO** (`@strapi-community/plugin-io`) is a free, MIT-licensed Strapi 5 plugin that runs a Socket.IO server inside Strapi and sends content events only to the roles and API tokens that may read that content.
+
+## Is it the right fit?
+
+Use it when:
+
+- Browsers or apps should hear about created, updated, published or deleted entries without polling.
+- Each client may only receive what its role or API token can `find` through the Content API.
+- You want connection settings, monitoring and admin presence inside the Strapi admin.
+
+Skip it when:
+
+- You only need server-to-server notifications: Strapi's own webhooks cover that without a WebSocket server.
+- Your project runs Strapi 4, or Strapi 5 older than 5.38.
+
 ## Quick start
 
 ```bash
@@ -68,18 +83,18 @@ layout of Strapi's own settings pages: Save in the header, an unsaved-changes
 guard, inline validation, confirmation dialogs and RBAC-aware actions, in
 light and dark mode and five languages.
 
-![Settings > Socket.IO > Settings](/settings.png)
+<img src="/settings.png" alt="Settings > Socket.IO > Settings" width="1440" height="900" loading="lazy" decoding="async" />
 
-![Monitoring in dark mode](/monitoring-dark.png)
+<img src="/monitoring-dark.png" alt="Monitoring in dark mode" width="1440" height="993" loading="lazy" decoding="async" />
 
-![Monitoring at 390 px width](/monitoring-mobile.png)
+<img src="/monitoring-mobile.png" alt="Monitoring at 390 px width" width="390" height="844" loading="lazy" decoding="async" />
 
 The homepage gets two widgets through Strapi's Widget API, and the Content
 Manager edit view shows who else is editing.
 
-![Socket.IO homepage widget](/widget.png)
+<img src="/widget.png" alt="Socket.IO homepage widget" width="626" height="350" loading="lazy" decoding="async" />
 
-![Live presence panel in the edit view](/presence.png)
+<img src="/presence.png" alt="Live presence panel in the edit view" width="1440" height="900" loading="lazy" decoding="async" />
 
 Screenshots come from a local test host with synthetic data.
 
@@ -105,11 +120,26 @@ Screenshots come from a local test host with synthetic data.
 - Node.js 22.21+ or 24.9+ (up to 26)
 - Socket.IO 4.8 clients (`socket.io-client`)
 
+## FAQ
+
+### What is @strapi-community/plugin-io?
+
+A free MIT-licensed Socket.IO plugin for Strapi v5 that adds real-time WebSocket events, auth strategies, rooms, Redis scaling, and admin presence on top of Strapi.
+
+### Does plugin-io break strapi transfer?
+
+Older Engine.IO defaults could kill `/admin/transfer` WebSocket upgrades behind reverse proxies. Current versions default `destroyUpgrade` to `false` so Strapi Data Transfer coexists with Socket.IO on the same HTTP server.
+
+### Which Strapi version is supported?
+
+Strapi 5.38 or later on Node.js 22.21+ or 24.9+ (up to 26). Install via npm as `@strapi-community/plugin-io`.
+
 ## Community
 
 - [Report an issue](https://github.com/strapi-community/plugin-io/issues)
 - [Source on GitHub](https://github.com/strapi-community/plugin-io)
 - [Related plugins](/ecosystem)
+- [Overview on the Schero94 plugin hub](https://schero94.github.io/plugins/plugin-io/)
 
 ---
 
