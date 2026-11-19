@@ -1,0 +1,33 @@
+[
+  {
+    "change_type": "added",
+    "name": "tiny-lib",
+    "version": "1.3.0",
+    "license": "MIT",
+    "scope": "runtime",
+    "vulnerabilities": [
+      {
+        "severity": "moderate",
+        "advisory_ghsa_id": "GHSA-0000-0000-0002",
+        "advisory_summary": "Moderate severity example",
+        "advisory_url": "https://github.com/advisories/GHSA-0000-0000-0002"
+      }
+    ]
+  },
+  {
+    "change_type": "added",
+    "name": "copyleft-lib",
+    "version": "2.0.0",
+    "license": "GPL-3.0-only",
+    "scope": "development",
+    "vulnerabilities": []
+  },
+  {
+    "change_type": "added",
+    "name": "mpl-runtime",
+    "version": "1.0.0",
+    "license": "MPL-2.0",
+    "scope": "runtime",
+    "vulnerabilities": []
+  }
+]

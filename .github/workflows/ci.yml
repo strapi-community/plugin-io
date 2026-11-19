@@ -74,6 +74,8 @@ jobs:
         run: npm test
         env:
           IO_TEST_PG_URL: postgres://io:io-ci-only@127.0.0.1:5432/io_test
+      - name: Dependency gate unit tests
+        run: node --test .github/scripts/dependency-gate.test.mjs
       - name: Admin StrictMode tests (React 18)
         run: npm run test:admin
       - name: Type check (published types)

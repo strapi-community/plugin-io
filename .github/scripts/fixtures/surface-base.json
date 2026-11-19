@@ -1,0 +1,55 @@
+{
+  "files": [
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md",
+    "dist/_chunks/App-[hash].mjs",
+    "dist/admin/index.js",
+    "dist/admin/index.mjs",
+    "dist/server/index.js",
+    "dist/server/index.mjs",
+    "package.json",
+    "strapi-admin.js",
+    "strapi-server.js"
+  ],
+  "package": {
+    "main": null,
+    "module": null,
+    "types": null,
+    "type": "commonjs",
+    "bin": null,
+    "exports": {
+      "./strapi-server": {
+        "require": "./dist/server/index.js",
+        "import": "./dist/server/index.mjs"
+      }
+    },
+    "files": ["dist", "strapi-admin.js", "strapi-server.js"]
+  },
+  "peerDependencies": {
+    "@strapi/strapi": "^5.50.0",
+    "react": "^18.0.0"
+  },
+  "engines": {
+    "node": "^22.22.2 || >=24.15.0"
+  },
+  "entries": {
+    "./dist/server/index.js": [],
+    "./dist/server/index.mjs": ["default"]
+  },
+  "shapes": {
+    "./dist/server/index.js": {
+      "bootstrap": "function",
+      "controllers": {
+        "settings": "function"
+      },
+      "register": "function",
+      "routes": {
+        "admin": {
+          "routes": "array",
+          "type": "string"
+        }
+      }
+    }
+  }
+}
