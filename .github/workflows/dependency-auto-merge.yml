@@ -1,6 +1,14 @@
-# Verifies every Dependabot PR and merges it automatically when it is safe:
-# - patch/minor updates: merged after lint, format, build, tests, type check and verify pass;
-# - major updates: never merged automatically; the PR is labelled and left for review.
+# Dependency auto-merge, version 2. Runs only for pull requests that Dependabot opened and
+# updated (author and actor dependabot[bot]); for every other pull request all jobs are skipped.
+#
+# - verify:  this repository's own checks on the Dependabot branch.
+# - surface: builds merge base and head and records the published surface (read-only token).
+# - gate:    .github/scripts/dependency-gate.mjs from the default branch decides merge, hold or
+#            major from data only (lockfiles, package.json, surface reports, dependency review,
+#            npm audit signatures). It never runs code from the pull request.
+# - merge:   patch/minor updates with a "merge" decision wait until every other check on the
+#            head commit is green, then are squash-merged with --match-head-commit. Holds get the
+#            `needs-review` label and a comment with the reasons; majors get `major-update`.
 # Merges made with GITHUB_TOKEN do not trigger release.yml, so no npm release is published
 # automatically. Updates ship with the next regular release.
 name: Dependency auto-merge
@@ -16,9 +24,14 @@ concurrency:
   group: dependency-auto-merge-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+env:
+  # Extra flags for npm ci in the surface and gate jobs (same install as the verify job).
+  NPM_CI_FLAGS: ''
+
 jobs:
+  # This repository's own checks, unchanged from version 1.
   verify:
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -48,30 +61,243 @@ jobs:
       - name: Production audit
         run: npm audit --omit=dev --audit-level=high
 
-  auto-merge:
-    needs: verify
-    if: github.event.pull_request.user.login == 'dependabot[bot]'
+  # Builds the merge base and the head and records what the package publishes. This job runs
+  # code from the pull request (install without lifecycle scripts, then the build), so it gets
+  # the read-only token only and its report is treated as data by the gate job.
+  surface:
+    name: Published surface (${{ matrix.side }})
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        side: [base, head]
+    steps:
+      - name: Checkout gate script (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Checkout pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Switch to the merge base
+        if: matrix.side == 'base'
+        working-directory: pr
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git checkout --detach "$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Install (no lifecycle scripts)
+        working-directory: pr
+        run: |
+          read -ra flags <<< "$NPM_CI_FLAGS"
+          npm ci --ignore-scripts "${flags[@]}"
+      - name: Build
+        working-directory: pr
+        run: npm run build
+      - name: Record the published surface
+        env:
+          SIDE: ${{ matrix.side }}
+        run: node trusted/.github/scripts/dependency-gate.mjs surface --dir pr --out "surface-$SIDE.json"
+      - name: Upload the surface report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: surface-${{ matrix.side }}
+          path: surface-${{ matrix.side }}.json
+          if-no-files-found: error
+          retention-days: 3
+
+  # Trusted decision. Runs the gate script from the default branch on data only: lockfiles and
+  # package.json files of merge base and head, the surface reports, the dependency-graph
+  # comparison, actions/dependency-review-action and `npm audit signatures`. No code from the
+  # pull request runs here (the install skips lifecycle scripts).
+  gate:
+    name: Dependency gate
+    needs: surface
+    if: ${{ !cancelled() && github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      decision: ${{ steps.decide.outputs.decision }}
+      reasons: ${{ steps.decide.outputs.reasons }}
+      notes: ${{ steps.decide.outputs.notes }}
+    steps:
+      - name: Checkout gate script (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Checkout pull request
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: pr
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Gate self-test
+        run: node --test trusted/.github/scripts/dependency-gate.test.mjs
+      - name: Read the merge base
+        id: base
+        working-directory: pr
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          merge_base="$(git merge-base "$BASE_SHA" "$HEAD_SHA")"
+          echo "sha=$merge_base" >> "$GITHUB_OUTPUT"
+          mkdir -p ../gate-input
+          git show "$merge_base:package.json" > ../gate-input/base-package.json
+          git show "$merge_base:package-lock.json" > ../gate-input/base-lock.json
+      - name: Install head (no lifecycle scripts)
+        working-directory: pr
+        run: |
+          read -ra flags <<< "$NPM_CI_FLAGS"
+          npm ci --ignore-scripts "${flags[@]}"
+      - name: Registry signatures and provenance attestations
+        id: signatures
+        working-directory: pr
+        run: |
+          set +e
+          npm audit signatures
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+      - name: License policy
+        id: policy
+        run: node trusted/.github/scripts/dependency-gate.mjs policy
+      - name: Dependency review
+        id: review
+        continue-on-error: true
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          base-ref: ${{ steps.base.outputs.sha }}
+          head-ref: ${{ github.event.pull_request.head.sha }}
+          fail-on-severity: moderate
+          fail-on-scopes: runtime, development, unknown
+          allow-licenses: ${{ steps.policy.outputs.allow-licenses }}
+          allow-dependencies-licenses: ${{ steps.policy.outputs.allow-dependencies-licenses }}
+          comment-summary-in-pr: never
+          show-openssf-scorecard: false
+      - name: Dependency-graph comparison
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ steps.base.outputs.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: >-
+          node trusted/.github/scripts/dependency-gate.mjs review-changes --repo "$REPO"
+          --base "$BASE" --head "$HEAD" --out gate-input/review-changes.json
+      - name: Download the surface reports
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: surface-*
+          path: gate-input
+          merge-multiple: true
+      - name: Decide
+        id: decide
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          REVIEW_OUTCOME: ${{ steps.review.outcome }}
+          SIGNATURES_EXIT: ${{ steps.signatures.outputs.exit }}
+        run: |
+          printf '%s' "$PR_BODY" > gate-input/pr-body.txt
+          node trusted/.github/scripts/dependency-gate.mjs decide \
+            --base-lock gate-input/base-lock.json --head-lock pr/package-lock.json \
+            --base-pkg gate-input/base-package.json --head-pkg pr/package.json \
+            --base-surface gate-input/surface-base.json --head-surface gate-input/surface-head.json \
+            --review-changes gate-input/review-changes.json --review-outcome "$REVIEW_OUTCOME" \
+            --signatures-exit "$SIGNATURES_EXIT" --pr-body gate-input/pr-body.txt \
+            --out gate-input/decision.json
+
+  # Acts on the decision. Holds and majors are labelled and commented. A patch or minor update
+  # with a "merge" decision waits until every other workflow run, check run and commit status
+  # on the head commit is green (all CI jobs and matrix entries, CodeQL where present), then
+  # squash-merges exactly that commit. This job checks out no code from the pull request.
+  merge:
+    name: Merge or hold
+    needs: [verify, gate]
+    if: ${{ !cancelled() && github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
+      actions: read
+      checks: read
       contents: write
       pull-requests: write
+      statuses: read
     steps:
       - name: Read update metadata
         id: meta
         uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Merge patch and minor updates
-        if: steps.meta.outputs.update-type != 'version-update:semver-major'
-        run: gh pr merge "$PR_URL" --squash --delete-branch
+      - name: Checkout gate script (default branch)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: trusted
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - name: Route
+        id: route
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          VERIFY_RESULT: ${{ needs.verify.result }}
+          GATE_RESULT: ${{ needs.gate.result }}
+          GATE_DECISION: ${{ needs.gate.outputs.decision }}
+          GATE_REASONS: ${{ needs.gate.outputs.reasons }}
+          GATE_NOTES: ${{ needs.gate.outputs.notes }}
+        run: node trusted/.github/scripts/dependency-gate.mjs route --comment hold-comment.md
+      - name: Wait for the full CI on the head commit
+        id: ci
+        if: steps.route.outputs.action == 'merge'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_ID: ${{ github.run_id }}
+        run: >-
+          node trusted/.github/scripts/dependency-gate.mjs wait-ci --repo "$REPO" --sha "$HEAD_SHA"
+          --run-id "$RUN_ID" --timeout-minutes 75 --comment ci-comment.md
+      - name: Merge exactly the verified commit
+        if: steps.route.outputs.action == 'merge' && steps.ci.outputs.state == 'success'
+        run: gh pr merge "$PR_URL" --squash --delete-branch --match-head-commit "$HEAD_SHA"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Hold for review
+        if: steps.route.outputs.action == 'hold' || (steps.route.outputs.action == 'merge' && steps.ci.outputs.state != 'success')
+        run: |
+          body=hold-comment.md
+          if [ -f ci-comment.md ]; then body=ci-comment.md; fi
+          gh pr edit "$PR_URL" --add-label "needs-review" || true
+          gh pr comment "$PR_URL" --body-file "$body"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Flag major updates for review
-        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        if: steps.route.outputs.action == 'major'
         run: |
           gh pr edit "$PR_URL" --add-label "major-update" || true
-          gh pr comment "$PR_URL" --body "Major update: all checks passed, but this PR is not merged automatically. Review the changelog of ${DEPS} for breaking changes before merging."
+          gh pr comment "$PR_URL" --body "Major update: this PR is not merged automatically. Review the changelog of ${DEPS} for breaking changes before merging."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           DEPS: ${{ steps.meta.outputs.dependency-names }}

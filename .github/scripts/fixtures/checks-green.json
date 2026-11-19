@@ -1,0 +1,101 @@
+{
+  "ownWorkflowId": 1,
+  "runs": [
+    {
+      "id": 100,
+      "workflow_id": 1,
+      "name": "Dependency auto-merge",
+      "event": "pull_request",
+      "status": "in_progress",
+      "conclusion": null,
+      "run_number": 100,
+      "run_attempt": 1,
+      "check_suite_id": 1000
+    },
+    {
+      "id": 101,
+      "workflow_id": 2,
+      "name": "CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 101,
+      "run_attempt": 1,
+      "check_suite_id": 1010
+    },
+    {
+      "id": 102,
+      "workflow_id": 3,
+      "name": "CodeQL",
+      "event": "dynamic",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 102,
+      "run_attempt": 1,
+      "check_suite_id": 1020
+    }
+  ],
+  "checkRuns": [
+    {
+      "name": "merge",
+      "status": "in_progress",
+      "conclusion": null,
+      "check_suite": {
+        "id": 1000
+      }
+    },
+    {
+      "name": "verify (22)",
+      "status": "completed",
+      "conclusion": "success",
+      "check_suite": {
+        "id": 1010
+      }
+    },
+    {
+      "name": "verify (24)",
+      "status": "completed",
+      "conclusion": "success",
+      "check_suite": {
+        "id": 1010
+      }
+    },
+    {
+      "name": "peer-floor",
+      "status": "completed",
+      "conclusion": "success",
+      "check_suite": {
+        "id": 1010
+      }
+    },
+    {
+      "name": "react-19",
+      "status": "completed",
+      "conclusion": "skipped",
+      "check_suite": {
+        "id": 1010
+      }
+    },
+    {
+      "name": "Analyze (javascript)",
+      "status": "completed",
+      "conclusion": "success",
+      "check_suite": {
+        "id": 1020
+      }
+    },
+    {
+      "name": "CodeQL",
+      "status": "completed",
+      "conclusion": "neutral",
+      "check_suite": {
+        "id": 9999
+      }
+    }
+  ],
+  "status": {
+    "state": "pending",
+    "total_count": 0,
+    "statuses": []
+  }
+}

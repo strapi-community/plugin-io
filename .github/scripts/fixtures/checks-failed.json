@@ -1,0 +1,50 @@
+{
+  "ownWorkflowId": 1,
+  "runs": [
+    {
+      "id": 100,
+      "workflow_id": 1,
+      "name": "Dependency auto-merge",
+      "event": "pull_request",
+      "status": "in_progress",
+      "conclusion": null,
+      "run_number": 100,
+      "run_attempt": 1,
+      "check_suite_id": 1000
+    },
+    {
+      "id": 101,
+      "workflow_id": 2,
+      "name": "CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "failure",
+      "run_number": 101,
+      "run_attempt": 1,
+      "check_suite_id": 1010
+    }
+  ],
+  "checkRuns": [
+    {
+      "name": "verify (22)",
+      "status": "completed",
+      "conclusion": "success",
+      "check_suite": {
+        "id": 1010
+      }
+    },
+    {
+      "name": "Admin StrictMode tests on React 19",
+      "status": "completed",
+      "conclusion": "failure",
+      "check_suite": {
+        "id": 1010
+      }
+    }
+  ],
+  "status": {
+    "state": "pending",
+    "total_count": 0,
+    "statuses": []
+  }
+}

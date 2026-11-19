@@ -1,0 +1,85 @@
+{
+  "ownWorkflowId": 1,
+  "runs": [
+    {
+      "id": 90,
+      "workflow_id": 1,
+      "name": "Dependency auto-merge",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "run_number": 90,
+      "run_attempt": 1,
+      "check_suite_id": 900
+    },
+    {
+      "id": 100,
+      "workflow_id": 1,
+      "name": "Dependency auto-merge",
+      "event": "pull_request",
+      "status": "in_progress",
+      "conclusion": null,
+      "run_number": 100,
+      "run_attempt": 1,
+      "check_suite_id": 1000
+    },
+    {
+      "id": 91,
+      "workflow_id": 2,
+      "name": "CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "run_number": 5,
+      "run_attempt": 1,
+      "check_suite_id": 910
+    },
+    {
+      "id": 101,
+      "workflow_id": 2,
+      "name": "CI",
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "run_number": 6,
+      "run_attempt": 1,
+      "check_suite_id": 1010
+    }
+  ],
+  "checkRuns": [
+    {
+      "name": "merge",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "check_suite": {
+        "id": 900
+      }
+    },
+    {
+      "name": "verify (22)",
+      "status": "completed",
+      "conclusion": "cancelled",
+      "check_suite": {
+        "id": 910
+      }
+    },
+    {
+      "name": "verify (22)",
+      "status": "completed",
+      "conclusion": "success",
+      "check_suite": {
+        "id": 1010
+      }
+    }
+  ],
+  "status": {
+    "state": "success",
+    "total_count": 1,
+    "statuses": [
+      {
+        "context": "external/ci",
+        "state": "success"
+      }
+    ]
+  }
+}
