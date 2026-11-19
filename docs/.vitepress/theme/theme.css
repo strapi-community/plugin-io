@@ -1,8 +1,24 @@
-/* .vitepress/theme/custom.css */
+/* Brand colours for the default VitePress theme (VitePress 1.x variable names).
+   --vp-c-brand-1 is used for link text, so it keeps 4.5:1 on the page background. */
 :root {
-  --vp-c-brand: #514efe;
-  --vp-c-brand-light: #625fff;
-  --vp-c-brand-lighter: #7e7cfc;
-  --vp-c-brand-dark: #5553fc;
-  --vp-c-brand-darker: #312f91;
+  --vp-c-brand-1: #4338e8;
+  --vp-c-brand-2: #5249ff;
+  --vp-c-brand-3: #4945ff;
+  --vp-c-brand-soft: rgba(73, 69, 255, 0.14);
+  /* Language label and line numbers on code blocks: AA contrast instead of text-3. */
+  --vp-code-lang-color: var(--vp-c-text-2);
+  --vp-code-line-number-color: var(--vp-c-text-2);
+}
+
+.dark {
+  --vp-c-brand-1: #9b98ff;
+  --vp-c-brand-2: #8481ff;
+  --vp-c-brand-3: #4945ff;
+  --vp-c-brand-soft: rgba(132, 129, 255, 0.16);
+}
+
+/* The hidden "..." flyout menu in the nav sits 3 px past the right edge at tablet
+   widths and makes the page scroll sideways; clip does not create a scroll container. */
+body {
+  overflow-x: clip;
 }

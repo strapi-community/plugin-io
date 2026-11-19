@@ -42,7 +42,9 @@ const SOFTWARE = {
 	name: 'Strapi Plugin IO',
 	alternateName: ['@strapi-community/plugin-io', 'strapi-plugin-io'],
 	applicationCategory: 'DeveloperApplication',
-	operatingSystem: 'Node.js',
+	operatingSystem: 'Node.js 22+ / Strapi 5',
+	softwareRequirements: 'Strapi ^5.38.0, Node.js ^22.21.0 || >=24.9.0 <=26.x.x',
+	isAccessibleForFree: true,
 	description:
 		'Production-ready Socket.IO plugin for Strapi v5 with JWT and API token auth strategies, automatic content-type events, rooms, Redis adapter, presence, and admin monitoring.',
 	url: `${SITE_URL}/`,
@@ -187,7 +189,7 @@ export function generateStructuredData({
 			description: 'Install and enable @strapi-community/plugin-io in a Strapi v5 project.',
 			totalTime: 'PT10M',
 			tool: [
-				{ '@type': 'HowToTool', name: 'Node.js 18+' },
+				{ '@type': 'HowToTool', name: 'Node.js 22.21+ or 24.9+' },
 				{ '@type': 'HowToTool', name: 'Strapi v5' },
 			],
 			step: [
