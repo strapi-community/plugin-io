@@ -1,0 +1,57 @@
+{
+  "total_count": 6,
+  "jobs": [
+    {
+      "id": 101,
+      "name": "Detect versions",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/example/plugin/actions/runs/1/job/101",
+      "steps": []
+    },
+    {
+      "id": 102,
+      "name": "Verify on Node 22.23.5",
+      "status": "completed",
+      "conclusion": "success",
+      "html_url": "https://github.com/example/plugin/actions/runs/1/job/102",
+      "steps": []
+    },
+    {
+      "id": 103,
+      "name": "Verify on Node 26.13.1",
+      "status": "completed",
+      "conclusion": "failure",
+      "html_url": "https://github.com/example/plugin/actions/runs/1/job/103",
+      "steps": [
+        { "name": "Set up job", "conclusion": "success" },
+        { "name": "Tests", "conclusion": "failure" },
+        { "name": "Build", "conclusion": "skipped" }
+      ]
+    },
+    {
+      "id": 104,
+      "name": "Strapi boot on Node 24.22.3",
+      "status": "completed",
+      "conclusion": "timed_out",
+      "html_url": "https://github.com/example/plugin/actions/runs/1/job/104",
+      "steps": []
+    },
+    {
+      "id": 105,
+      "name": "Strapi boot on Node 26.13.1",
+      "status": "completed",
+      "conclusion": "skipped",
+      "html_url": "https://github.com/example/plugin/actions/runs/1/job/105",
+      "steps": []
+    },
+    {
+      "id": 106,
+      "name": "Report",
+      "status": "in_progress",
+      "conclusion": null,
+      "html_url": "https://github.com/example/plugin/actions/runs/1/job/106",
+      "steps": []
+    }
+  ]
+}

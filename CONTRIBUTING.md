@@ -64,6 +64,10 @@ Dependabot proposes updates weekly, after a cooldown (7 days, 14 for majors). `.
 
 The gate script runs from the default branch and reads lockfiles and reports as data; it never runs code from the pull request. Only the surface job installs (without lifecycle scripts) and builds the pull request, with a read-only token. Merges made with `GITHUB_TOKEN` do not start `release.yml`, so a dependency update ships with the next regular release.
 
+## Compatibility canary
+
+`.github/workflows/canary.yml` tests the plugin every Monday against the newest Strapi 5.x and the current Node.js lines and reports through one `compat` issue; the README section "Compatibility canary" describes what it runs. To check a coming version by hand, run the workflow from the Actions tab with `strapi` (and `node`) set and `dry-run` on. When you change `.github/scripts/compat-canary.mjs`, change it in every plugin repository and the workbench (it is byte-identical) and run `node --test .github/scripts/compat-canary.test.mjs`.
+
 ## Admin UI conventions
 
 The admin follows native Strapi screens 1:1 with the Strapi Design System 2. On/off settings use the native boolean input of Settings > Users & Permissions > Advanced settings (`Field` with a `Toggle` labelled TRUE/FALSE, one per grid row); permission grants in tables use a `Checkbox` per row, like the native role permission matrices. `tests/admin-source-contract.test.mjs` enforces these patterns, and every text exists in all five admin languages (`tests/admin-i18n.test.mjs`).

@@ -1,0 +1,62 @@
+[
+  {
+    "version": "v27.0.0-alpha.0.2.0",
+    "date": "2026-11-25",
+    "lts": false,
+    "security": false
+  },
+  {
+    "version": "v26.13.1",
+    "date": "2026-11-10",
+    "lts": "Lithium",
+    "security": true
+  },
+  {
+    "version": "v26.13.0",
+    "date": "2026-10-28",
+    "lts": "Lithium",
+    "security": false
+  },
+  {
+    "version": "v25.9.0",
+    "date": "2026-03-31",
+    "lts": false,
+    "security": false
+  },
+  {
+    "version": "v24.22.3",
+    "date": "2026-11-10",
+    "lts": "Krypton",
+    "security": true
+  },
+  {
+    "version": "v24.22.2",
+    "date": "2026-10-27",
+    "lts": "Krypton",
+    "security": false
+  },
+  {
+    "version": "v23.11.1",
+    "date": "2025-05-14",
+    "lts": false,
+    "security": true
+  },
+  {
+    "version": "v22.23.5",
+    "date": "2026-11-11",
+    "lts": "Jod",
+    "security": true
+  },
+  {
+    "version": "v22.23.4",
+    "date": "2026-10-20",
+    "lts": "Jod",
+    "security": true
+  },
+  {
+    "version": "v20.20.2",
+    "date": "2026-03-24",
+    "lts": "Iron",
+    "security": true
+  }
+]
