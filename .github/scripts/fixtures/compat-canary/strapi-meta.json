@@ -1,0 +1,12 @@
+{
+  "name": "@strapi/strapi",
+  "modified": "2026-11-20T10:00:00.000Z",
+  "dist-tags": { "latest": "5.64.0", "beta": "5.17.0-beta.0", "legacy": "4.26.2" },
+  "versions": {
+    "4.26.2": {},
+    "5.24.0": { "deprecated": "Please revert to 5.23.6, this version has a build issue." },
+    "5.63.0": {},
+    "5.64.0": {},
+    "5.65.0-beta.1": {}
+  }
+}

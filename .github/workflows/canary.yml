@@ -1,0 +1,198 @@
+# Compatibility canary. Every Monday (and on manual runs) this workflow tests the plugin against
+# the newest Strapi 5.x release and the current Node.js release lines: the newest release, the
+# newest LTS and every LTS line inside engines.node. It runs the same scripts as ci.yml
+# (build, tests with PostgreSQL, admin tests, type check, verify) and the e2e job (a scaffolded
+# Strapi app with the packed plugin, Playwright and socket suites) on the Strapi under test.
+# The report job opens, updates or closes one `compat` issue and records the tested versions
+# (.github/scripts/compat-canary.mjs). Pull requests that change the canary run it as a dry run:
+# the plan is printed, nothing is written.
+name: Compatibility canary
+
+on:
+  schedule:
+    # Mondays 04:17 UTC, off the full hour (scheduled runs can be delayed at busy times).
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      strapi:
+        description: Strapi version instead of the newest 5.x (for example 5.65.0)
+        required: false
+        default: ''
+      node:
+        description: Node.js versions or majors instead of the detected ones (comma-separated)
+        required: false
+        default: ''
+      dry-run:
+        description: Print the issue and pull request plan instead of writing them
+        type: boolean
+        default: false
+      simulate-last-pass:
+        description: 'Dry runs only: pretend the last passing run tested this Strapi version'
+        required: false
+        default: ''
+  pull_request:
+    paths:
+      - .github/workflows/canary.yml
+      - .github/scripts/compat-canary.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detect:
+    name: Detect versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      strapi: ${{ steps.detect.outputs.strapi }}
+      packages: ${{ steps.detect.outputs.packages }}
+      nodes: ${{ steps.detect.outputs.nodes }}
+      current: ${{ steps.detect.outputs.current }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js lts/*
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Newest Strapi 5.x and Node.js versions
+        id: detect
+        env:
+          CANARY_FORCE_STRAPI: ${{ inputs.strapi }}
+          CANARY_FORCE_NODE: ${{ inputs.node }}
+        run: node .github/scripts/compat-canary.mjs detect
+
+  verify:
+    name: Verify on Node ${{ matrix.node }}
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(needs.detect.outputs.nodes) }}
+    # PostgreSQL for the multi-process suites, as in ci.yml.
+    services:
+      postgres:
+        image: postgres:16.15-alpine@sha256:aa6cb33cf4c19c765cefcf48d96176258800870a9a1e930ad126200f9d825139
+        env:
+          POSTGRES_USER: io
+          POSTGRES_PASSWORD: io-ci-only
+          POSTGRES_DB: io_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U io -d io_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      STRAPI_VERSION: ${{ needs.detect.outputs.strapi }}
+      STRAPI_PACKAGES: ${{ needs.detect.outputs.packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Install dependencies
+        run: |
+          npm ci --ignore-scripts
+          # Only the native SQLite binding runs its install script (store tests on SQLite).
+          npm rebuild better-sqlite3
+      - name: Install Strapi ${{ needs.detect.outputs.strapi }} (not saved)
+        run: |
+          read -ra packages <<< "$STRAPI_PACKAGES"
+          npm install --no-save --ignore-scripts --no-audit --no-fund "${packages[@]}"
+          node .github/scripts/compat-canary.mjs assert "$STRAPI_VERSION"
+      - name: Raise version guards to the Strapi under test
+        run: node .github/scripts/compat-canary.mjs guards "$STRAPI_VERSION"
+      - name: Build
+        run: npm run build
+      - name: Tests
+        env:
+          IO_TEST_PG_URL: postgres://io:io-ci-only@127.0.0.1:5432/io_test
+        run: npm test
+      - name: Admin StrictMode tests
+        run: npm run test:admin
+      - name: Type check (published types)
+        run: npm run test:types
+      - name: Verify package
+        run: npm run verify
+
+  boot:
+    name: Strapi app e2e on Node ${{ matrix.node }}
+    needs: detect
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(needs.detect.outputs.nodes) }}
+    env:
+      STRAPI_VERSION: ${{ needs.detect.outputs.strapi }}
+      STRAPI_PACKAGES: ${{ needs.detect.outputs.packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Install dependencies (no lifecycle scripts)
+        run: npm ci --ignore-scripts
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+      - name: Build
+        run: npm run build
+      - name: Scaffold a Strapi ${{ needs.detect.outputs.strapi }} app and run tests/e2e
+        run: node scripts/e2e-app.mjs --dir "$RUNNER_TEMP/io-e2e-app" --strapi "$STRAPI_VERSION"
+      - name: Server log tail (on failure)
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/io-e2e-app/logs/server.log" || true
+
+  report:
+    name: Report
+    needs: [detect, verify, boot]
+    if: ${{ always() && !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Node.js lts/*
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: lts/*
+          # No dependency cache: a weekly run on new versions should not reuse old installs.
+          package-manager-cache: false
+      - name: Open, update or close the compat issue
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CANARY_CURRENT: ${{ needs.detect.outputs.current }}
+          CANARY_DRY_RUN: ${{ github.event_name == 'pull_request' || inputs.dry-run }}
+          CANARY_SIMULATE_LAST_PASS: ${{ inputs.simulate-last-pass }}
+        run: node .github/scripts/compat-canary.mjs report

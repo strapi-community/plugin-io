@@ -402,6 +402,12 @@ npm run verify
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/). semantic-release publishes releases from `main` and folds the `[Unreleased]` section of `CHANGELOG.md` into the release notes (`scripts/release-unreleased.mjs`).
 
+### Compatibility canary
+
+A scheduled workflow, `.github/workflows/canary.yml`, runs every Monday at 04:17 UTC and on demand (Actions → Compatibility canary → Run workflow). It installs the newest Strapi 5.x release over the lockfile and tests the plugin on the newest Node.js release, the newest LTS and every LTS line inside `engines.node`: the build, the tests (with PostgreSQL), the admin tests, the type check and `verify` as in `ci.yml`, and the `e2e` job: a scaffolded Strapi app with the Strapi under test, the packed plugin, and the Playwright and socket suites.
+
+A failure opens or updates one issue labelled `compat` ("Compatibility: Strapi X.Y.Z / Node A.B.C") with the failing jobs, the failing step and a log excerpt; the next green run closes it. The last passing and the last run are recorded in the closed issue "Compatibility canary state". A manual run can force a Strapi version (`strapi`) or Node.js versions (`node`), and `dry-run` prints the plan instead of writing issues. Pull requests that change the canary run it as a dry run. The logic lives in `.github/scripts/compat-canary.mjs` (byte-identical in every plugin of the workbench, unit-tested in `compat-canary.test.mjs`).
+
 ## Contributing
 
 Bug reports and pull requests are welcome. Please open an [issue](https://github.com/strapi-community/plugin-io/issues) first for larger changes and add a test for every fix. [CONTRIBUTING.md](https://github.com/strapi-community/plugin-io/blob/main/CONTRIBUTING.md) lists the checks to run before you push, the cluster acceptance run and the admin UI conventions.
